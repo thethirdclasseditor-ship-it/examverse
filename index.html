@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#4338CA" />
+  <meta name="description" content="ExamVerse — Premium Educational Examination & MCQ Mastery Platform for SSC, HSC, University Admission, Medical, Engineering, BCS & Bank Jobs." />
+  <title>ExamVerse — Academic Examination &amp; MCQ Mastery Platform</title>
+
+  <!-- Zero-FOUC Theme Initialization (Defaults Strictly to Light Mode) -->
+  <script>
+    (function () {
+      try {
+        var saved = window.localStorage.getItem('examverse_theme');
+        var theme = (saved === 'dark' || saved === 'light') ? saved : 'light';
+        document.documentElement.setAttribute('data-theme', theme);
+      } catch (e) {
+        document.documentElement.setAttribute('data-theme', 'light');
+      }
+    })();
+  </script>
+
+  <!-- Google Fonts: Plus Jakarta Sans, Hind Siliguri (Bangla), JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+
+  <!-- Modular Stylesheets -->
+  <link rel="stylesheet" href="css/theme.css" />
+  <link rel="stylesheet" href="css/main.css" />
+  <link rel="stylesheet" href="css/animations.css" />
+</head>
+<body>
+  <div class="ev-app-shell">
+    <!-- Desktop Sidebar Navigation -->
+    <aside class="ev-sidebar" aria-label="Main Sidebar Navigation">
+      <div class="ev-brand" onclick="window.evNavigate('home')" role="button" tabindex="0">
+        <div class="ev-brand-mark">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2">
+            <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+            <path d="M2 17l10 5 10-5"/>
+            <path d="M2 12l10 5 10-5"/>
+          </svg>
+        </div>
+        <div class="ev-brand-text">
+          <span class="ev-brand-title">ExamVerse</span>
+          <span class="ev-brand-subtitle">Academic EdTech</span>
+        </div>
+      </div>
+
+      <div class="ev-nav-section-label">Core Platform</div>
+      <ul class="ev-nav-list">
+        <li>
+          <button type="button" class="ev-nav-btn is-active" data-nav-target="home" onclick="window.evNavigate('home')">
+            <span class="ev-nav-btn-left">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 9.5L12 3l9 6.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1V9.5z"/></svg>
+              <span>Home</span>
+            </span>
+          </button>
+        </li>
+        <li>
+          <button type="button" class="ev-nav-btn" data-nav-target="exams" onclick="window.evNavigate('exams')">
+            <span class="ev-nav-btn-left">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+              <span>Exams</span>
+            </span>
+            <span class="ev-nav-count">9</span>
+          </button>
+        </li>
+        <li>
+          <button type="button" class="ev-nav-btn" data-nav-target="quiz" onclick="window.evNavigate('quiz')">
+            <span class="ev-nav-btn-left">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              <span>Quiz &amp; Exam</span>
+            </span>
+          </button>
+        </li>
+        <li>
+          <button type="button" class="ev-nav-btn" data-nav-target="stats" onclick="window.evNavigate('stats')">
+            <span class="ev-nav-btn-left">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+              <span>Stats</span>
+            </span>
+          </button>
+        </li>
+        <li>
+          <button type="button" class="ev-nav-btn" data-nav-target="leaderboard" onclick="window.evNavigate('leaderboard')">
+            <span class="ev-nav-btn-left">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2z"/></svg>
+              <span>Leaderboard</span>
+            </span>
+          </button>
+        </li>
+        <li>
+          <button type="button" class="ev-nav-btn" data-nav-target="profile" onclick="window.evNavigate('profile')">
+            <span class="ev-nav-btn-left">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              <span>Profile</span>
+            </span>
+          </button>
+        </li>
+      </ul>
+
+      <div class="ev-nav-section-label" style="margin-top:0.85rem;">Study Vault</div>
+      <ul class="ev-nav-list">
+        <li>
+          <button type="button" class="ev-nav-btn" data-nav-target="daily" onclick="window.evNavigate('daily')">
+            <span class="ev-nav-btn-left">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+              <span>Daily Challenge</span>
+            </span>
+          </button>
+        </li>
+        <li>
+          <button type="button" class="ev-nav-btn" data-nav-target="bookmarks" onclick="window.evNavigate('bookmarks')">
+            <span class="ev-nav-btn-left">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+              <span>Bookmarks</span>
+            </span>
+            <span id="ev-nav-count-bookmarks" class="ev-nav-count">3</span>
+          </button>
+        </li>
+        <li>
+          <button type="button" class="ev-nav-btn" data-nav-target="mistakes" onclick="window.evNavigate('mistakes')">
+            <span class="ev-nav-btn-left">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              <span>Mistake Bank</span>
+            </span>
+            <span id="ev-nav-count-mistakes" class="ev-nav-count">3</span>
+          </button>
+        </li>
+        <li>
+          <button type="button" class="ev-nav-btn" data-nav-target="history" onclick="window.evNavigate('history')">
+            <span class="ev-nav-btn-left">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+              <span>Quiz History</span>
+            </span>
+          </button>
+        </li>
+      </ul>
+
+      <div class="ev-sidebar-footer">
+        <button type="button" class="ev-nav-btn" data-nav-target="settings" onclick="window.evNavigate('settings')">
+          <span class="ev-nav-btn-left">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            <span>Settings</span>
+          </span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- Main Wrapper -->
+    <div class="ev-main-wrapper">
+      <!-- Sticky Top Header -->
+      <header class="ev-topbar">
+        <div class="ev-topbar-left">
+          <div class="ev-mobile-logo" onclick="window.evNavigate('home')" role="button" tabindex="0">
+            <div class="ev-brand-mark" style="width:32px; height:32px; border-radius:8px;">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2">
+                <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                <path d="M2 17l10 5 10-5"/>
+                <path d="M2 12l10 5 10-5"/>
+              </svg>
+            </div>
+            <span style="font-weight:800; font-size:1rem;">ExamVerse</span>
+          </div>
+          <div class="ev-greeting-wrap">
+            <div id="ev-greeting-title" class="ev-greeting-title">Welcome back, Arian</div>
+            <div class="ev-greeting-sub">SSC • HSC • Admission • BCS • Bank Exam Portal</div>
+          </div>
+        </div>
+
+        <div class="ev-topbar-right">
+          <!-- Small Elegant Streak Flame Indicator Beside Profile Area -->
+          <button type="button" id="ev-header-streak" class="ev-streak-pill is-active" onclick="window.evNavigate('daily')" title="Active Study Streak">
+            <svg class="ev-flame-svg" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 2c1.5 3.5 4.5 5.5 4.5 9.5a4.5 4.5 0 1 1-9 0C7.5 9 9.5 6 12 2zm0 14a2 2 0 0 0 2-2c0-1.5-2-3.5-2-3.5S10 12.5 10 14a2 2 0 0 0 2 2z"/>
+            </svg>
+            <span id="ev-header-streak-count">9d</span>
+          </button>
+
+          <!-- Theme Switch Button -->
+          <button type="button" class="ev-icon-btn" onclick="window.evToggleTheme()" title="Switch Light / Dark Theme" aria-label="Switch Light or Dark Theme">
+            <span id="ev-theme-icon-wrap" style="display:flex; align-items:center; justify-content:center;"></span>
+          </button>
+
+          <!-- Notification Button -->
+          <button type="button" class="ev-icon-btn" onclick="window.evOpenNotifModal()" title="Notifications" aria-label="Notifications">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+              <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+            </svg>
+            <span class="ev-notif-dot"></span>
+          </button>
+
+          <!-- User Avatar / Profile Access -->
+          <button type="button" class="ev-profile-trigger" onclick="window.evNavigate('profile')" title="View Profile">
+            <span id="ev-header-avatar" class="ev-avatar-sm">AC</span>
+            <span id="ev-header-username" class="ev-profile-trigger-name">Arian</span>
+          </button>
+        </div>
+      </header>
+
+      <!-- Dynamic Main Content Container -->
+      <main id="ev-main-content" class="ev-content-area" aria-live="polite"></main>
+    </div>
+  </div>
+
+  <!-- Mobile Bottom Navigation (5 Core Tabs + Quick Access) -->
+  <nav class="ev-bottom-nav" aria-label="Mobile Bottom Navigation">
+    <button type="button" class="ev-bottom-nav-btn is-active" data-nav-target="home" onclick="window.evNavigate('home')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 9.5L12 3l9 6.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1V9.5z"/></svg>
+      <span>Home</span>
+    </button>
+    <button type="button" class="ev-bottom-nav-btn" data-nav-target="exams" onclick="window.evNavigate('exams')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+      <span>Exams</span>
+    </button>
+    <button type="button" class="ev-bottom-nav-btn" data-nav-target="quiz" onclick="window.evNavigate('quiz')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      <span>Quiz</span>
+    </button>
+    <button type="button" class="ev-bottom-nav-btn" data-nav-target="stats" onclick="window.evNavigate('stats')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+      <span>Stats</span>
+    </button>
+    <button type="button" class="ev-bottom-nav-btn" data-nav-target="profile" onclick="window.evNavigate('profile')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      <span>Profile</span>
+    </button>
+  </nav>
+
+  <!-- Notifications Modal -->
+  <div id="ev-notif-modal" class="ev-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="ev-notif-modal-title">
+    <div class="ev-modal-panel">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem;">
+        <h3 id="ev-notif-modal-title" style="font-size:1.05rem; font-weight:800;">Academic Notifications</h3>
+        <button type="button" class="ev-btn ev-btn-secondary ev-btn-sm" onclick="window.evCloseNotifModal()">Close</button>
+      </div>
+      <div id="ev-notif-list" style="display:flex; flex-direction:column; gap:0.65rem;"></div>
+    </div>
+  </div>
+
+  <!-- Reset Progress Confirmation Modal -->
+  <div id="ev-reset-modal" class="ev-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="ev-reset-modal-title">
+    <div class="ev-modal-panel" style="max-width:440px;">
+      <h3 id="ev-reset-modal-title" style="font-size:1.1rem; font-weight:800; margin-bottom:0.4rem;">Reset Learning Progress?</h3>
+      <p style="font-size:0.86rem; color:var(--text-secondary); margin-bottom:1.25rem;">
+        This will clear your XP, level, completed quiz history, bookmarks, and mistake bank from LocalStorage. Your selected theme preference will be preserved.
+      </p>
+      <div style="display:flex; justify-content:flex-end; gap:0.6rem;">
+        <button type="button" class="ev-btn ev-btn-secondary" onclick="window.evCloseResetModal()">Cancel</button>
+        <button type="button" class="ev-btn ev-btn-danger" onclick="window.evConfirmResetProgress()">Confirm Reset</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Feedback Pill -->
+  <div id="ev-toast" class="ev-toast" role="status" aria-live="polite">
+    <span id="ev-toast-text">Action completed</span>
+  </div>
+
+  <!-- Modular Application Scripts -->
+  <script src="js/data.js"></script>
+  <script src="js/storage.js"></script>
+  <script src="js/quiz.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

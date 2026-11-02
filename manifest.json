@@ -1,0 +1,10 @@
+{
+  "name": "ExamVerse — Academic Examination & MCQ Mastery Platform",
+  "short_name": "ExamVerse",
+  "description": "Premium educational examination and MCQ practice platform for SSC, HSC, University, Medical, Engineering, BCS & Bank Job preparation.",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#F7F9FC",
+  "theme_color": "#4338CA",
+  "orientation": "portrait-primary"
+}

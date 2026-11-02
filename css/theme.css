@@ -1,0 +1,208 @@
+/* ==========================================================================
+   ExamVerse — Theme System & Design Tokens (css/theme.css)
+   Default: Light Mode (:root, [data-theme="light"])
+   Optional: Dark Mode ([data-theme="dark"])
+   ========================================================================== */
+
+:root,
+[data-theme="light"] {
+  color-scheme: light;
+
+  /* Core Backgrounds */
+  --bg-canvas: #F7F9FC;
+  --bg-canvas-subtle: #F1F5F9;
+  --bg-surface: #FFFFFF;
+  --bg-surface-elevated: #FFFFFF;
+  --bg-surface-hover: #F8FAFC;
+  --bg-surface-muted: #F1F5F9;
+  --bg-glass: rgba(255, 255, 255, 0.92);
+  --bg-sidebar: #FFFFFF;
+  --bg-input: #FFFFFF;
+
+  /* Typography Colors */
+  --text-primary: #0F172A;
+  --text-secondary: #475569;
+  --text-muted: #64748B;
+  --text-faint: #94A3B8;
+  --text-inverse: #FFFFFF;
+
+  /* Brand & Accent Colors (Sophisticated Indigo & Restrained Violet) */
+  --brand-primary: #4338CA;
+  --brand-primary-hover: #3730A3;
+  --brand-primary-light: #4F46E5;
+  --brand-primary-soft: #EEF2FF;
+  --brand-primary-border: #C7D2FE;
+
+  --brand-accent: #6D28D9;
+  --brand-accent-soft: #F5F3FF;
+  --brand-accent-border: #DDD6FE;
+
+  /* Semantic Status Colors */
+  --status-success: #059669;
+  --status-success-bg: #ECFDF5;
+  --status-success-border: #A7F3D0;
+  --status-success-text: #065F46;
+
+  --status-danger: #DC2626;
+  --status-danger-bg: #FEF2F2;
+  --status-danger-border: #FECACA;
+  --status-danger-text: #991B1B;
+
+  --status-warning: #D97706;
+  --status-warning-bg: #FFFBEB;
+  --status-warning-border: #FDE68A;
+  --status-warning-text: #92400E;
+
+  --status-info: #0284C7;
+  --status-info-bg: #F0F9FF;
+  --status-info-border: #BAE6FD;
+
+  /* Borders & Dividers */
+  --border-subtle: #E2E8F0;
+  --border-default: #CBD5E1;
+  --border-strong: #94A3B8;
+  --border-focus: #4F46E5;
+
+  /* Shadows */
+  --shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.04);
+  --shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.06), 0 1px 2px rgba(15, 23, 42, 0.04);
+  --shadow-md: 0 4px 12px -2px rgba(15, 23, 42, 0.07), 0 2px 6px -1px rgba(15, 23, 42, 0.04);
+  --shadow-lg: 0 12px 24px -4px rgba(15, 23, 42, 0.08), 0 4px 8px -2px rgba(15, 23, 42, 0.04);
+  --shadow-focus: 0 0 0 3px rgba(79, 70, 229, 0.18);
+
+  /* Academic Background Pattern Tokens */
+  --pattern-grid-line: rgba(15, 23, 42, 0.032);
+  --pattern-dot: rgba(67, 56, 202, 0.07);
+  --illustration-stroke: #CBD5E1;
+  --illustration-accent: #818CF8;
+
+  /* Chart & Gamification Tokens */
+  --chart-grid: #E2E8F0;
+  --chart-bar-primary: #4F46E5;
+  --chart-bar-secondary: #818CF8;
+  --chart-bar-muted: #E2E8F0;
+
+  /* Podium Metallic Tones */
+  --medal-gold-bg: linear-gradient(135deg, #FEFCE8 0%, #FEF08A 100%);
+  --medal-gold-border: #FACC15;
+  --medal-gold-text: #854D0E;
+
+  --medal-silver-bg: linear-gradient(135deg, #F8FAFC 0%, #E2E8F0 100%);
+  --medal-silver-border: #94A3B8;
+  --medal-silver-text: #334155;
+
+  --medal-bronze-bg: linear-gradient(135deg, #FFF7ED 0%, #FED7AA 100%);
+  --medal-bronze-border: #FB923C;
+  --medal-bronze-text: #9A3412;
+
+  /* Spacing & Radius Tokens */
+  --radius-xs: 6px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-full: 9999px;
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  /* Sophisticated Deep Navy / Slate Backgrounds (Never pure #000000) */
+  --bg-canvas: #0B1120;
+  --bg-canvas-subtle: #0F172A;
+  --bg-surface: #151F32;
+  --bg-surface-elevated: #1E293B;
+  --bg-surface-hover: #1E293B;
+  --bg-surface-muted: #0F172A;
+  --bg-glass: rgba(21, 31, 50, 0.92);
+  --bg-sidebar: #0F172A;
+  --bg-input: #0F172A;
+
+  /* High-Contrast Readable Typography */
+  --text-primary: #F8FAFC;
+  --text-secondary: #CBD5E1;
+  --text-muted: #94A3B8;
+  --text-faint: #64748B;
+  --text-inverse: #0F172A;
+
+  /* Restrained Brand Accents for Dark Mode */
+  --brand-primary: #6366F1;
+  --brand-primary-hover: #818CF8;
+  --brand-primary-light: #818CF8;
+  --brand-primary-soft: rgba(99, 102, 241, 0.14);
+  --brand-primary-border: rgba(129, 140, 248, 0.32);
+
+  --brand-accent: #A78BFA;
+  --brand-accent-soft: rgba(167, 139, 250, 0.14);
+  --brand-accent-border: rgba(167, 139, 250, 0.3);
+
+  /* Semantic Status Colors in Dark Mode */
+  --status-success: #10B981;
+  --status-success-bg: rgba(16, 185, 129, 0.13);
+  --status-success-border: rgba(52, 211, 153, 0.35);
+  --status-success-text: #6EE7B7;
+
+  --status-danger: #F87171;
+  --status-danger-bg: rgba(239, 68, 68, 0.14);
+  --status-danger-border: rgba(248, 113, 113, 0.35);
+  --status-danger-text: #FCA5A5;
+
+  --status-warning: #FBBF24;
+  --status-warning-bg: rgba(245, 158, 11, 0.14);
+  --status-warning-border: rgba(251, 191, 36, 0.35);
+  --status-warning-text: #FDE68A;
+
+  --status-info: #38BDF8;
+  --status-info-bg: rgba(56, 189, 248, 0.14);
+  --status-info-border: rgba(56, 189, 248, 0.35);
+
+  /* Borders & Dividers */
+  --border-subtle: #1E293B;
+  --border-default: #26344D;
+  --border-strong: #334155;
+  --border-focus: #818CF8;
+
+  /* Shadows */
+  --shadow-xs: 0 1px 2px rgba(2, 6, 23, 0.35);
+  --shadow-sm: 0 2px 4px rgba(2, 6, 23, 0.45);
+  --shadow-md: 0 6px 16px -2px rgba(2, 6, 23, 0.55);
+  --shadow-lg: 0 14px 28px -4px rgba(2, 6, 23, 0.65);
+  --shadow-focus: 0 0 0 3px rgba(129, 140, 248, 0.25);
+
+  /* Academic Background Pattern Tokens */
+  --pattern-grid-line: rgba(148, 163, 184, 0.035);
+  --pattern-dot: rgba(129, 140, 248, 0.075);
+  --illustration-stroke: #334155;
+  --illustration-accent: #6366F1;
+
+  /* Chart & Gamification Tokens */
+  --chart-grid: #1E293B;
+  --chart-bar-primary: #6366F1;
+  --chart-bar-secondary: #A78BFA;
+  --chart-bar-muted: #1E293B;
+
+  /* Podium Metallic Tones */
+  --medal-gold-bg: linear-gradient(135deg, rgba(234, 179, 8, 0.18) 0%, rgba(202, 138, 4, 0.08) 100%);
+  --medal-gold-border: rgba(250, 204, 21, 0.45);
+  --medal-gold-text: #FDE047;
+
+  --medal-silver-bg: linear-gradient(135deg, rgba(148, 163, 184, 0.2) 0%, rgba(100, 116, 139, 0.08) 100%);
+  --medal-silver-border: rgba(203, 213, 225, 0.4);
+  --medal-silver-text: #E2E8F0;
+
+  --medal-bronze-bg: linear-gradient(135deg, rgba(249, 115, 22, 0.18) 0%, rgba(194, 65, 12, 0.08) 100%);
+  --medal-bronze-border: rgba(251, 146, 60, 0.45);
+  --medal-bronze-text: #FDBA74;
+}
+
+/* Subtle Academic Study-Grid & Notebook Texture on Canvas */
+body {
+  background-color: var(--bg-canvas);
+  color: var(--text-primary);
+  background-image:
+    radial-gradient(var(--pattern-dot) 1px, transparent 1px),
+    linear-gradient(to right, var(--pattern-grid-line) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--pattern-grid-line) 1px, transparent 1px);
+  background-size: 24px 24px, 96px 96px, 96px 96px;
+  background-attachment: fixed;
+}
