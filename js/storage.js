@@ -1,13 +1,12 @@
 /* ==========================================================================
    ExamVerse — LocalStorage Persistence & Honest Progress Engine (js/storage.js)
-   Audit Fixes Applied:
+   Step 1 + Step 2 Audit Fixes Applied:
    - Fresh Zero Default State for new users (0 XP, Level 1, 0% Mastery, 0 Streak)
-   - Optional Demo Profile loader clearly separated in Settings
    - Real calendar-date Streak calculation in Asia/Dhaka timezone
    - Rolling 7-Day Weekly Activity chart synchronized with real calendar dates
    - Separate Total Questions, Attempted (Correct + Incorrect), and Skipped counts
    - Daily Challenge strictly tied to today's date & Daily Challenge sessions only
-   - Deterministic XP/Level thresholds & real Achievement Badge unlock logic
+   - Bookmark notes storage (bookmarkNotes) & Sound Volume setting (soundVolume)
    - Complete 100% Reset All Progress implementation
    ========================================================================== */
 
@@ -16,7 +15,6 @@
   var THEME_KEY = 'examverse_theme';
   var DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-  /* Helper: Get YYYY-MM-DD in Bangladesh Standard Time (Asia/Dhaka) */
   function getDhakaDateStr(dateObj) {
     var d = dateObj || new Date();
     try {
@@ -42,7 +40,6 @@
     return yr + '-' + mo + '-' + da;
   }
 
-  /* Helper: Build rolling 7-day activity array ending today in Asia/Dhaka */
   function buildRolling7Days(existingArray) {
     var existingMap = {};
     if (Array.isArray(existingArray)) {
@@ -72,13 +69,11 @@
     return result;
   }
 
-  /* Deterministic XP Threshold: Level 1 -> 500, Level 2 -> 1000, etc. */
   function getXpForNextLevel(level) {
     var lv = Math.max(1, Number(level) || 1);
     return lv * 500;
   }
 
-  /* Fresh Zero Default State for New Students (Audit 5.1, 5.4, 5.5) */
   function createFreshDefaultState() {
     var todayKey = getDhakaDateStr();
     return {
@@ -140,6 +135,7 @@
       activeSession: null,
       lastResult: null,
       bookmarks: [],
+      bookmarkNotes: {},
       mistakes: [],
       quizHistory: [],
       unlockedBadges: [],
@@ -154,6 +150,7 @@
       ],
       settings: {
         soundEnabled: true,
+        soundVolume: 0.75,
         vibrationEnabled: true,
         timerEnabled: true,
         defaultDurationPerQuestionSec: 45,
@@ -184,6 +181,7 @@
           this.state.stats.subjectStats = Object.assign({}, fresh.stats.subjectStats, (parsed.stats && parsed.stats.subjectStats) || {});
           this.state.settings = Object.assign({}, fresh.settings, parsed.settings || {});
           this.state.dailyChallenge = Object.assign({}, fresh.dailyChallenge, parsed.dailyChallenge || {});
+          this.state.bookmarkNotes = Object.assign({}, fresh.bookmarkNotes, parsed.bookmarkNotes || {});
         }
         var savedTheme = window.localStorage.getItem(THEME_KEY);
         if (savedTheme === 'dark' || savedTheme === 'light') {
@@ -196,7 +194,6 @@
         this.state = fresh;
       }
 
-      /* Synchronize Rolling 7-Day Activity & Daily Challenge Date & Streak Expiry */
       this.syncCalendarState();
       this.applyTheme(this.state.theme);
       return this.state;
@@ -206,28 +203,21 @@
       var todayKey = getDhakaDateStr();
       var yesterdayKey = getDhakaDateStr(new Date(Date.now() - 86400000));
 
-      /* 1. Rolling 7-day weekly activity bars */
       this.state.stats.weeklyActivity = buildRolling7Days(this.state.stats.weeklyActivity);
 
-      /* 2. Reset Daily Challenge automatically when date changes (Audit 2.6) */
       if (this.state.dailyChallenge.date !== todayKey) {
         this.state.dailyChallenge.date = todayKey;
         this.state.dailyChallenge.completedQuestions = 0;
         this.state.dailyChallenge.isCompleted = (this.state.dailyChallenge.completedDate === todayKey);
       }
 
-      /* 3. Verify consecutive day streak (Audit 5.2) */
       var lastDate = this.state.user.lastStudyDate;
       if (!lastDate) {
         this.state.user.streakDays = 0;
         this.state.user.streakActive = false;
-      } else if (lastDate === todayKey) {
-        this.state.user.streakActive = true;
-      } else if (lastDate === yesterdayKey) {
-        /* Studied yesterday, streak is still alive waiting for today */
+      } else if (lastDate === todayKey || lastDate === yesterdayKey) {
         this.state.user.streakActive = true;
       } else {
-        /* Missed more than 1 calendar day — streak resets to 0 */
         this.state.user.streakDays = 0;
         this.state.user.streakActive = false;
       }
@@ -308,6 +298,19 @@
       }
       this.save();
       return added;
+    },
+
+    saveBookmarkNote: function (questionId, noteText) {
+      if (!this.state.bookmarkNotes) {
+        this.state.bookmarkNotes = {};
+      }
+      var clean = String(noteText || '').trim();
+      if (clean) {
+        this.state.bookmarkNotes[questionId] = clean;
+      } else {
+        delete this.state.bookmarkNotes[questionId];
+      }
+      this.save();
     },
 
     addMistake: function (questionId, selectedIndex, customNote) {
@@ -411,11 +414,9 @@
       var todayKey = getDhakaDateStr();
       var yesterdayKey = getDhakaDateStr(new Date(Date.now() - 86400000));
 
-      /* Clear active in-progress session so Resume never opens a dead submitted quiz (Audit 4.2) */
       this.state.activeSession = null;
       this.state.lastResult = JSON.parse(JSON.stringify(resultPayload));
 
-      /* Separate Total Questions, Attempted (Correct + Incorrect), and Skipped (Audit 4.4) */
       s.totalQuestionsSeen = (s.totalQuestionsSeen || 0) + resultPayload.total;
       s.totalAttempted += resultPayload.attempted;
       s.totalCorrect += resultPayload.correct;
@@ -427,7 +428,6 @@
         s.totalScorePctSum += resultPayload.accuracy;
       }
 
-      /* Update Rolling 7-Day Weekly Activity for Today's DateKey (Audit 5.3) */
       this.state.stats.weeklyActivity = buildRolling7Days(this.state.stats.weeklyActivity);
       for (var i = 0; i < this.state.stats.weeklyActivity.length; i++) {
         if (this.state.stats.weeklyActivity[i].dateKey === todayKey) {
@@ -438,8 +438,6 @@
         }
       }
 
-      /* Real Subject Mastery Calculation (Audit 5.4 — Zero Fake 70% Baseline) */
-      var self = this;
       if (resultPayload.subjectBreakdown) {
         Object.keys(resultPayload.subjectBreakdown).forEach(function (subjId) {
           var item = resultPayload.subjectBreakdown[subjId];
@@ -461,11 +459,9 @@
         });
       }
 
-      /* Real Date-Based Streak Calculation in Asia/Dhaka (Audit 5.2) */
       if (resultPayload.attempted > 0) {
         var lastDate = this.state.user.lastStudyDate;
         if (lastDate === todayKey) {
-          /* Already studied today — do not increment streak a second time */
           this.state.user.streakActive = true;
         } else if (lastDate === yesterdayKey) {
           this.state.user.streakDays += 1;
@@ -478,7 +474,6 @@
         }
       }
 
-      /* Strict Daily Challenge Tracking (Audit 2.6 — Only Daily Challenge updates Daily Challenge) */
       if (resultPayload.isDailyChallenge && resultPayload.attempted > 0) {
         this.state.dailyChallenge.date = todayKey;
         this.state.dailyChallenge.completedQuestions = Math.max(
@@ -491,14 +486,10 @@
         }
       }
 
-      /* Award XP & Recalculate Level (Audit 2.5 & 5.7) */
       this.state.user.xp += resultPayload.xpEarned;
       this.recalculateLevelProgress();
-
-      /* Evaluate Achievement Badges */
       this.evaluateAndAwardBadges(resultPayload);
 
-      /* Update Continue Learning to show completed status (Audit 4.2) */
       this.state.continueLearning = {
         title: resultPayload.title,
         subjectId: resultPayload.primarySubjectId === 'all' ? 'physics' : (resultPayload.primarySubjectId || 'physics'),
@@ -510,7 +501,6 @@
         hasActiveSession: false
       };
 
-      /* Prepend Full Snapshot to Quiz History for Exact Review & Retry (Audit 4.8) */
       this.state.quizHistory.unshift({
         id: resultPayload.sessionId || ('hist-' + Date.now()),
         title: resultPayload.title,
@@ -539,7 +529,6 @@
       this.save();
     },
 
-    /* Complete 100% Reset All Progress (Audit 2.7) */
     resetProgress: function () {
       var preservedTheme = this.state.theme;
       var preservedSettings = JSON.parse(JSON.stringify(this.state.settings));
@@ -557,7 +546,6 @@
       this.save();
     },
 
-    /* Optional Demo Profile Loader (Clearly flagged as Demo Mode per Audit 5.1) */
     loadSampleDemoProfile: function () {
       var todayKey = getDhakaDateStr();
       var yesterdayKey = getDhakaDateStr(new Date(Date.now() - 86400000));
@@ -596,6 +584,9 @@
         ict: 86
       };
       fresh.bookmarks = ['q-phy-101', 'q-chem-203'];
+      fresh.bookmarkNotes = {
+        'q-phy-101': 'Equal magnitude vectors with resultant P always have θ = 120°.'
+      };
       fresh.mistakes = [
         {
           questionId: 'q-phy-102',
