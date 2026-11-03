@@ -1,11 +1,5 @@
 /* ==========================================================================
    ExamVerse — Supabase Auth, Cloud Sync & Server-Side Validation Client (js/supabase-client.js)
-   Step 4 Implementation (Audit 2.8, 2.9, 10.2):
-   - Supports Email/Password Sign Up, Sign In, Google OAuth, and Sign Out via Supabase Auth REST API
-   - Supports dynamic configuration from Settings UI (saved in localStorage) or static constants
-   - Syncs User Profile, Bookmarks, Mistakes & Live Leaderboard with Supabase PostgreSQL
-   - Submits quiz attempts to Server-Side RPC (submit_quiz_attempt) when authenticated
-   - Allows students to submit Question Error Reports ("Report a Typo")
    ========================================================================== */
 
 (function () {
@@ -13,21 +7,23 @@
   var CLOUD_SESSION_KEY = 'examverse_supabase_session_v1';
 
   var DEFAULT_CONFIG = {
-    url: 'https://muxgoubiqmussyydhekq.supabase.co/rest/v1/',
+    url: 'https://muxgoubiqmussyydhekq.supabase.co',
     anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im11eGdvdWJpcW11c3N5eWRoZWtxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTM2Njg0OTMsImV4cCI6MjEwOTI0NDQ5M30.BesDfzId-3Pewr5EfNXvKwm4--LkpnBIGGqDQS7kDkc',
-    enabled: false
+    enabled: true
   };
 
   var CloudService = {
     config: Object.assign({}, DEFAULT_CONFIG),
-    authSession: null, /* { access_token, refresh_token, user: { id, email } } */
+    authSession: null,
 
     init: function () {
       try {
         var rawCfg = window.localStorage.getItem(CLOUD_CFG_KEY);
         if (rawCfg) {
           var parsed = JSON.parse(rawCfg);
-          this.config = Object.assign({}, DEFAULT_CONFIG, parsed);
+          if (parsed && parsed.url && parsed.anonKey) {
+            this.config = Object.assign({}, DEFAULT_CONFIG, parsed);
+          }
         }
         var rawSess = window.localStorage.getItem(CLOUD_SESSION_KEY);
         if (rawSess) {
@@ -52,7 +48,7 @@
     },
 
     disconnectConfig: function () {
-      this.config = Object.assign({}, DEFAULT_CONFIG);
+      this.config = { url: '', anonKey: '', enabled: false };
       this.authSession = null;
       try {
         window.localStorage.removeItem(CLOUD_CFG_KEY);
@@ -66,6 +62,7 @@
         this.config.enabled &&
         this.config.url &&
         this.config.anonKey &&
+        this.config.anonKey.indexOf('এখানে_') === -1 &&
         this.config.url.indexOf('YOUR_PROJECT_ID') === -1
       );
     },
@@ -78,14 +75,16 @@
       var token = (useAuthToken && this.authSession && this.authSession.access_token)
         ? this.authSession.access_token
         : this.config.anonKey;
-      return {
+      var headers = {
         'Content-Type': 'application/json',
-        'apikey': this.config.anonKey,
-        'Authorization': 'Bearer ' + token
+        'apikey': this.config.anonKey
       };
+      if (token && (token.indexOf('eyJ') === 0 || (useAuthToken && this.authSession && this.authSession.access_token))) {
+        headers['Authorization'] = 'Bearer ' + token;
+      }
+      return headers;
     },
 
-    /* 1. Email/Password Sign Up */
     signUpWithEmail: async function (email, password, fullName) {
       if (!this.isConfigured()) {
         throw new Error('Please configure your Supabase Project URL and Anon Key first.');
@@ -110,7 +109,6 @@
       return data;
     },
 
-    /* 2. Email/Password Sign In */
     signInWithEmail: async function (email, password) {
       if (!this.isConfigured()) {
         throw new Error('Please configure your Supabase Project URL and Anon Key first.');
@@ -129,7 +127,6 @@
       return data;
     },
 
-    /* 3. Google OAuth Redirect Sign In */
     getGoogleOAuthUrl: function () {
       if (!this.isConfigured()) return null;
       var redirectUrl = window.location.origin + window.location.pathname;
@@ -154,7 +151,6 @@
       } catch (e) {}
     },
 
-    /* 4. Pull User Profile & Sync with LocalStorage */
     pullCloudProfile: async function () {
       if (!this.isAuthenticated()) return null;
       var uid = this.authSession.user.id;
@@ -181,7 +177,6 @@
       return null;
     },
 
-    /* 5. Submit Quiz Attempt to Server-Side Validated RPC (submit_quiz_attempt) */
     submitServerValidatedAttempt: async function (resultPayload) {
       if (!this.isAuthenticated()) return null;
       try {
@@ -208,7 +203,6 @@
       }
     },
 
-    /* 6. Fetch Real Leaderboard from Supabase View (public.leaderboard_alltime) */
     fetchLiveLeaderboard: async function () {
       if (!this.isConfigured()) return null;
       try {
@@ -223,7 +217,6 @@
       }
     },
 
-    /* 7. Submit Question Error / Typo Report */
     submitQuestionReport: async function (questionId, issueType, detailsText) {
       var reportEntry = {
         questionId: questionId,
