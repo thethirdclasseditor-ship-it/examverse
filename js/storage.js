@@ -1,193 +1,189 @@
 /* ==========================================================================
-   ExamVerse — LocalStorage Persistence & Firebase-Ready State Manager (js/storage.js)
-   Default Theme: Light Mode ('light') when no preference exists in LocalStorage
+   ExamVerse — LocalStorage Persistence & Honest Progress Engine (js/storage.js)
+   Audit Fixes Applied:
+   - Fresh Zero Default State for new users (0 XP, Level 1, 0% Mastery, 0 Streak)
+   - Optional Demo Profile loader clearly separated in Settings
+   - Real calendar-date Streak calculation in Asia/Dhaka timezone
+   - Rolling 7-Day Weekly Activity chart synchronized with real calendar dates
+   - Separate Total Questions, Attempted (Correct + Incorrect), and Skipped counts
+   - Daily Challenge strictly tied to today's date & Daily Challenge sessions only
+   - Deterministic XP/Level thresholds & real Achievement Badge unlock logic
+   - Complete 100% Reset All Progress implementation
    ========================================================================== */
 
 (function () {
-  var STORAGE_KEY = 'examverse_state_v1';
+  var STORAGE_KEY = 'examverse_state_v2';
   var THEME_KEY = 'examverse_theme';
+  var DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-  var DEFAULT_STATE = {
-    theme: 'light', /* Strictly Light Mode by default */
-    user: {
-      name: 'Arian Chowdhury',
-      username: '@arian_ev',
-      avatarInitials: 'AC',
-      targetTrack: 'University & Engineering Admission',
-      level: 14,
-      xp: 3480,
-      xpForNextLevel: 4000,
-      streakDays: 9,
-      streakActive: true,
-      lastStudyDate: '2026-11-02'
-    },
-    stats: {
-      totalAttempted: 412,
-      totalCorrect: 338,
-      completedQuizzes: 34,
-      totalScorePctSum: 2788,
-      weeklyActivity: [
-        { day: 'Tue', attempted: 42, correct: 34, xp: 210 },
-        { day: 'Wed', attempted: 56, correct: 47, xp: 290 },
-        { day: 'Thu', attempted: 38, correct: 30, xp: 185 },
-        { day: 'Fri', attempted: 64, correct: 54, xp: 340 },
-        { day: 'Sat', attempted: 72, correct: 61, xp: 390 },
-        { day: 'Sun', attempted: 48, correct: 39, xp: 245 },
-        { day: 'Mon', attempted: 60, correct: 51, xp: 315 }
-      ],
-      subjectMastery: {
-        math: 86,
-        bangla: 82,
-        ict: 80,
-        physics: 78,
-        english: 75,
-        chemistry: 71,
-        biology: 68,
-        gk: 64
+  /* Helper: Get YYYY-MM-DD in Bangladesh Standard Time (Asia/Dhaka) */
+  function getDhakaDateStr(dateObj) {
+    var d = dateObj || new Date();
+    try {
+      var parts = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Dhaka',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+      }).formatToParts(d);
+      var y = '', m = '', day = '';
+      for (var i = 0; i < parts.length; i++) {
+        if (parts[i].type === 'year') y = parts[i].value;
+        if (parts[i].type === 'month') m = parts[i].value;
+        if (parts[i].type === 'day') day = parts[i].value;
       }
-    },
-    dailyChallenge: {
-      date: '2026-11-02',
-      totalQuestions: 8,
-      completedQuestions: 5,
-      isCompleted: false,
-      rewardXp: 150
-    },
-    continueLearning: {
-      title: 'Vectors & Classical Mechanics',
-      subjectId: 'physics',
-      categoryId: 'uni',
-      progressPct: 68,
-      completedCount: 17,
-      totalCount: 25,
-      mode: 'practice'
-    },
-    bookmarks: ['q-phy-101', 'q-chem-203', 'q-gk-702'],
-    mistakes: [
-      {
-        questionId: 'q-phy-102',
-        selectedIndex: 2,
-        timestamp: 'Yesterday, 8:40 PM',
-        note: 'Forgot to convert Celsius (327°C and 27°C) to Kelvin before applying η = 1 - T2/T1.'
-      },
-      {
-        questionId: 'q-chem-203',
-        selectedIndex: 1,
-        timestamp: '2 days ago',
-        note: 'Confused Clemmensen reagent (Zn-Hg/HCl) with Wolff-Kishner reagent (NH2NH2/KOH).'
-      },
-      {
-        questionId: 'q-eng-501',
-        selectedIndex: 0,
-        timestamp: '3 days ago',
-        note: 'Relative pronoun antecedent agreement with plural noun before singular head.'
-      }
-    ],
-    quizHistory: [
-      {
-        id: 'hist-101',
-        title: 'BUET & DU A-Unit STEM Diagnostic',
-        category: 'Engineering Admission',
-        subjectId: 'physics',
-        mode: 'exam',
-        score: 7,
-        total: 8,
-        accuracy: 88,
-        timeTakenSec: 312,
-        xpEarned: 140,
-        date: 'Today, 4:15 PM'
-      },
-      {
-        id: 'hist-102',
-        title: '47th BCS Preliminary Master Capsule',
-        category: 'BCS',
-        subjectId: 'gk',
-        mode: 'practice',
-        score: 6,
-        total: 8,
-        accuracy: 75,
-        timeTakenSec: 275,
-        xpEarned: 110,
-        date: 'Yesterday, 9:10 PM'
-      },
-      {
-        id: 'hist-103',
-        title: 'Medical MBBS Rapid Fire',
-        category: 'Medical Admission',
-        subjectId: 'biology',
-        mode: 'exam',
-        score: 6,
-        total: 7,
-        accuracy: 86,
-        timeTakenSec: 240,
-        xpEarned: 125,
-        date: 'Oct 30, 2026'
-      },
-      {
-        id: 'hist-104',
-        title: 'Higher Math Calculus & Matrices',
-        category: 'HSC',
-        subjectId: 'math',
-        mode: 'practice',
-        score: 9,
-        total: 10,
-        accuracy: 90,
-        timeTakenSec: 380,
-        xpEarned: 160,
-        date: 'Oct 28, 2026'
-      }
-    ],
-    unlockedBadges: ['badge-first-step', 'badge-streak-7', 'badge-precision-90', 'badge-stem-scholar'],
-    notifications: [
-      {
-        id: 'notif-1',
-        title: 'Daily Merit Sprint Ready',
-        body: 'Complete 3 more questions today to claim your +150 XP bonus and extend your 9-day streak.',
-        time: '15m ago',
-        unread: true
-      },
-      {
-        id: 'notif-2',
-        title: 'Leaderboard Rank Up',
-        body: 'You moved up to #3 on the Weekly Friends & Global STEM Leaderboard!',
-        time: '3h ago',
-        unread: true
-      },
-      {
-        id: 'notif-3',
-        title: 'Mistake Bank Reminder',
-        body: 'You have 3 saved conceptual mistakes ready for a 2-minute revision quiz.',
-        time: 'Yesterday',
-        unread: false
-      }
-    ],
-    settings: {
-      soundEnabled: true,
-      vibrationEnabled: true,
-      timerEnabled: true,
-      defaultDurationPerQuestionSec: 45,
-      language: 'bilingual', /* 'en', 'bn', 'bilingual' */
-      notificationsEnabled: true,
-      cloudSyncReady: false
+      if (y && m && day) return y + '-' + m + '-' + day;
+    } catch (e) {}
+    var utcMs = d.getTime() + (d.getTimezoneOffset() * 60000);
+    var dhakaDate = new Date(utcMs + 6 * 3600000);
+    var yr = dhakaDate.getFullYear();
+    var mo = String(dhakaDate.getMonth() + 1).padStart(2, '0');
+    var da = String(dhakaDate.getDate()).padStart(2, '0');
+    return yr + '-' + mo + '-' + da;
+  }
+
+  /* Helper: Build rolling 7-day activity array ending today in Asia/Dhaka */
+  function buildRolling7Days(existingArray) {
+    var existingMap = {};
+    if (Array.isArray(existingArray)) {
+      existingArray.forEach(function (item) {
+        if (item && item.dateKey) {
+          existingMap[item.dateKey] = item;
+        }
+      });
     }
-  };
+    var result = [];
+    var now = new Date();
+    for (var i = 6; i >= 0; i--) {
+      var target = new Date(now.getTime() - i * 86400000);
+      var key = getDhakaDateStr(target);
+      var parts = key.split('-');
+      var localDate = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+      var dayLabel = DAY_NAMES[localDate.getDay()];
+      var prev = existingMap[key];
+      result.push({
+        dateKey: key,
+        day: dayLabel,
+        attempted: prev ? Number(prev.attempted || 0) : 0,
+        correct: prev ? Number(prev.correct || 0) : 0,
+        xp: prev ? Number(prev.xp || 0) : 0
+      });
+    }
+    return result;
+  }
 
-  function cloneDefault() {
-    return JSON.parse(JSON.stringify(DEFAULT_STATE));
+  /* Deterministic XP Threshold: Level 1 -> 500, Level 2 -> 1000, etc. */
+  function getXpForNextLevel(level) {
+    var lv = Math.max(1, Number(level) || 1);
+    return lv * 500;
+  }
+
+  /* Fresh Zero Default State for New Students (Audit 5.1, 5.4, 5.5) */
+  function createFreshDefaultState() {
+    var todayKey = getDhakaDateStr();
+    return {
+      theme: 'light',
+      isDemoMode: false,
+      user: {
+        name: 'Student Scholar',
+        username: '@student_ev',
+        avatarInitials: 'SS',
+        targetTrack: 'University & Engineering Admission',
+        level: 1,
+        xp: 0,
+        xpForNextLevel: 500,
+        streakDays: 0,
+        streakActive: false,
+        lastStudyDate: null
+      },
+      stats: {
+        totalQuestionsSeen: 0,
+        totalAttempted: 0,
+        totalCorrect: 0,
+        totalIncorrect: 0,
+        totalSkipped: 0,
+        completedQuizzes: 0,
+        totalScorePctSum: 0,
+        totalMistakesResolved: 0,
+        stemQuestionsSolved: 0,
+        weeklyActivity: buildRolling7Days([]),
+        subjectMastery: {
+          physics: 0,
+          chemistry: 0,
+          math: 0,
+          biology: 0,
+          english: 0,
+          bangla: 0,
+          gk: 0,
+          ict: 0
+        },
+        subjectStats: {
+          physics: { attempted: 0, correct: 0 },
+          chemistry: { attempted: 0, correct: 0 },
+          math: { attempted: 0, correct: 0 },
+          biology: { attempted: 0, correct: 0 },
+          english: { attempted: 0, correct: 0 },
+          bangla: { attempted: 0, correct: 0 },
+          gk: { attempted: 0, correct: 0 },
+          ict: { attempted: 0, correct: 0 }
+        }
+      },
+      dailyChallenge: {
+        date: todayKey,
+        totalQuestions: 8,
+        completedQuestions: 0,
+        isCompleted: false,
+        completedDate: null,
+        rewardXp: 150
+      },
+      continueLearning: null,
+      activeSession: null,
+      lastResult: null,
+      bookmarks: [],
+      mistakes: [],
+      quizHistory: [],
+      unlockedBadges: [],
+      notifications: [
+        {
+          id: 'notif-welcome',
+          title: 'Welcome to ExamVerse!',
+          body: 'Start your first chapter practice or Daily Merit Sprint to track your real accuracy, XP, and subject mastery.',
+          time: 'Today',
+          unread: true
+        }
+      ],
+      settings: {
+        soundEnabled: true,
+        vibrationEnabled: true,
+        timerEnabled: true,
+        defaultDurationPerQuestionSec: 45,
+        negativeMarkingEnabled: true,
+        language: 'bilingual',
+        notificationsEnabled: true
+      }
+    };
   }
 
   var StorageManager = {
-    state: cloneDefault(),
+    state: createFreshDefaultState(),
+
+    getTodayDateStr: function () {
+      return getDhakaDateStr();
+    },
 
     init: function () {
+      var fresh = createFreshDefaultState();
       try {
         var raw = window.localStorage.getItem(STORAGE_KEY);
         if (raw) {
           var parsed = JSON.parse(raw);
-          this.state = Object.assign(cloneDefault(), parsed);
-          this.state.user = Object.assign(cloneDefault().user, parsed.user || {});
-          this.state.stats = Object.assign(cloneDefault().stats, parsed.stats || {});
-          this.state.settings = Object.assign(cloneDefault().settings, parsed.settings || {});
+          this.state = Object.assign({}, fresh, parsed);
+          this.state.user = Object.assign({}, fresh.user, parsed.user || {});
+          this.state.stats = Object.assign({}, fresh.stats, parsed.stats || {});
+          this.state.stats.subjectMastery = Object.assign({}, fresh.stats.subjectMastery, (parsed.stats && parsed.stats.subjectMastery) || {});
+          this.state.stats.subjectStats = Object.assign({}, fresh.stats.subjectStats, (parsed.stats && parsed.stats.subjectStats) || {});
+          this.state.settings = Object.assign({}, fresh.settings, parsed.settings || {});
+          this.state.dailyChallenge = Object.assign({}, fresh.dailyChallenge, parsed.dailyChallenge || {});
         }
         var savedTheme = window.localStorage.getItem(THEME_KEY);
         if (savedTheme === 'dark' || savedTheme === 'light') {
@@ -197,25 +193,94 @@
           window.localStorage.setItem(THEME_KEY, 'light');
         }
       } catch (e) {
-        this.state = cloneDefault();
+        this.state = fresh;
       }
+
+      /* Synchronize Rolling 7-Day Activity & Daily Challenge Date & Streak Expiry */
+      this.syncCalendarState();
       this.applyTheme(this.state.theme);
       return this.state;
+    },
+
+    syncCalendarState: function () {
+      var todayKey = getDhakaDateStr();
+      var yesterdayKey = getDhakaDateStr(new Date(Date.now() - 86400000));
+
+      /* 1. Rolling 7-day weekly activity bars */
+      this.state.stats.weeklyActivity = buildRolling7Days(this.state.stats.weeklyActivity);
+
+      /* 2. Reset Daily Challenge automatically when date changes (Audit 2.6) */
+      if (this.state.dailyChallenge.date !== todayKey) {
+        this.state.dailyChallenge.date = todayKey;
+        this.state.dailyChallenge.completedQuestions = 0;
+        this.state.dailyChallenge.isCompleted = (this.state.dailyChallenge.completedDate === todayKey);
+      }
+
+      /* 3. Verify consecutive day streak (Audit 5.2) */
+      var lastDate = this.state.user.lastStudyDate;
+      if (!lastDate) {
+        this.state.user.streakDays = 0;
+        this.state.user.streakActive = false;
+      } else if (lastDate === todayKey) {
+        this.state.user.streakActive = true;
+      } else if (lastDate === yesterdayKey) {
+        /* Studied yesterday, streak is still alive waiting for today */
+        this.state.user.streakActive = true;
+      } else {
+        /* Missed more than 1 calendar day — streak resets to 0 */
+        this.state.user.streakDays = 0;
+        this.state.user.streakActive = false;
+      }
+
+      this.recalculateLevelProgress();
+      this.save();
+    },
+
+    recalculateLevelProgress: function () {
+      var u = this.state.user;
+      u.xp = Math.max(0, Number(u.xp) || 0);
+      var level = 1;
+      while (u.xp >= getXpForNextLevel(level)) {
+        level += 1;
+      }
+      u.level = level;
+      u.xpForNextLevel = getXpForNextLevel(level);
     },
 
     save: function () {
       try {
         window.localStorage.setItem(STORAGE_KEY, JSON.stringify(this.state));
         window.localStorage.setItem(THEME_KEY, this.state.theme);
-      } catch (e) {
-        /* Fallback to in-memory state inside restricted sandboxes */
+      } catch (e) {}
+    },
+
+    saveActiveSession: function (sessionData) {
+      this.state.activeSession = sessionData ? JSON.parse(JSON.stringify(sessionData)) : null;
+      if (sessionData && !sessionData.isSubmitted && !sessionData.isEmpty) {
+        var answeredCount = Object.keys(sessionData.answers || {}).length;
+        var totalCount = (sessionData.questions || []).length || 1;
+        this.state.continueLearning = {
+          title: sessionData.title,
+          subjectId: sessionData.primarySubjectId === 'all' ? 'physics' : (sessionData.primarySubjectId || 'physics'),
+          categoryId: sessionData.categoryId || 'uni',
+          progressPct: Math.min(100, Math.round((answeredCount / totalCount) * 100)),
+          completedCount: answeredCount,
+          totalCount: totalCount,
+          mode: sessionData.mode,
+          hasActiveSession: true
+        };
       }
+      this.save();
     },
 
     applyTheme: function (themeName) {
       var validTheme = themeName === 'dark' ? 'dark' : 'light';
       this.state.theme = validTheme;
       document.documentElement.setAttribute('data-theme', validTheme);
+      var metaTheme = document.querySelector('meta[name="theme-color"]');
+      if (metaTheme) {
+        metaTheme.setAttribute('content', validTheme === 'dark' ? '#0B1120' : '#4338CA');
+      }
       try {
         window.localStorage.setItem(THEME_KEY, validTheme);
       } catch (e) {}
@@ -253,10 +318,13 @@
           break;
         }
       }
+      var prevRetries = existingIdx !== -1 ? (this.state.mistakes[existingIdx].retryCount || 0) + 1 : 1;
       var entry = {
         questionId: questionId,
         selectedIndex: selectedIndex,
-        timestamp: 'Just now',
+        timestamp: getDhakaDateStr(),
+        status: 'Needs Review',
+        retryCount: prevRetries,
         note: customNote || 'Review concept explanation and formula application.'
       };
       if (existingIdx !== -1) {
@@ -268,129 +336,281 @@
     },
 
     removeMistake: function (questionId) {
+      var beforeLen = this.state.mistakes.length;
       this.state.mistakes = this.state.mistakes.filter(function (m) {
         return m.questionId !== questionId;
       });
-      if (this.state.unlockedBadges.indexOf('badge-mistake-conqueror') === -1) {
-        this.state.unlockedBadges.push('badge-mistake-conqueror');
+      if (this.state.mistakes.length < beforeLen) {
+        this.state.stats.totalMistakesResolved = (this.state.stats.totalMistakesResolved || 0) + 1;
       }
+      this.evaluateAndAwardBadges(null);
       this.save();
+    },
+
+    addNotification: function (title, body) {
+      this.state.notifications.unshift({
+        id: 'notif-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
+        title: title,
+        body: body,
+        time: 'Just now',
+        unread: true
+      });
+      if (this.state.notifications.length > 20) {
+        this.state.notifications = this.state.notifications.slice(0, 20);
+      }
+    },
+
+    markAllNotificationsRead: function () {
+      this.state.notifications.forEach(function (n) {
+        n.unread = false;
+      });
+      this.save();
+    },
+
+    clearNotifications: function () {
+      this.state.notifications = [];
+      this.save();
+    },
+
+    evaluateAndAwardBadges: function (resultPayload) {
+      var self = this;
+      var s = this.state.stats;
+      var u = this.state.user;
+      var unlocked = this.state.unlockedBadges;
+
+      var conditions = {
+        'badge-first-step': s.completedQuizzes >= 1 && s.totalAttempted >= 1,
+        'badge-streak-7': u.streakDays >= 7,
+        'badge-precision-90': Boolean(resultPayload && resultPayload.attempted >= 3 && resultPayload.accuracy >= 90),
+        'badge-stem-scholar': (s.stemQuestionsSolved || 0) >= 20,
+        'badge-mistake-conqueror': (s.totalMistakesResolved || 0) >= 3 && this.state.mistakes.length === 0,
+        'badge-centurion': u.level >= 10 && u.xp >= 4500
+      };
+
+      var newlyUnlocked = [];
+      window.EXAMVERSE_DATA.achievements.forEach(function (ach) {
+        if (unlocked.indexOf(ach.id) === -1 && conditions[ach.id]) {
+          unlocked.push(ach.id);
+          u.xp += (ach.xpBonus || 0);
+          newlyUnlocked.push(ach);
+          self.addNotification(
+            'Achievement Unlocked: ' + ach.title,
+            'You earned the "' + ach.title + '" badge and +' + ach.xpBonus + ' Bonus XP!'
+          );
+        }
+      });
+
+      if (newlyUnlocked.length > 0) {
+        this.recalculateLevelProgress();
+      }
+      return newlyUnlocked;
     },
 
     recordQuizCompletion: function (resultPayload) {
       var s = this.state.stats;
-      s.totalAttempted += resultPayload.total;
-      s.totalCorrect += resultPayload.correct;
-      s.completedQuizzes += 1;
-      s.totalScorePctSum += resultPayload.accuracy;
+      var todayKey = getDhakaDateStr();
+      var yesterdayKey = getDhakaDateStr(new Date(Date.now() - 86400000));
 
-      /* Update weekly activity today (last bar) */
-      if (s.weeklyActivity && s.weeklyActivity.length > 0) {
-        var todayBar = s.weeklyActivity[s.weeklyActivity.length - 1];
-        todayBar.attempted += resultPayload.total;
-        todayBar.correct += resultPayload.correct;
-        todayBar.xp += resultPayload.xpEarned;
+      /* Clear active in-progress session so Resume never opens a dead submitted quiz (Audit 4.2) */
+      this.state.activeSession = null;
+      this.state.lastResult = JSON.parse(JSON.stringify(resultPayload));
+
+      /* Separate Total Questions, Attempted (Correct + Incorrect), and Skipped (Audit 4.4) */
+      s.totalQuestionsSeen = (s.totalQuestionsSeen || 0) + resultPayload.total;
+      s.totalAttempted += resultPayload.attempted;
+      s.totalCorrect += resultPayload.correct;
+      s.totalIncorrect = (s.totalIncorrect || 0) + resultPayload.incorrect;
+      s.totalSkipped = (s.totalSkipped || 0) + resultPayload.skipped;
+
+      if (resultPayload.attempted > 0) {
+        s.completedQuizzes += 1;
+        s.totalScorePctSum += resultPayload.accuracy;
       }
 
-      /* Update Subject Mastery */
+      /* Update Rolling 7-Day Weekly Activity for Today's DateKey (Audit 5.3) */
+      this.state.stats.weeklyActivity = buildRolling7Days(this.state.stats.weeklyActivity);
+      for (var i = 0; i < this.state.stats.weeklyActivity.length; i++) {
+        if (this.state.stats.weeklyActivity[i].dateKey === todayKey) {
+          this.state.stats.weeklyActivity[i].attempted += resultPayload.attempted;
+          this.state.stats.weeklyActivity[i].correct += resultPayload.correct;
+          this.state.stats.weeklyActivity[i].xp += resultPayload.xpEarned;
+          break;
+        }
+      }
+
+      /* Real Subject Mastery Calculation (Audit 5.4 — Zero Fake 70% Baseline) */
+      var self = this;
       if (resultPayload.subjectBreakdown) {
-        var self = this;
         Object.keys(resultPayload.subjectBreakdown).forEach(function (subjId) {
           var item = resultPayload.subjectBreakdown[subjId];
-          if (item.total > 0) {
-            var sessionPct = Math.round((item.correct / item.total) * 100);
-            var currentMastery = self.state.stats.subjectMastery[subjId] || 70;
-            self.state.stats.subjectMastery[subjId] = Math.min(
-              99,
-              Math.max(35, Math.round(currentMastery * 0.75 + sessionPct * 0.25))
-            );
+          if (!s.subjectStats[subjId]) {
+            s.subjectStats[subjId] = { attempted: 0, correct: 0 };
+          }
+          var subjAttempted = item.attempted || 0;
+          if (subjAttempted > 0) {
+            s.subjectStats[subjId].attempted += subjAttempted;
+            s.subjectStats[subjId].correct += item.correct;
+            var totalSubjAtt = s.subjectStats[subjId].attempted;
+            var totalSubjCorr = s.subjectStats[subjId].correct;
+            s.subjectMastery[subjId] = Math.min(100, Math.round((totalSubjCorr / totalSubjAtt) * 100));
+
+            if (subjId === 'physics' || subjId === 'chemistry' || subjId === 'math') {
+              s.stemQuestionsSolved = (s.stemQuestionsSolved || 0) + item.correct;
+            }
           }
         });
       }
 
-      /* Award XP & Level Up check */
-      this.state.user.xp += resultPayload.xpEarned;
-      while (this.state.user.xp >= this.state.user.xpForNextLevel) {
-        this.state.user.level += 1;
-        this.state.user.xpForNextLevel += 600;
-      }
-
-      /* Keep streak active */
-      if (!this.state.user.streakActive) {
-        this.state.user.streakActive = true;
-        this.state.user.streakDays = 1;
-      }
-
-      /* Update Daily Challenge if applicable */
-      if (resultPayload.isDailyChallenge) {
-        this.state.dailyChallenge.completedQuestions = this.state.dailyChallenge.totalQuestions;
-        this.state.dailyChallenge.isCompleted = true;
-      } else {
-        this.state.dailyChallenge.completedQuestions = Math.min(
-          this.state.dailyChallenge.totalQuestions,
-          this.state.dailyChallenge.completedQuestions + resultPayload.correct
-        );
-        if (this.state.dailyChallenge.completedQuestions >= this.state.dailyChallenge.totalQuestions) {
-          this.state.dailyChallenge.isCompleted = true;
+      /* Real Date-Based Streak Calculation in Asia/Dhaka (Audit 5.2) */
+      if (resultPayload.attempted > 0) {
+        var lastDate = this.state.user.lastStudyDate;
+        if (lastDate === todayKey) {
+          /* Already studied today — do not increment streak a second time */
+          this.state.user.streakActive = true;
+        } else if (lastDate === yesterdayKey) {
+          this.state.user.streakDays += 1;
+          this.state.user.streakActive = true;
+          this.state.user.lastStudyDate = todayKey;
+        } else {
+          this.state.user.streakDays = 1;
+          this.state.user.streakActive = true;
+          this.state.user.lastStudyDate = todayKey;
         }
       }
 
-      /* Unlock precision badge if accuracy >= 90% */
-      if (resultPayload.accuracy >= 90 && this.state.unlockedBadges.indexOf('badge-precision-90') === -1) {
-        this.state.unlockedBadges.push('badge-precision-90');
+      /* Strict Daily Challenge Tracking (Audit 2.6 — Only Daily Challenge updates Daily Challenge) */
+      if (resultPayload.isDailyChallenge && resultPayload.attempted > 0) {
+        this.state.dailyChallenge.date = todayKey;
+        this.state.dailyChallenge.completedQuestions = Math.max(
+          this.state.dailyChallenge.completedQuestions,
+          resultPayload.attempted
+        );
+        if (resultPayload.attempted >= this.state.dailyChallenge.totalQuestions) {
+          this.state.dailyChallenge.isCompleted = true;
+          this.state.dailyChallenge.completedDate = todayKey;
+        }
       }
 
-      /* Prepend to Quiz History */
+      /* Award XP & Recalculate Level (Audit 2.5 & 5.7) */
+      this.state.user.xp += resultPayload.xpEarned;
+      this.recalculateLevelProgress();
+
+      /* Evaluate Achievement Badges */
+      this.evaluateAndAwardBadges(resultPayload);
+
+      /* Update Continue Learning to show completed status (Audit 4.2) */
+      this.state.continueLearning = {
+        title: resultPayload.title,
+        subjectId: resultPayload.primarySubjectId === 'all' ? 'physics' : (resultPayload.primarySubjectId || 'physics'),
+        categoryId: resultPayload.categoryId || 'uni',
+        progressPct: 100,
+        completedCount: resultPayload.attempted,
+        totalCount: resultPayload.total,
+        mode: resultPayload.mode,
+        hasActiveSession: false
+      };
+
+      /* Prepend Full Snapshot to Quiz History for Exact Review & Retry (Audit 4.8) */
       this.state.quizHistory.unshift({
-        id: 'hist-' + Date.now(),
+        id: resultPayload.sessionId || ('hist-' + Date.now()),
         title: resultPayload.title,
         category: resultPayload.categoryLabel || 'Practice Set',
+        categoryId: resultPayload.categoryId || 'uni',
         subjectId: resultPayload.primarySubjectId || 'physics',
         mode: resultPayload.mode,
         score: resultPayload.correct,
+        netScore: resultPayload.netScore,
+        negativeMark: resultPayload.negativeMark || 0,
         total: resultPayload.total,
+        attempted: resultPayload.attempted,
+        incorrect: resultPayload.incorrect,
+        skipped: resultPayload.skipped,
         accuracy: resultPayload.accuracy,
+        scorePct: resultPayload.scorePct,
         timeTakenSec: resultPayload.timeTakenSec,
         xpEarned: resultPayload.xpEarned,
-        date: 'Just now'
+        date: todayKey,
+        questionIds: (resultPayload.questions || []).map(function (q) { return q.id; }),
+        questionsSnapshot: JSON.parse(JSON.stringify(resultPayload.questions || [])),
+        answersSnapshot: JSON.parse(JSON.stringify(resultPayload.answers || {})),
+        subjectBreakdown: JSON.parse(JSON.stringify(resultPayload.subjectBreakdown || {}))
       });
 
       this.save();
     },
 
+    /* Complete 100% Reset All Progress (Audit 2.7) */
     resetProgress: function () {
-      var currentTheme = this.state.theme;
-      this.state = cloneDefault();
-      this.state.theme = currentTheme;
-      this.state.stats.totalAttempted = 0;
-      this.state.stats.totalCorrect = 0;
-      this.state.stats.completedQuizzes = 0;
-      this.state.stats.totalScorePctSum = 0;
-      this.state.user.xp = 0;
-      this.state.user.level = 1;
-      this.state.user.xpForNextLevel = 500;
-      this.state.quizHistory = [];
-      this.state.mistakes = [];
-      this.state.bookmarks = [];
-      this.state.dailyChallenge.completedQuestions = 0;
-      this.state.dailyChallenge.isCompleted = false;
+      var preservedTheme = this.state.theme;
+      var preservedSettings = JSON.parse(JSON.stringify(this.state.settings));
+      var fresh = createFreshDefaultState();
+      fresh.theme = preservedTheme;
+      fresh.settings = preservedSettings;
+      this.state = fresh;
+
+      if (window.ExamVerseQuiz) {
+        window.ExamVerseQuiz.stopTimer();
+        window.ExamVerseQuiz.session = null;
+        window.ExamVerseQuiz.lastResult = null;
+      }
+
       this.save();
     },
 
-    /* Frontend-Ready Cloud Adapter Stub for Future Firebase Auth & Firestore Integration */
-    firebaseAdapter: {
-      isConfigured: false,
-      statusMessage: 'Local-first storage active. Ready for Firebase Auth & Cloud Firestore binding.',
-      getSyncPayload: function () {
-        return {
-          schemaVersion: '1.0.0',
-          exportedAt: new Date().toISOString(),
-          profile: StorageManager.state.user,
-          stats: StorageManager.state.stats,
-          bookmarks: StorageManager.state.bookmarks,
-          mistakes: StorageManager.state.mistakes
-        };
-      }
+    /* Optional Demo Profile Loader (Clearly flagged as Demo Mode per Audit 5.1) */
+    loadSampleDemoProfile: function () {
+      var todayKey = getDhakaDateStr();
+      var yesterdayKey = getDhakaDateStr(new Date(Date.now() - 86400000));
+      var fresh = createFreshDefaultState();
+      fresh.theme = this.state.theme;
+      fresh.settings = JSON.parse(JSON.stringify(this.state.settings));
+      fresh.isDemoMode = true;
+      fresh.user = {
+        name: 'Arian Chowdhury (Demo)',
+        username: '@arian_demo',
+        avatarInitials: 'AC',
+        targetTrack: 'University & Engineering Admission',
+        level: 7,
+        xp: 3480,
+        xpForNextLevel: 3500,
+        streakDays: 5,
+        streakActive: true,
+        lastStudyDate: yesterdayKey
+      };
+      fresh.stats.totalQuestionsSeen = 48;
+      fresh.stats.totalAttempted = 45;
+      fresh.stats.totalCorrect = 38;
+      fresh.stats.totalIncorrect = 7;
+      fresh.stats.totalSkipped = 3;
+      fresh.stats.completedQuizzes = 6;
+      fresh.stats.totalScorePctSum = 504;
+      fresh.stats.stemQuestionsSolved = 24;
+      fresh.stats.subjectMastery = {
+        physics: 85,
+        chemistry: 78,
+        math: 88,
+        biology: 75,
+        english: 80,
+        bangla: 82,
+        gk: 70,
+        ict: 86
+      };
+      fresh.bookmarks = ['q-phy-101', 'q-chem-203'];
+      fresh.mistakes = [
+        {
+          questionId: 'q-phy-102',
+          selectedIndex: 2,
+          timestamp: yesterdayKey,
+          status: 'Needs Review',
+          retryCount: 1,
+          note: 'Convert Celsius (327°C and 27°C) to Kelvin before applying η = 1 - T2/T1.'
+        }
+      ];
+      fresh.unlockedBadges = ['badge-first-step', 'badge-stem-scholar'];
+      fresh.dailyChallenge.date = todayKey;
+      this.state = fresh;
+      this.recalculateLevelProgress();
+      this.save();
     }
   };
 
