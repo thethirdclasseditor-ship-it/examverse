@@ -1,9 +1,5 @@
 /* ==========================================================================
    ExamVerse — Production Quiz & Examination Engine (js/quiz.js)
-   Step 1 + Step 2 + Step 3 Updates:
-   - Supports Question Type Filtering ('all', 'multi' বহুপদী i,ii,iii, 'standard')
-   - Preserves standard board option order (i ও ii, i ও iii, ii ও iii, i, ii ও iii) on multi-statement questions while shuffling standard MCQ options
-   - Supports Custom Exam Builder parameters (custom count, per-question timer, custom negative mark)
    ========================================================================== */
 
 (function () {
@@ -20,7 +16,6 @@
 
   function prepareQuestionWithShuffledOptions(q, shouldShuffleOptions) {
     var copy = JSON.parse(JSON.stringify(q));
-    /* Do not shuffle options for Multi-Statement (i, ii, iii) questions so board option order stays intact */
     if (!shouldShuffleOptions || copy.questionType === 'multi' || !Array.isArray(copy.options)) {
       return copy;
     }
