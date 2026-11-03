@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { AppState, QuestionMCQ } from '../types';
+import { AppState, LeaderboardEntry, QuestionMCQ } from '../types';
 import { SUBJECTS, BENCHMARK_LEADERBOARD } from '../data/syllabusData';
-import { supabase } from '../lib/supabase';
+import { supabase, fetchRealCloudLeaderboard } from '../lib/supabase';
 
 const CUSTOM_QUESTIONS_STORAGE_KEY = 'examverse_custom_questions_v1';
 
@@ -23,37 +23,36 @@ export function saveCustomQuestions(list: QuestionMCQ[]) {
 }
 
 /* ==========================================================================
-   FEATURE 1: PAST YEAR QUESTION BANK ARCHIVE (বিগত বছরের প্রশ্ন ব্যাংক)
+   FEATURE 1 (Audit 3.5 Fix): PAST YEAR QUESTION BANK ARCHIVE
    ========================================================================== */
 export interface PastYearPaper {
   id: string;
   examGroup: 'Admission' | 'BCS & Bank' | 'HSC Board' | 'SSC Board';
   institution: string;
   year: string;
+  unit: string;
   titleBn: string;
   titleEn: string;
   negativeMark: number;
-  subjectFilter?: string;
   categoryFilter: string;
+  subjectIds: string[];
 }
 
 export const PAST_YEAR_PAPERS: PastYearPaper[] = [
-  { id: 'py-du-a-24', examGroup: 'Admission', institution: 'Dhaka University (DU)', year: '2024–25', titleBn: 'ঢাবি ক-ইউনিট (বিজ্ঞান) ভর্তি প্রশ্ন ২০২৪–২৫', titleEn: 'DU A-Unit Science Admission Question Paper', negativeMark: 0.25, categoryFilter: 'uni' },
-  { id: 'py-du-b-24', examGroup: 'Admission', institution: 'Dhaka University (DU)', year: '2024–25', titleBn: 'ঢাবি খ-ইউনিট (মানবিক) ভর্তি প্রশ্ন ২০২৪–২৫', titleEn: 'DU B-Unit Arts & Humanities Question Paper', negativeMark: 0.25, categoryFilter: 'uni' },
-  { id: 'py-du-c-24', examGroup: 'Admission', institution: 'Dhaka University (DU)', year: '2024–25', titleBn: 'ঢাবি গ-ইউনিট (ব্যবসায় শিক্ষা) ভর্তি প্রশ্ন ২০২৪–২৫', titleEn: 'DU C-Unit Business Studies Question Paper', negativeMark: 0.25, categoryFilter: 'uni' },
-  { id: 'py-buet-24', examGroup: 'Admission', institution: 'BUET Preliminary', year: '2024', titleBn: 'বুয়েট প্রিলিমিনারি ভর্তি পরীক্ষা ২০২৪', titleEn: 'BUET Engineering Preliminary Question Paper', negativeMark: 0.25, categoryFilter: 'eng' },
-  { id: 'py-med-24', examGroup: 'Admission', institution: 'Medical (MBBS)', year: '2024–25', titleBn: 'মেডিকেল (MBBS) ভর্তি পরীক্ষা প্রশ্ন ২০২৪–২৫', titleEn: 'DGHS Medical Admission Question Paper', negativeMark: 0.25, categoryFilter: 'med' },
-  { id: 'py-bcs-46', examGroup: 'BCS & Bank', institution: 'BPSC (46th BCS)', year: '2024', titleBn: '৪৬তম বিসিএস প্রিলিমিনারি প্রশ্নপত্র', titleEn: '46th BCS Preliminary Official Paper', negativeMark: 0.5, categoryFilter: 'bcs' },
-  { id: 'py-bcs-45', examGroup: 'BCS & Bank', institution: 'BPSC (45th BCS)', year: '2023', titleBn: '৪৫তম বিসিএস প্রিলিমিনারি প্রশ্নপত্র', titleEn: '45th BCS Preliminary Official Paper', negativeMark: 0.5, categoryFilter: 'bcs' },
-  { id: 'py-bb-ad-24', examGroup: 'BCS & Bank', institution: 'Bangladesh Bank', year: '2024', titleBn: 'বাংলাদেশ ব্যাংক সহকারী পরিচালক (AD) ২০২৪', titleEn: 'Bangladesh Bank Assistant Director (AD) Question', negativeMark: 0.25, categoryFilter: 'bank' },
-  { id: 'py-hsc-dhaka-24', examGroup: 'HSC Board', institution: 'Dhaka Board', year: '2024', titleBn: 'ঢাকা বোর্ড এইচএসসি চূড়ান্ত প্রশ্নপত্র ২০২৪', titleEn: 'Dhaka Board HSC Final Paper 2024', negativeMark: 0, categoryFilter: 'hsc' },
-  { id: 'py-hsc-raj-24', examGroup: 'HSC Board', institution: 'Rajshahi Board', year: '2024', titleBn: 'রাজশাহী বোর্ড এইচএসসি চূড়ান্ত প্রশ্নপত্র ২০২৪', titleEn: 'Rajshahi Board HSC Final Paper 2024', negativeMark: 0, categoryFilter: 'hsc' },
-  { id: 'py-ssc-dhaka-24', examGroup: 'SSC Board', institution: 'Dhaka Board', year: '2024', titleBn: 'ঢাকা বোর্ড এসএসসি চূড়ান্ত প্রশ্নপত্র ২০২৪', titleEn: 'Dhaka Board SSC Final Paper 2024', negativeMark: 0, categoryFilter: 'ssc' }
+  { id: 'py-du-a-24', examGroup: 'Admission', institution: 'Dhaka University', year: '2024–25', unit: 'A-Unit (Science)', titleBn: 'ঢাবি ক-ইউনিট (বিজ্ঞান) ভর্তি প্রশ্ন সেট ২০২৪–২৫', titleEn: 'DU A-Unit Science Question Set', negativeMark: 0.25, categoryFilter: 'uni', subjectIds: ['physics', 'chemistry', 'math', 'biology'] },
+  { id: 'py-du-b-24', examGroup: 'Admission', institution: 'Dhaka University', year: '2024–25', unit: 'B-Unit (Arts)', titleBn: 'ঢাবি খ-ইউনিট (মানবিক) ভর্তি প্রশ্ন সেট ২০২৪–২৫', titleEn: 'DU B-Unit Arts & Humanities Set', negativeMark: 0.25, categoryFilter: 'uni', subjectIds: ['bangla', 'english', 'gk', 'economics', 'civics', 'history'] },
+  { id: 'py-du-c-24', examGroup: 'Admission', institution: 'Dhaka University', year: '2024–25', unit: 'C-Unit (Commerce)', titleBn: 'ঢাবি গ-ইউনিট (ব্যবসায় শিক্ষা) ভর্তি প্রশ্ন সেট ২০২৪–২৫', titleEn: 'DU C-Unit Business Studies Set', negativeMark: 0.25, categoryFilter: 'uni', subjectIds: ['accounting', 'management', 'finance', 'marketing', 'english', 'bangla'] },
+  { id: 'py-buet-24', examGroup: 'Admission', institution: 'BUET', year: '2024', unit: 'Preliminary', titleBn: 'বুয়েট প্রিলিমিনারি ভর্তি প্রশ্ন সেট ২০২৪', titleEn: 'BUET Engineering Preliminary Set', negativeMark: 0.25, categoryFilter: 'eng', subjectIds: ['physics', 'chemistry', 'math'] },
+  { id: 'py-med-24', examGroup: 'Admission', institution: 'DGHS Medical', year: '2024–25', unit: 'MBBS', titleBn: 'মেডিকেল (MBBS) ভর্তি পরীক্ষা প্রশ্ন সেট ২০২৪–২৫', titleEn: 'Medical Admission Standard Paper', negativeMark: 0.25, categoryFilter: 'med', subjectIds: ['biology', 'chemistry', 'physics', 'english', 'gk'] },
+  { id: 'py-bcs-46', examGroup: 'BCS & Bank', institution: 'BPSC', year: '2024', unit: '46th BCS', titleBn: '৪৬তম বিসিএস প্রিলিমিনারি প্রশ্ন সেট', titleEn: '46th BCS Preliminary Paper', negativeMark: 0.5, categoryFilter: 'bcs', subjectIds: ['bangla', 'english', 'gk', 'math', 'ict', 'economics', 'civics'] },
+  { id: 'py-bb-ad-24', examGroup: 'BCS & Bank', institution: 'Bangladesh Bank', year: '2024', unit: 'AD General', titleBn: 'বাংলাদেশ ব্যাংক সহকারী পরিচালক (AD) ২০২৪', titleEn: 'Bangladesh Bank AD Paper', negativeMark: 0.25, categoryFilter: 'bank', subjectIds: ['math', 'english', 'accounting', 'finance', 'economics', 'ict', 'gk'] },
+  { id: 'py-hsc-dhaka-24', examGroup: 'HSC Board', institution: 'Dhaka Board', year: '2024', unit: 'HSC Final', titleBn: 'ঢাকা বোর্ড এইচএসসি চূড়ান্ত প্রশ্ন সেট ২০২৪', titleEn: 'Dhaka Board HSC Paper 2024', negativeMark: 0, categoryFilter: 'hsc', subjectIds: ['physics', 'chemistry', 'math', 'biology', 'accounting', 'economics', 'bangla', 'english', 'ict'] },
+  { id: 'py-ssc-dhaka-24', examGroup: 'SSC Board', institution: 'Dhaka Board', year: '2024', unit: 'SSC Final', titleBn: 'ঢাকা বোর্ড এসএসসি চূড়ান্ত প্রশ্ন সেট ২০২৪', titleEn: 'Dhaka Board SSC Paper 2024', negativeMark: 0, categoryFilter: 'ssc', subjectIds: ['physics', 'chemistry', 'math', 'biology', 'accounting', 'bangla', 'english', 'gk'] }
 ];
 
 export const PastYearArchiveView: React.FC<{
   allQuestions: QuestionMCQ[];
-  onStartPaper: (questions: QuestionMCQ[], title: string, mode: 'practice' | 'exam') => void;
+  onStartPaper: (questions: QuestionMCQ[], title: string, mode: 'practice' | 'exam', categoryId: string, negativeMark: number) => void;
 }> = ({ allQuestions, onStartPaper }) => {
   const [filterTrack, setFilterTrack] = useState<string>('all');
   const [yearSearch, setYearSearch] = useState<string>('');
@@ -74,13 +73,13 @@ export const PastYearArchiveView: React.FC<{
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.85rem', marginBottom: '1.15rem' }}>
         <div>
           <span className="ev-badge-pill ev-badge-indigo" style={{ marginBottom: '0.3rem' }}>Question Bank Archive</span>
-          <h1 className="font-bn" style={{ fontSize: '1.38rem', fontWeight: 800 }}>📚 বিগত বছরের প্রশ্ন ব্যাংক (Past Year Papers)</h1>
+          <h1 className="font-bn" style={{ fontSize: '1.38rem', fontWeight: 800 }}>📚 বিগত বছরের প্রশ্ন ব্যাংক আর্কাইভ</h1>
         </div>
         <input
           type="text"
           className="ev-input"
           style={{ maxWidth: '280px' }}
-          placeholder="সাল বা প্রতিষ্ঠান খুঁজুন (যেমন: DU, 46th BCS, 2024)..."
+          placeholder="সাল, ইউনিট বা প্রতিষ্ঠান খুঁজুন..."
           value={yearSearch}
           onChange={(e) => setYearSearch(e.target.value)}
         />
@@ -101,17 +100,22 @@ export const PastYearArchiveView: React.FC<{
 
       <div className="ev-grid-2">
         {filteredPapers.map((paper) => {
-          const pool = allQuestions.filter((q) => q.categories.includes(paper.categoryFilter));
+          /* Audit 3.5 Fix: Filter by paperId if tagged, or by the exact unit's subjectIds + category */
+          const pool = allQuestions.filter(
+            (q) =>
+              q.paperId === paper.id ||
+              (paper.subjectIds.includes(q.subjectId) && q.categories.includes(paper.categoryFilter))
+          );
           return (
             <div key={paper.id} className="ev-card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: '0.9rem' }}>
               <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.45rem' }}>
-                  <span className="ev-badge-pill ev-badge-indigo">{paper.institution}</span>
-                  <span className="ev-badge-pill ev-badge-warning font-mono">{paper.year}</span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.45rem', flexWrap: 'wrap', gap: '0.4rem' }}>
+                  <span className="ev-badge-pill ev-badge-indigo">{paper.institution} • {paper.unit}</span>
+                  <span className="ev-badge-pill ev-badge-warning font-mono">{paper.year} • Neg: -{paper.negativeMark}</span>
                 </div>
                 <h3 className="font-bn" style={{ fontSize: '1.05rem', fontWeight: 800, marginBottom: '0.2rem' }}>{paper.titleBn}</h3>
                 <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
-                  {paper.titleEn} • <strong>{pool.length} Verified MCQs</strong> • Negative: -{paper.negativeMark}
+                  {paper.titleEn} • <strong>{pool.length} Subject-Matched MCQs</strong>
                 </div>
               </div>
               <div style={{ display: 'flex', gap: '0.5rem', paddingTop: '0.6rem', borderTop: '1px solid var(--border-subtle)' }}>
@@ -119,17 +123,17 @@ export const PastYearArchiveView: React.FC<{
                   type="button"
                   className="ev-btn ev-btn-soft ev-btn-sm"
                   style={{ flex: 1 }}
-                  onClick={() => onStartPaper(pool, paper.titleBn, 'practice')}
+                  onClick={() => onStartPaper(pool, paper.titleBn, 'practice', paper.categoryFilter, 0)}
                 >
-                  সমাধান ও ব্যাখ্যা (Practice)
+                  Practice &amp; Solution
                 </button>
                 <button
                   type="button"
                   className="ev-btn ev-btn-primary ev-btn-sm"
                   style={{ flex: 1 }}
-                  onClick={() => onStartPaper(pool, paper.titleBn, 'exam')}
+                  onClick={() => onStartPaper(pool, paper.titleBn, 'exam', paper.categoryFilter, paper.negativeMark)}
                 >
-                  লাইভ পরীক্ষা (Timed Exam)
+                  Timed Exam (-{paper.negativeMark})
                 </button>
               </div>
             </div>
@@ -141,34 +145,59 @@ export const PastYearArchiveView: React.FC<{
 };
 
 /* ==========================================================================
-   FEATURE 3: 1v1 LIVE QUIZ BATTLE (১-অন-১ কুইজ ব্যাটল / Friend Challenge)
+   FEATURE 3 (Audit 3.6 Fix): 1v1 QUIZ BATTLE (Supabase Realtime Room + Practice Bot Mode)
    ========================================================================== */
 export const QuizBattleView: React.FC<{
   allQuestions: QuestionMCQ[];
   userName: string;
   onAwardBattleXp: (xp: number) => void;
 }> = ({ allQuestions, userName, onAwardBattleXp }) => {
+  const [battleMode, setBattleMode] = useState<'bot' | 'realtime'>('bot');
   const [roomCode, setRoomCode] = useState<string>('EV-' + Math.floor(1000 + Math.random() * 9000));
   const [joinCode, setJoinCode] = useState<string>('');
   const [selectedSubject, setSelectedSubject] = useState<string>('all');
-  const [opponentName, setOpponentName] = useState<string>('Nafis Rahman (BUET Track)');
+  const [opponentName, setOpponentName] = useState<string>('Practice AI Bot');
   const [battleQuestions, setBattleQuestions] = useState<QuestionMCQ[]>([]);
   const [currentIdx, setCurrentIdx] = useState<number>(0);
   const [myScore, setMyScore] = useState<number>(0);
   const [oppScore, setOppScore] = useState<number>(0);
   const [status, setStatus] = useState<'lobby' | 'playing' | 'finished'>('lobby');
   const [chosenOpt, setChosenOpt] = useState<number | null>(null);
+  const [activeChannel, setActiveChannel] = useState<any>(null);
 
-  const startBattle = (customOpponent?: string) => {
+  useEffect(() => {
+    return () => {
+      if (activeChannel) supabase.removeChannel(activeChannel);
+    };
+  }, [activeChannel]);
+
+  const startBattle = (modeType: 'bot' | 'realtime', customCode?: string) => {
+    const code = customCode || roomCode;
     const pool = allQuestions.filter((q) => selectedSubject === 'all' || q.subjectId === selectedSubject);
-    const shuffled = [...pool].sort(() => Math.random() - 0.5).slice(0, 5);
-    if (customOpponent) setOpponentName(customOpponent);
-    setBattleQuestions(shuffled);
+    /* Deterministic shuffle by room code so two players in the same Realtime room get the exact same 5 questions */
+    let seed = 0;
+    for (let i = 0; i < code.length; i++) seed = (seed * 31 + code.charCodeAt(i)) >>> 0;
+    const ordered = [...pool].sort((a, b) => ((a.id.charCodeAt(2) + seed) % 13) - ((b.id.charCodeAt(2) + seed) % 13)).slice(0, 5);
+
+    setBattleMode(modeType);
+    setOpponentName(modeType === 'bot' ? 'Practice AI Challenger (Bot)' : `Room Opponent (${code})`);
+    setBattleQuestions(ordered);
     setCurrentIdx(0);
     setMyScore(0);
     setOppScore(0);
     setChosenOpt(null);
     setStatus('playing');
+
+    if (modeType === 'realtime') {
+      const ch = supabase.channel(`ev-battle-${code}`);
+      ch.on('broadcast', { event: 'score_update' }, (payload: any) => {
+        if (payload?.payload?.sender !== userName) {
+          setOpponentName(payload.payload.sender || 'Live Challenger');
+          setOppScore(Number(payload.payload.score) || 0);
+        }
+      }).subscribe();
+      setActiveChannel(ch);
+    }
   };
 
   const handlePickBattleOption = (idx: number) => {
@@ -176,13 +205,19 @@ export const QuizBattleView: React.FC<{
     setChosenOpt(idx);
     const q = battleQuestions[currentIdx];
     const isMeCorrect = idx === q.correctIndex;
-    /* Opponent has a 72% realistic accuracy rate */
-    const isOppCorrect = Math.random() < 0.72;
-
     const nextMy = myScore + (isMeCorrect ? 20 : 0);
-    const nextOpp = oppScore + (isOppCorrect ? 20 : 0);
     setMyScore(nextMy);
-    setOppScore(nextOpp);
+
+    if (battleMode === 'realtime' && activeChannel) {
+      activeChannel.send({
+        type: 'broadcast',
+        event: 'score_update',
+        payload: { sender: userName, score: nextMy }
+      });
+    } else {
+      const isBotCorrect = Math.random() < 0.7;
+      setOppScore((prev) => prev + (isBotCorrect ? 20 : 0));
+    }
 
     window.setTimeout(() => {
       if (currentIdx + 1 < battleQuestions.length) {
@@ -190,65 +225,63 @@ export const QuizBattleView: React.FC<{
         setChosenOpt(null);
       } else {
         setStatus('finished');
-        if (nextMy >= nextOpp && nextMy > 0) {
-          onAwardBattleXp(50);
-        } else if (nextMy > 0) {
-          onAwardBattleXp(20);
-        }
+        if (nextMy > 0) onAwardBattleXp(nextMy >= oppScore ? 40 : 15);
       }
-    }, 950);
+    }, 900);
   };
 
   if (status === 'lobby') {
     return (
-      <div style={{ maxWidth: '760px', margin: '0 auto' }}>
-        <span className="ev-badge-pill ev-badge-violet" style={{ marginBottom: '0.35rem' }}>Real-Time 1v1 Arena</span>
+      <div style={{ maxWidth: '780px', margin: '0 auto' }}>
+        <span className="ev-badge-pill ev-badge-violet" style={{ marginBottom: '0.35rem' }}>1v1 Challenge &amp; Practice Bot</span>
         <h1 className="font-bn" style={{ fontSize: '1.4rem', fontWeight: 800, marginBottom: '1rem' }}>
-          ⚔️ ১-অন-১ কুইজ ব্যাটল (1v1 Live Quiz Battle)
+          ⚔️ ১-অন-১ কুইজ ব্যাটল (Live Room Sync &amp; Practice Bot Battle)
         </h1>
 
-        <div className="ev-grid-2" style={{ marginBottom: '1.25rem' }}>
-          <div className="ev-card" style={{ border: '1.5px solid var(--brand-primary-border)', background: 'linear-gradient(145deg, var(--bg-surface) 0%, var(--brand-primary-soft) 100%)' }}>
-            <h3 className="font-bn" style={{ fontSize: '1.05rem', fontWeight: 800, marginBottom: '0.4rem' }}>বন্ধুকে চ্যালেঞ্জ করুন (Room Code)</h3>
-            <p className="font-bn" style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: '0.75rem' }}>
-              নিচের রুম কোডটি বন্ধুকে পাঠান অথবা সাবজেক্ট সিলেক্ট করে ব্যাটল শুরু করুন:
-            </p>
-            <div className="font-mono" style={{ fontSize: '1.35rem', fontWeight: 800, padding: '0.55rem 0.9rem', background: 'var(--bg-surface)', borderRadius: '8px', border: '1px dashed var(--brand-primary)', textAlign: 'center', marginBottom: '0.75rem', color: 'var(--brand-primary)' }}>
-              {roomCode}
+        <div style={{ marginBottom: '1rem' }}>
+          <label style={{ fontSize: '0.78rem', fontWeight: 700, display: 'block', marginBottom: '0.3rem' }}>ব্যাটলের বিষয় নির্বাচন করুন (Select Subject)</label>
+          <select className="ev-select" style={{ maxWidth: '340px' }} value={selectedSubject} onChange={(e) => setSelectedSubject(e.target.value)}>
+            <option value="all">সকল বিষয় (All 17 Subjects)</option>
+            {SUBJECTS.map((s) => (
+              <option key={s.id} value={s.id}>{s.nameBn} ({s.name})</option>
+            ))}
+          </select>
+        </div>
+
+        <div className="ev-grid-2">
+          {/* Option 1: Honest Practice Bot Battle (Audit 3.6 recommendation) */}
+          <div className="ev-card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: '0.85rem' }}>
+            <div>
+              <span className="ev-badge-pill ev-badge-indigo" style={{ marginBottom: '0.35rem' }}>Instant Solo Match</span>
+              <h3 className="font-bn" style={{ fontSize: '1.08rem', fontWeight: 800 }}>🤖 Practice Bot Battle (তাৎক্ষণিক প্র্যাকটিস ম্যাচ)</h3>
+              <p className="font-bn" style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
+                যেকোনো সময় অপেক্ষা ছাড়াই AI Bot প্রতিদ্বন্দ্বীর সাথে ৫টি প্রশ্নের দ্রুতগতির প্র্যাকটিস ম্যাচ খেলুন।
+              </p>
             </div>
-            <select className="ev-select" style={{ marginBottom: '0.75rem' }} value={selectedSubject} onChange={(e) => setSelectedSubject(e.target.value)}>
-              <option value="all">সকল বিষয় (All 17 Subjects Mix)</option>
-              {SUBJECTS.map((s) => (
-                <option key={s.id} value={s.id}>{s.name} ({s.nameBn})</option>
-              ))}
-            </select>
-            <button type="button" className="ev-btn ev-btn-primary" style={{ width: '100%' }} onClick={() => startBattle('Tasnim Zara (Medical Track)')}>
-              ⚔️ কুইজ ব্যাটল শুরু করুন (5 Rapid Questions)
+            <button type="button" className="ev-btn ev-btn-primary" onClick={() => startBattle('bot')}>
+              🤖 Start Practice Bot Battle →
             </button>
           </div>
 
-          <div className="ev-card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-            <div>
-              <h3 className="font-bn" style={{ fontSize: '1.05rem', fontWeight: 800, marginBottom: '0.4rem' }}>বন্ধুর রুমে জয়েন করুন (Join Room)</h3>
-              <p className="font-bn" style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: '0.75rem' }}>
-                আপনার বন্ধুর দেওয়া `EV-XXXX` রুম কোডটি নিচে লিখে সরাসরি ম্যাচে যুক্ত হোন:
-              </p>
+          {/* Option 2: Real-Time Room Sync via Supabase Realtime Channel */}
+          <div className="ev-card" style={{ border: '1.5px solid var(--brand-primary-border)', background: 'linear-gradient(145deg, var(--bg-surface) 0%, var(--brand-primary-soft) 100%)' }}>
+            <span className="ev-badge-pill ev-badge-success" style={{ marginBottom: '0.35rem' }}>Supabase Realtime Channel</span>
+            <h3 className="font-bn" style={{ fontSize: '1.08rem', fontWeight: 800 }}>🌐 Live Friend Room Battle (রুম কোড ম্যাচ)</h3>
+            <div className="font-mono" style={{ fontSize: '1.2rem', fontWeight: 800, padding: '0.45rem', background: 'var(--bg-surface)', borderRadius: '8px', border: '1px dashed var(--brand-primary)', textAlign: 'center', margin: '0.55rem 0', color: 'var(--brand-primary)' }}>
+              Your Room Code: {roomCode}
+            </div>
+            <div style={{ display: 'flex', gap: '0.45rem', marginBottom: '0.55rem' }}>
               <input
                 type="text"
                 className="ev-input font-mono"
-                placeholder="যেমন: EV-4829"
+                placeholder="বন্ধুর কোড (যেমন: EV-4829)"
                 value={joinCode}
                 onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
               />
+              <button type="button" className="ev-btn ev-btn-soft ev-btn-sm" onClick={() => startBattle('realtime', joinCode || roomCode)}>
+                Join / Start
+              </button>
             </div>
-            <button
-              type="button"
-              className="ev-btn ev-btn-soft"
-              style={{ width: '100%', marginTop: '0.85rem' }}
-              onClick={() => startBattle(joinCode ? `Challenger (${joinCode})` : 'Nafis Rahman (BUET Track)')}
-            >
-              রুমে জয়েন ও ব্যাটল শুরু করুন →
-            </button>
           </div>
         </div>
       </div>
@@ -259,23 +292,23 @@ export const QuizBattleView: React.FC<{
     const won = myScore >= oppScore;
     return (
       <div className="ev-card" style={{ maxWidth: '640px', margin: '0 auto', textAlign: 'center', padding: '2rem' }}>
-        <div style={{ fontSize: '2.6rem', marginBottom: '0.4rem' }}>{won ? '🏆' : '⚡'}</div>
-        <h2 className="font-bn" style={{ fontSize: '1.45rem', fontWeight: 800, marginBottom: '0.35rem' }}>
-          {won ? 'অভিনন্দন! আপনি কুইজ ব্যাটলে বিজয়ী হয়েছেন!' : 'দারুণ লড়াই হয়েছে! আবার চেষ্টা করুন!'}
+        <div style={{ fontSize: '2.5rem', marginBottom: '0.35rem' }}>{won ? '🏆' : '⚡'}</div>
+        <h2 className="font-bn" style={{ fontSize: '1.4rem', fontWeight: 800 }}>
+          {won ? 'অভিনন্দন! আপনি ম্যাচে এগিয়ে থেকে জয়ী হয়েছেন!' : 'দারুণ লড়াই হয়েছে! আবার চেষ্টা করুন!'}
         </h2>
         <div className="ev-grid-2" style={{ margin: '1.25rem 0' }}>
-          <div className="ev-card" style={{ background: 'var(--status-success-bg)', borderColor: 'var(--status-success-border)' }}>
+          <div className="ev-card" style={{ background: 'var(--status-success-bg)' }}>
             <div style={{ fontSize: '0.8rem', fontWeight: 700 }}>{userName} (আপনি)</div>
-            <div className="font-mono" style={{ fontSize: '1.6rem', fontWeight: 800, color: 'var(--status-success-text)' }}>{myScore} pts</div>
+            <div className="font-mono" style={{ fontSize: '1.55rem', fontWeight: 800, color: 'var(--status-success-text)' }}>{myScore} pts</div>
           </div>
           <div className="ev-card" style={{ background: 'var(--bg-surface-muted)' }}>
             <div style={{ fontSize: '0.8rem', fontWeight: 700 }}>{opponentName}</div>
-            <div className="font-mono" style={{ fontSize: '1.6rem', fontWeight: 800 }}>{oppScore} pts</div>
+            <div className="font-mono" style={{ fontSize: '1.55rem', fontWeight: 800 }}>{oppScore} pts</div>
           </div>
         </div>
         <div style={{ display: 'flex', gap: '0.6rem', justifyContent: 'center' }}>
-          <button type="button" className="ev-btn ev-btn-primary" onClick={() => startBattle()}>আবার খেলুন (Rematch)</button>
-          <button type="button" className="ev-btn ev-btn-secondary" onClick={() => { setRoomCode('EV-' + Math.floor(1000 + Math.random() * 9000)); setStatus('lobby'); }}>লবিতে ফিরুন</button>
+          <button type="button" className="ev-btn ev-btn-primary" onClick={() => startBattle(battleMode)}>Play Again</button>
+          <button type="button" className="ev-btn ev-btn-secondary" onClick={() => setStatus('lobby')}>Back to Lobby</button>
         </div>
       </div>
     );
@@ -289,16 +322,17 @@ export const QuizBattleView: React.FC<{
           <div style={{ fontSize: '0.75rem', fontWeight: 700 }}>👤 {userName}</div>
           <div className="font-mono" style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--brand-primary)' }}>{myScore} pts</div>
         </div>
-        <span className="ev-badge-pill ev-badge-warning">VS • Round {currentIdx + 1}/5</span>
+        <span className="ev-badge-pill ev-badge-warning">
+          {battleMode === 'bot' ? '🤖 Bot Match' : '🌐 Live Room'} • Q {currentIdx + 1}/5
+        </span>
         <div style={{ textAlign: 'right' }}>
-          <div style={{ fontSize: '0.75rem', fontWeight: 700 }}>⚡ {opponentName}</div>
+          <div style={{ fontSize: '0.75rem', fontWeight: 700 }}>{opponentName}</div>
           <div className="font-mono" style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--brand-accent)' }}>{oppScore} pts</div>
         </div>
       </div>
 
       <div className="ev-card">
-        <div className="font-bn" style={{ fontSize: '1.12rem', fontWeight: 800, marginBottom: '0.35rem' }}>{q.questionBn}</div>
-        <div style={{ fontSize: '0.92rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>{q.question}</div>
+        <div className="font-bn" style={{ fontSize: '1.12rem', fontWeight: 800, marginBottom: '0.85rem' }}>{q.questionBn}</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
           {q.options.map((opt, idx) => {
             let cls = 'ev-option-btn';
@@ -320,7 +354,7 @@ export const QuizBattleView: React.FC<{
 };
 
 /* ==========================================================================
-   FEATURE 11: 60-SECOND RAPID FIRE SPRINT (৬০-সেকেন্ড র‍্যাপিড ফায়ার মোড)
+   FEATURE 11: 60-SECOND RAPID FIRE SPRINT
    ========================================================================== */
 export const RapidFireView: React.FC<{
   allQuestions: QuestionMCQ[];
@@ -332,6 +366,7 @@ export const RapidFireView: React.FC<{
   const [idx, setIdx] = useState<number>(0);
   const [correctCount, setCorrectCount] = useState<number>(0);
   const [streakCombo, setStreakCombo] = useState<number>(0);
+  const [xpClaimed, setXpClaimed] = useState<boolean>(false);
   const [bestScore, setBestScore] = useState<number>(() => Number(window.localStorage.getItem('ev_rapid_best') || 0));
 
   useEffect(() => {
@@ -350,11 +385,11 @@ export const RapidFireView: React.FC<{
   }, [status]);
 
   const startSprint = () => {
-    const shuffled = [...allQuestions].sort(() => Math.random() - 0.5);
-    setPool(shuffled);
+    setPool([...allQuestions].sort(() => Math.random() - 0.5));
     setIdx(0);
     setCorrectCount(0);
     setStreakCombo(0);
+    setXpClaimed(false);
     setTimeLeft(60);
     setStatus('running');
   };
@@ -363,9 +398,8 @@ export const RapidFireView: React.FC<{
     const q = pool[idx % pool.length];
     const isRight = optIdx === q.correctIndex;
     const nextCorrect = isRight ? correctCount + 1 : correctCount;
-    const nextCombo = isRight ? streakCombo + 1 : 0;
     setCorrectCount(nextCorrect);
-    setStreakCombo(nextCombo);
+    setStreakCombo(isRight ? streakCombo + 1 : 0);
     if (nextCorrect > bestScore) {
       setBestScore(nextCorrect);
       try {
@@ -380,11 +414,8 @@ export const RapidFireView: React.FC<{
       <div className="ev-card" style={{ maxWidth: '640px', margin: '0 auto', textAlign: 'center', padding: '2.2rem' }}>
         <span className="ev-badge-pill ev-badge-warning" style={{ marginBottom: '0.5rem' }}>⚡ 60-Second Speed Challenge</span>
         <h1 className="font-bn" style={{ fontSize: '1.45rem', fontWeight: 800, marginBottom: '0.45rem' }}>
-          ৬০-সেকেন্ড র‍্যাপিড ফায়ার মোড (Rapid Fire Sprint)
+          ৬০-সেকেন্ড র‍্যাপিড ফায়ার মোড
         </h1>
-        <p className="font-bn" style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', marginBottom: '1.25rem' }}>
-          মাত্র ৬০ সেকেন্ডে আপনি কতগুলো সঠিক উত্তর দিতে পারেন? অপশনে ক্লিক করার সাথে সাথেই পরের প্রশ্ন চলে আসবে!
-        </p>
         <div style={{ marginBottom: '1.25rem', fontWeight: 800, color: 'var(--brand-primary)' }}>
           🏅 আপনার সর্বোচ্চ রেকর্ড (Personal Best): {bestScore} সঠিক উত্তর / ৬০ সেকেন্ড
         </div>
@@ -396,25 +427,25 @@ export const RapidFireView: React.FC<{
   }
 
   if (status === 'done') {
-    const earnedXp = correctCount * 15;
+    const earnedXp = correctCount * 10;
     return (
       <div className="ev-card" style={{ maxWidth: '620px', margin: '0 auto', textAlign: 'center', padding: '2rem' }}>
-        <h2 className="font-bn" style={{ fontSize: '1.4rem', fontWeight: 800, marginBottom: '0.5rem' }}>⏱ সময় শেষ! (Time’s Up!)</h2>
-        <div style={{ fontSize: '2.2rem', fontWeight: 800, color: 'var(--brand-primary)', marginBottom: '0.4rem' }}>
+        <h2 className="font-bn" style={{ fontSize: '1.4rem', fontWeight: 800, marginBottom: '0.5rem' }}>⏱ সময় শেষ!</h2>
+        <div style={{ fontSize: '2rem', fontWeight: 800, color: 'var(--brand-primary)', marginBottom: '0.4rem' }}>
           {correctCount} সঠিক উত্তর (+{earnedXp} XP)
         </div>
-        <p style={{ fontSize: '0.86rem', color: 'var(--text-secondary)', marginBottom: '1.25rem' }}>
-          সর্বোচ্চ রেকর্ড: {bestScore} • মোট প্রশ্ন সমাধান: {idx}টি
-        </p>
         <button
           type="button"
           className="ev-btn ev-btn-primary"
           onClick={() => {
-            if (earnedXp > 0) onAwardSprintXp(earnedXp);
+            if (!xpClaimed && earnedXp > 0) {
+              setXpClaimed(true);
+              onAwardSprintXp(earnedXp);
+            }
             startSprint();
           }}
         >
-          XP গ্রহণ করে আবার খেলুন →
+          আবার খেলুন →
         </button>
       </div>
     );
@@ -424,7 +455,7 @@ export const RapidFireView: React.FC<{
   return (
     <div style={{ maxWidth: '720px', margin: '0 auto' }}>
       <div className="ev-card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-        <span className="ev-badge-pill ev-badge-danger font-mono" style={{ fontSize: '0.95rem' }}>⏱ {timeLeft}s Left</span>
+        <span className="ev-badge-pill ev-badge-danger font-mono">⏱ {timeLeft}s Left</span>
         <span className="ev-badge-pill ev-badge-indigo">🔥 Combo: {streakCombo}x</span>
         <span className="font-mono" style={{ fontWeight: 800, color: 'var(--status-success)' }}>✓ Correct: {correctCount}</span>
       </div>
@@ -444,41 +475,54 @@ export const RapidFireView: React.FC<{
 };
 
 /* ==========================================================================
-   FEATURE 14: SUBJECT-WISE LEADERBOARD (সাবজেক্ট ভিত্তিক লিডারবোর্ড)
+   FEATURE 14 (Audit 3.7 Fix): REAL DATABASE & SUBJECT-WISE LEADERBOARD
    ========================================================================== */
 export const SubjectLeaderboardView: React.FC<{ state: AppState }> = ({ state }) => {
   const [selectedSubj, setSelectedSubj] = useState<string>('all');
+  const [cloudRows, setCloudRows] = useState<LeaderboardEntry[]>([]);
+  const [loading, setLoading] = useState<boolean>(false);
   const activeSubjectObj = SUBJECTS.find((s) => s.id === selectedSubj);
 
-  /* Calculate subject-specific XP or global XP */
-  const rows = [
-    ...BENCHMARK_LEADERBOARD.map((b, idx) => ({
-      ...b,
-      subjXp: selectedSubj === 'all' ? b.xp : Math.max(120, Math.round(b.xp * (0.28 - idx * 0.03) + (selectedSubj.charCodeAt(0) % 7) * 45))
-    })),
+  useEffect(() => {
+    setLoading(true);
+    fetchRealCloudLeaderboard(selectedSubj)
+      .then((rows) => setCloudRows(rows))
+      .finally(() => setLoading(false));
+  }, [selectedSubj, state.user.xp]);
+
+  /* User's real subject score based on actual correct answers & mastery in that subject */
+  const mySubjXp =
+    selectedSubj === 'all'
+      ? state.user.xp
+      : (state.stats.subjectStats[selectedSubj]?.correct || 0) * 20 +
+        (state.stats.subjectMastery[selectedSubj] || 0) * 3;
+
+  const baseList = cloudRows.length > 0 ? cloudRows : BENCHMARK_LEADERBOARD;
+  const combined = [
+    ...baseList.filter((r) => r.handle !== state.user.username),
     {
-      rank: 6,
+      rank: 0,
       name: `${state.user.name} (আপনি)`,
       handle: state.user.username,
       avatar: state.user.avatarInitials,
       level: state.user.level,
-      xp: state.user.xp,
-      subjXp:
-        selectedSubj === 'all'
-          ? state.user.xp
-          : (state.stats.subjectStats[selectedSubj]?.correct || 0) * 25 + (state.stats.subjectMastery[selectedSubj] || 0) * 5,
-      badge: activeSubjectObj ? activeSubjectObj.nameBn : state.user.targetTrack,
+      xp: mySubjXp,
+      badge: activeSubjectObj ? `${state.stats.subjectMastery[selectedSubj] || 0}% Mastery` : state.user.targetTrack,
       isCurrentUser: true
     }
-  ].sort((a, b) => b.subjXp - a.subjXp);
+  ]
+    .sort((a, b) => b.xp - a.xp)
+    .map((item, idx) => ({ ...item, rank: idx + 1 }));
 
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.85rem', marginBottom: '1rem' }}>
         <div>
-          <span className="ev-badge-pill ev-badge-indigo" style={{ marginBottom: '0.3rem' }}>Global &amp; Subject-Wise Ranking</span>
+          <span className="ev-badge-pill ev-badge-success" style={{ marginBottom: '0.3rem' }}>
+            {cloudRows.length > 0 ? `✓ Live Database Ranking (${cloudRows.length} Users)` : 'Merit Leaderboard'}
+          </span>
           <h1 className="font-bn" style={{ fontSize: '1.38rem', fontWeight: 800 }}>
-            🏆 {activeSubjectObj ? `${activeSubjectObj.nameBn} — লিডারবোর্ড` : 'সার্বিক ও সাবজেক্ট ভিত্তিক লিডারবোর্ড'}
+            🏆 {activeSubjectObj ? `${activeSubjectObj.nameBn} — সাবজেক্ট লিডারবোর্ড` : 'সার্বিক ও সাবজেক্ট ভিত্তিক লিডারবোর্ড'}
           </h1>
         </div>
         <select
@@ -487,7 +531,7 @@ export const SubjectLeaderboardView: React.FC<{ state: AppState }> = ({ state })
           value={selectedSubj}
           onChange={(e) => setSelectedSubj(e.target.value)}
         >
-          <option value="all">🌐 সকল বিষয় (Overall Global Leaderboard)</option>
+          <option value="all">🌐 সকল বিষয় (Overall Global XP)</option>
           {SUBJECTS.map((s) => (
             <option key={s.id} value={s.id}>
               📘 {s.nameBn} ({s.name})
@@ -496,26 +540,27 @@ export const SubjectLeaderboardView: React.FC<{ state: AppState }> = ({ state })
         </select>
       </div>
 
-      {/* Top 3 Podium */}
+      {loading && <div style={{ fontSize: '0.84rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>ডাটাবেস থেকে র‍্যাংকিং লোড হচ্ছে...</div>}
+
       <div className="ev-podium-grid">
-        {rows.slice(0, 3).map((item, idx) => (
-          <div key={item.handle} className={`ev-podium-card rank-${idx + 1}`}>
-            <div style={{ fontSize: '1.55rem', fontWeight: 800 }}>
+        {combined.slice(0, 3).map((item, idx) => (
+          <div key={item.handle + idx} className={`ev-podium-card rank-${idx + 1}`}>
+            <div style={{ fontSize: '1.5rem', fontWeight: 800 }}>
               {idx === 0 ? '👑 #1 Gold' : idx === 1 ? '🥈 #2 Silver' : '🥉 #3 Bronze'}
             </div>
-            <div style={{ fontSize: '1.06rem', fontWeight: 800 }}>{item.name}</div>
+            <div style={{ fontSize: '1.05rem', fontWeight: 800 }}>{item.name}</div>
             <span className="ev-badge-pill ev-badge-indigo">{item.badge}</span>
             <div className="font-mono" style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--brand-primary)' }}>
-              {item.subjXp.toLocaleString()} XP
+              {item.xp.toLocaleString()} XP • Lv.{item.level}
             </div>
           </div>
         ))}
       </div>
 
       <div className="ev-card">
-        {rows.map((row, i) => (
+        {combined.map((row) => (
           <div
-            key={row.handle}
+            key={row.handle + row.rank}
             style={{
               display: 'flex',
               justifyContent: 'space-between',
@@ -527,11 +572,11 @@ export const SubjectLeaderboardView: React.FC<{ state: AppState }> = ({ state })
             }}
           >
             <div>
-              <strong>#{i + 1} {row.name}</strong>{' '}
+              <strong>#{row.rank} {row.name}</strong>{' '}
               <span className="font-bn" style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>({row.badge})</span>
             </div>
             <div className="font-mono" style={{ fontWeight: 800, color: 'var(--brand-primary)' }}>
-              {row.subjXp.toLocaleString()} XP • Lv.{row.level}
+              {row.xp.toLocaleString()} XP • Lv.{row.level}
             </div>
           </div>
         ))}
@@ -541,14 +586,16 @@ export const SubjectLeaderboardView: React.FC<{ state: AppState }> = ({ state })
 };
 
 /* ==========================================================================
-   FEATURE 15: ADMIN PANEL & BULK QUESTION UPLOADER (অ্যাডমিন প্যানেল)
+   FEATURE 15 (BUG-05 Fix): ROLE-PROTECTED ADMIN PANEL & BULK UPLOADER
    ========================================================================== */
 export const AdminDashboardView: React.FC<{
+  isAdmin: boolean;
+  authEmail: string | null;
   customQuestions: QuestionMCQ[];
   onAddQuestions: (newQs: QuestionMCQ[]) => void;
   onDeleteCustomQuestion: (id: string) => void;
   showToast: (msg: string) => void;
-}> = ({ customQuestions, onAddQuestions, onDeleteCustomQuestion, showToast }) => {
+}> = ({ isAdmin, authEmail, customQuestions, onAddQuestions, onDeleteCustomQuestion, showToast }) => {
   const [subjectId, setSubjectId] = useState<string>('physics');
   const activeSubj = SUBJECTS.find((s) => s.id === subjectId) || SUBJECTS[0];
   const [chapterId, setChapterId] = useState<string>(activeSubj.chapters[0].id);
@@ -563,12 +610,23 @@ export const AdminDashboardView: React.FC<{
   const [explanation, setExplanation] = useState<string>('');
   const [bulkJsonText, setBulkJsonText] = useState<string>('');
 
+  /* BUG-05 Security Gate: Block unauthorized users from Admin Panel */
+  if (!authEmail || !isAdmin) {
+    return (
+      <div className="ev-card" style={{ maxWidth: '580px', margin: '2rem auto', textAlign: 'center', padding: '2rem' }}>
+        <span className="ev-badge-pill ev-badge-danger" style={{ marginBottom: '0.5rem' }}>🔒 Restricted Admin Area</span>
+        <h2 className="font-bn" style={{ fontSize: '1.3rem', fontWeight: 800, marginBottom: '0.5rem' }}>
+          শুধুমাত্র অনুমোদিত অ্যাডমিন এই প্যানেলে প্রবেশ করতে পারবেন
+        </h2>
+        <p className="font-bn" style={{ fontSize: '0.86rem', color: 'var(--text-secondary)' }}>
+          আপনার অ্যাডমিন একাউন্ট দিয়ে লগইন করুন এবং নিশ্চিত করুন যে Supabase ডাটাবেসের `user_profiles` টেবিলে আপনার একাউন্টে `is_admin = true` দেওয়া আছে।
+        </p>
+      </div>
+    );
+  }
+
   const handleCreateSingleMCQ = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!questionBn.trim() || !optA.trim() || !optB.trim()) {
-      showToast('অনুগ্রহ করে প্রশ্ন এবং কমপক্ষে অপশনগুলো পূরণ করুন।');
-      return;
-    }
     const newQ: QuestionMCQ = {
       id: 'q-custom-' + Date.now(),
       subjectId,
@@ -581,28 +639,28 @@ export const AdminDashboardView: React.FC<{
       questionBn: questionBn.trim(),
       options: [optA.trim(), optB.trim(), optC.trim() || 'None', optD.trim() || 'All'],
       correctIndex,
-      explanation: explanation.trim() || 'সঠিক উত্তরটি বোর্ড পাঠ্যবই অনুসারে যাচাইকৃত।'
+      explanation: explanation.trim() || 'বোর্ড পাঠ্যবই অনুসারে যাচাইকৃত।'
     };
 
+    const { error } = await supabase.from('questions_mcq').upsert({
+      id: newQ.id,
+      subject_id: newQ.subjectId,
+      chapter_id: newQ.chapterId,
+      categories: newQ.categories,
+      difficulty: newQ.difficulty,
+      exam_tag: newQ.examTag,
+      question_en: newQ.question,
+      question_bn: newQ.questionBn,
+      options: newQ.options,
+      correct_index: newQ.correctIndex,
+      explanation: newQ.explanation
+    });
+
+    if (error) {
+      showToast('Database RLS Warning: ' + error.message);
+    }
+
     onAddQuestions([newQ]);
-
-    /* Also sync to Supabase questions_mcq table if connected */
-    try {
-      await supabase.from('questions_mcq').upsert({
-        id: newQ.id,
-        subject_id: newQ.subjectId,
-        chapter_id: newQ.chapterId,
-        categories: newQ.categories,
-        difficulty: newQ.difficulty,
-        exam_tag: newQ.examTag,
-        question_en: newQ.question,
-        question_bn: newQ.questionBn,
-        options: newQ.options,
-        correct_index: newQ.correctIndex,
-        explanation: newQ.explanation
-      });
-    } catch {}
-
     setQuestionBn('');
     setOptA('');
     setOptB('');
@@ -632,7 +690,7 @@ export const AdminDashboardView: React.FC<{
       }));
       onAddQuestions(valid);
       setBulkJsonText('');
-      showToast(`${valid.length}টি প্রশ্ন একসাথে আপলোড হয়েছে!`);
+      showToast(`${valid.length}টি প্রশ্ন আপলোড হয়েছে!`);
     } catch {
       showToast('সঠিক JSON ফরম্যাট দিন!');
     }
@@ -641,98 +699,66 @@ export const AdminDashboardView: React.FC<{
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
       <div>
-        <span className="ev-badge-pill ev-badge-indigo" style={{ marginBottom: '0.3rem' }}>Admin Content Manager</span>
-        <h1 className="font-bn" style={{ fontSize: '1.38rem', fontWeight: 800 }}>🛠️ অ্যাডমিন প্যানেল ও প্রশ্ন আপলোডার (Admin Panel)</h1>
+        <span className="ev-badge-pill ev-badge-success" style={{ marginBottom: '0.3rem' }}>✓ Verified Admin ({authEmail})</span>
+        <h1 className="font-bn" style={{ fontSize: '1.38rem', fontWeight: 800 }}>🛠️ অ্যাডমিন প্যানেল ও প্রশ্ন আপলোডার</h1>
       </div>
 
       <div className="ev-grid-2">
-        {/* 1. Single Question Creator Form */}
         <form onSubmit={handleCreateSingleMCQ} className="ev-card" style={{ display: 'flex', flexDirection: 'column', gap: '0.7rem' }}>
           <h3 className="font-bn" style={{ fontSize: '1.05rem', fontWeight: 800 }}>+ নতুন MCQ প্রশ্ন যোগ করুন</h3>
           <div className="ev-grid-2">
-            <div>
-              <label style={{ fontSize: '0.75rem', fontWeight: 700 }}>Subject (বিষয়)</label>
-              <select
-                className="ev-select"
-                value={subjectId}
-                onChange={(e) => {
-                  const s = SUBJECTS.find((x) => x.id === e.target.value) || SUBJECTS[0];
-                  setSubjectId(s.id);
-                  setChapterId(s.chapters[0].id);
-                }}
-              >
-                {SUBJECTS.map((s) => (
-                  <option key={s.id} value={s.id}>{s.nameBn} ({s.name})</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label style={{ fontSize: '0.75rem', fontWeight: 700 }}>Chapter (অধ্যায়)</label>
-              <select className="ev-select" value={chapterId} onChange={(e) => setChapterId(e.target.value)}>
-                {activeSubj.chapters.map((ch) => (
-                  <option key={ch.id} value={ch.id}>{ch.titleBn}</option>
-                ))}
-              </select>
-            </div>
+            <select
+              className="ev-select"
+              value={subjectId}
+              onChange={(e) => {
+                const s = SUBJECTS.find((x) => x.id === e.target.value) || SUBJECTS[0];
+                setSubjectId(s.id);
+                setChapterId(s.chapters[0].id);
+              }}
+            >
+              {SUBJECTS.map((s) => (
+                <option key={s.id} value={s.id}>{s.nameBn}</option>
+              ))}
+            </select>
+            <select className="ev-select" value={chapterId} onChange={(e) => setChapterId(e.target.value)}>
+              {activeSubj.chapters.map((ch) => (
+                <option key={ch.id} value={ch.id}>{ch.titleBn}</option>
+              ))}
+            </select>
           </div>
-
           <div className="ev-grid-2">
-            <div>
-              <label style={{ fontSize: '0.75rem', fontWeight: 700 }}>Difficulty</label>
-              <select className="ev-select" value={difficulty} onChange={(e) => setDifficulty(e.target.value as any)}>
-                <option value="Easy">Easy</option>
-                <option value="Medium">Medium</option>
-                <option value="Hard">Hard</option>
-              </select>
-            </div>
-            <div>
-              <label style={{ fontSize: '0.75rem', fontWeight: 700 }}>Exam Tag / সাল</label>
-              <input type="text" className="ev-input" value={examTag} onChange={(e) => setExamTag(e.target.value)} placeholder="যেমন: DU A-Unit 2024" />
-            </div>
+            <select className="ev-select" value={difficulty} onChange={(e) => setDifficulty(e.target.value as any)}>
+              <option value="Easy">Easy</option>
+              <option value="Medium">Medium</option>
+              <option value="Hard">Hard</option>
+            </select>
+            <input type="text" className="ev-input" value={examTag} onChange={(e) => setExamTag(e.target.value)} placeholder="Exam Tag (DU / 46th BCS)" />
           </div>
-
-          <div>
-            <label style={{ fontSize: '0.75rem', fontWeight: 700 }}>প্রশ্ন (Question Text)</label>
-            <input type="text" className="ev-input" value={questionBn} onChange={(e) => setQuestionBn(e.target.value)} placeholder="প্রশ্নটি এখানে লিখুন..." required />
-          </div>
-
+          <input type="text" className="ev-input" value={questionBn} onChange={(e) => setQuestionBn(e.target.value)} placeholder="প্রশ্নটি লিখুন..." required />
           <div className="ev-grid-2">
             <input type="text" className="ev-input" placeholder="অপশন A" value={optA} onChange={(e) => setOptA(e.target.value)} required />
             <input type="text" className="ev-input" placeholder="অপশন B" value={optB} onChange={(e) => setOptB(e.target.value)} required />
             <input type="text" className="ev-input" placeholder="অপশন C" value={optC} onChange={(e) => setOptC(e.target.value)} />
             <input type="text" className="ev-input" placeholder="অপশন D" value={optD} onChange={(e) => setOptD(e.target.value)} />
           </div>
-
-          <div>
-            <label style={{ fontSize: '0.75rem', fontWeight: 700 }}>সঠিক উত্তর কোনটি? (Correct Option)</label>
-            <select className="ev-select" value={correctIndex} onChange={(e) => setCorrectIndex(Number(e.target.value))}>
-              <option value={0}>Option A</option>
-              <option value={1}>Option B</option>
-              <option value={2}>Option C</option>
-              <option value={3}>Option D</option>
-            </select>
-          </div>
-
-          <div>
-            <label style={{ fontSize: '0.75rem', fontWeight: 700 }}>ব্যাখ্যা (Explanation)</label>
-            <input type="text" className="ev-input" value={explanation} onChange={(e) => setExplanation(e.target.value)} placeholder="উত্তরের ব্যাখ্যা বা সূত্র লিখুন..." />
-          </div>
-
-          <button type="submit" className="ev-btn ev-btn-primary">✓ প্রশ্ন সেভ ও প্রকাশ করুন</button>
+          <select className="ev-select" value={correctIndex} onChange={(e) => setCorrectIndex(Number(e.target.value))}>
+            <option value={0}>সঠিক উত্তর: Option A</option>
+            <option value={1}>সঠিক উত্তর: Option B</option>
+            <option value={2}>সঠিক উত্তর: Option C</option>
+            <option value={3}>সঠিক উত্তর: Option D</option>
+          </select>
+          <input type="text" className="ev-input" value={explanation} onChange={(e) => setExplanation(e.target.value)} placeholder="ব্যাখ্যা লিখুন..." />
+          <button type="submit" className="ev-btn ev-btn-primary">✓ প্রশ্ন সেভ করুন</button>
         </form>
 
-        {/* 2. Bulk JSON Importer & Custom Question List */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           <div className="ev-card">
-            <h3 className="font-bn" style={{ fontSize: '1.05rem', fontWeight: 800, marginBottom: '0.4rem' }}>⚡ বাল্ক প্রশ্ন আপলোড (Bulk JSON Import)</h3>
-            <p className="font-bn" style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.6rem' }}>
-              একসাথে শত শত প্রশ্ন যোগ করতে JSON অ্যারে পেস্ট করে Import চাপুন:
-            </p>
+            <h3 className="font-bn" style={{ fontSize: '1.05rem', fontWeight: 800, marginBottom: '0.4rem' }}>⚡ বাল্ক প্রশ্ন আপলোড (Bulk JSON)</h3>
             <textarea
               className="ev-input font-mono"
               rows={5}
               style={{ fontSize: '0.75rem', marginBottom: '0.65rem' }}
-              placeholder={'[{"subjectId":"physics","chapterId":"phy-1","questionBn":"বল ও সরণের গুণফলকে কী বলে?","options":["কাজ","ক্ষমতা","শক্তি","ভরবেগ"],"correctIndex":0,"explanation":"W = Fs"}]'}
+              placeholder={'[{"subjectId":"physics","chapterId":"phy-1","questionBn":"প্রশ্ন?","options":["A","B","C","D"],"correctIndex":0,"explanation":"..."}]'}
               value={bulkJsonText}
               onChange={(e) => setBulkJsonText(e.target.value)}
             />
@@ -743,20 +769,16 @@ export const AdminDashboardView: React.FC<{
 
           <div className="ev-card">
             <h3 className="font-bn" style={{ fontSize: '1rem', fontWeight: 800, marginBottom: '0.5rem' }}>
-              আপনার যুক্ত করা কাস্টম প্রশ্নসমূহ ({customQuestions.length}টি)
+              কাস্টম প্রশ্নসমূহ ({customQuestions.length}টি)
             </h3>
-            {customQuestions.length === 0 ? (
-              <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>এখনো কোনো কাস্টম প্রশ্ন যোগ করা হয়নি।</div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '220px', overflowY: 'auto' }}>
-                {customQuestions.map((cq) => (
-                  <div key={cq.id} style={{ padding: '0.6rem', background: 'var(--bg-surface-muted)', borderRadius: '6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem' }}>
-                    <span className="font-bn" style={{ fontSize: '0.82rem', fontWeight: 700 }}>{cq.questionBn}</span>
-                    <button type="button" className="ev-btn ev-btn-danger ev-btn-sm" onClick={() => onDeleteCustomQuestion(cq.id)}>Delete</button>
-                  </div>
-                ))}
-              </div>
-            )}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '220px', overflowY: 'auto' }}>
+              {customQuestions.map((cq) => (
+                <div key={cq.id} style={{ padding: '0.6rem', background: 'var(--bg-surface-muted)', borderRadius: '6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span className="font-bn" style={{ fontSize: '0.82rem', fontWeight: 700 }}>{cq.questionBn}</span>
+                  <button type="button" className="ev-btn ev-btn-danger ev-btn-sm" onClick={() => onDeleteCustomQuestion(cq.id)}>Delete</button>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </div>
