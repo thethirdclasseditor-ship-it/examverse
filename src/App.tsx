@@ -1,13 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { AcademicGroup, AppState, QuestionMCQ, QuizHistoryItem, QuizSession, ViewName } from './types';
+import { AcademicGroup, AppState, QuestionMCQ, QuizHistoryItem, QuizSession } from './types';
 import {
   EXAM_CATEGORIES,
   SUBJECTS,
   QUESTIONS_MCQ,
   RECOMMENDED_PACKS,
-  ACHIEVEMENTS,
-  BENCHMARK_LEADERBOARD,
-  getChapterQuestionCount
+  ACHIEVEMENTS
 } from './data/syllabusData';
 import { getDhakaDateStr, loadStoredState, saveStoredState, createFreshState } from './store/useExamStore';
 import {
@@ -17,10 +15,36 @@ import {
   submitServerQuizAttempt
 } from './lib/supabase';
 import { SubjectCard, AuthModal, QuizSection, CreativeQuestionsView } from './components/ModalsAndQuiz';
+import {
+  loadCustomQuestions,
+  saveCustomQuestions,
+  PastYearArchiveView,
+  QuizBattleView,
+  RapidFireView,
+  SubjectLeaderboardView,
+  AdminDashboardView
+} from './components/ExtraFeatures';
+
+type ExtendedViewName =
+  | 'home'
+  | 'exams'
+  | 'archive'
+  | 'battle'
+  | 'rapid'
+  | 'quiz'
+  | 'cq'
+  | 'stats'
+  | 'leaderboard'
+  | 'profile'
+  | 'bookmarks'
+  | 'mistakes'
+  | 'settings'
+  | 'admin';
 
 export const App: React.FC = () => {
   const [state, setState] = useState<AppState>(() => loadStoredState());
-  const [view, setView] = useState<ViewName>('home');
+  const [customQuestions, setCustomQuestions] = useState<QuestionMCQ[]>(() => loadCustomQuestions());
+  const [view, setView] = useState<ExtendedViewName>('home');
   const [homeGroup, setHomeGroup] = useState<'all' | AcademicGroup>('all');
   const [selectedCategory, setSelectedCategory] = useState<string>('uni');
   const [examGroup, setExamGroup] = useState<'all' | AcademicGroup>('all');
@@ -31,6 +55,9 @@ export const App: React.FC = () => {
   const [authEmail, setAuthEmail] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
+  /* Combined Question Pool (Admin Custom Questions + Built-in Verified Questions) */
+  const allQuestions: QuestionMCQ[] = [...customQuestions, ...QUESTIONS_MCQ];
+
   const showToast = (msg: string) => {
     setToast(msg);
     window.setTimeout(() => setToast(null), 3200);
@@ -39,6 +66,10 @@ export const App: React.FC = () => {
   useEffect(() => {
     saveStoredState(state);
   }, [state]);
+
+  useEffect(() => {
+    saveCustomQuestions(customQuestions);
+  }, [customQuestions]);
 
   /* Real-Time Supabase Auth Listener (Google, Facebook & Email) */
   useEffect(() => {
@@ -82,9 +113,32 @@ export const App: React.FC = () => {
     return () => window.clearInterval(interval);
   }, [session?.id, session?.isSubmitted]);
 
+  const awardBonusXp = (bonusXp: number, reasonMsg?: string) => {
+    if (bonusXp <= 0) return;
+    const today = getDhakaDateStr();
+    setState((prev) => {
+      const newXp = prev.user.xp + bonusXp;
+      const newLevel = Math.max(1, Math.floor(newXp / 500) + 1);
+      const updatedUser = {
+        ...prev.user,
+        xp: newXp,
+        level: newLevel,
+        xpForNextLevel: newLevel * 500,
+        streakDays: prev.user.lastStudyDate !== today ? prev.user.streakDays + 1 : prev.user.streakDays,
+        streakActive: true,
+        lastStudyDate: today
+      };
+      supabase.auth.getUser().then(({ data }) => {
+        if (data?.user) pushProfileUpdateToCloud(data.user, updatedUser);
+      });
+      return { ...prev, user: updatedUser };
+    });
+    if (reasonMsg) showToast(reasonMsg);
+  };
+
   const startQuiz = (questions: QuestionMCQ[], title: string, mode: 'practice' | 'exam' = 'practice', isDaily = false) => {
     if (questions.length === 0) {
-      showToast('এই অধ্যায়ে শীঘ্রই আরও প্রশ্ন যুক্ত হচ্ছে!');
+      showToast('এই অধ্যায়ে প্রশ্ন যুক্ত করতে Admin Panel ব্যবহার করুন!');
       return;
     }
     const now = Date.now();
@@ -255,25 +309,25 @@ export const App: React.FC = () => {
           </div>
         </button>
 
-        <div className="ev-nav-section-label">Main Menu</div>
+        <div className="ev-nav-section-label">Core Platform</div>
         <ul className="ev-nav-list">
           {([
-            ['home', 'Home (হোম)'],
-            ['exams', 'Exams & Syllabus (পরীক্ষা)'],
-            ['quiz', 'Active Quiz (কুইজ)'],
-            ['cq', 'Creative CQ (সৃজনশীল)'],
-            ['stats', 'Analytics (পরিসংখ্যান)'],
-            ['leaderboard', 'Leaderboard (লিডারবোর্ড)'],
-            ['profile', 'Profile & Login (প্রোফাইল)'],
-            ['bookmarks', `Bookmarks (${state.bookmarks.length})`],
-            ['mistakes', `Mistake Bank (${state.mistakes.length})`],
-            ['settings', 'Settings (সেটিংস)']
+            ['home', '🏠 Home (হোম)'],
+            ['exams', '📘 Syllabus & Exams (সিলেবাস)'],
+            ['archive', '📚 বিগত বছরের প্রশ্ন (Archive)'],
+            ['battle', '⚔️ ১-অন-১ কুইজ ব্যাটল (1v1)'],
+            ['rapid', '⚡ ৬০-সেকেন্ড র‍্যাপিড ফায়ার'],
+            ['quiz', '📝 Active Quiz (কুইজ)'],
+            ['cq', '✍️ সৃজনশীল প্রশ্ন (CQ)'],
+            ['leaderboard', '🏆 সাবজেক্ট লিডারবোর্ড'],
+            ['profile', '👤 Profile & Login (প্রোফাইল)'],
+            ['admin', '🛠️ Admin Panel (প্রশ্ন আপলোড)']
           ] as const).map(([key, label]) => (
             <li key={key}>
               <button
                 type="button"
                 className={`ev-nav-btn ${view === key ? 'is-active' : ''}`}
-                onClick={() => setView(key as ViewName)}
+                onClick={() => setView(key)}
               >
                 <span className="ev-nav-btn-left font-bn">{label}</span>
               </button>
@@ -296,7 +350,7 @@ export const App: React.FC = () => {
             <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{state.user.targetTrack}</div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem' }}>
-            <button type="button" className="ev-streak-pill" onClick={() => setView('stats')}>
+            <button type="button" className="ev-streak-pill" onClick={() => setView('profile')}>
               🔥 {state.user.streakDays}d Streak
             </button>
             <button
@@ -348,10 +402,40 @@ export const App: React.FC = () => {
                   <button
                     type="button"
                     className="ev-btn ev-btn-primary"
-                    onClick={() => startQuiz(QUESTIONS_MCQ.slice(0, 8), 'Daily Merit Challenge', 'practice', true)}
+                    onClick={() => startQuiz(allQuestions.slice(0, 8), 'Daily Merit Challenge', 'practice', true)}
                   >
                     Start Daily Challenge →
                   </button>
+                </div>
+              </div>
+
+              {/* Quick Launch Bar for New Competitive Modes (Archive, 1v1 Battle, 60s Rapid Fire) */}
+              <div className="ev-grid-3" style={{ marginBottom: '1.65rem' }}>
+                <div className="ev-card" style={{ borderLeft: '4px solid #4F46E5', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: '0.75rem' }}>
+                  <div>
+                    <span className="ev-badge-pill ev-badge-indigo">Question Bank</span>
+                    <h3 className="font-bn" style={{ fontSize: '1.05rem', fontWeight: 800, marginTop: '0.3rem' }}>📚 বিগত বছরের প্রশ্ন ব্যাংক</h3>
+                    <div className="font-bn" style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>ঢাবি, বুয়েট, মেডিকেল, বিসিএস ও বোর্ড প্রশ্ন</div>
+                  </div>
+                  <button type="button" className="ev-btn ev-btn-soft ev-btn-sm" onClick={() => setView('archive')}>আর্কাইভ দেখুন →</button>
+                </div>
+
+                <div className="ev-card" style={{ borderLeft: '4px solid #7C3AED', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: '0.75rem' }}>
+                  <div>
+                    <span className="ev-badge-pill ev-badge-violet">1v1 Multiplayer</span>
+                    <h3 className="font-bn" style={{ fontSize: '1.05rem', fontWeight: 800, marginTop: '0.3rem' }}>⚔️ ১-অন-১ কুইজ ব্যাটল</h3>
+                    <div className="font-bn" style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>বন্ধুর সাথে রুম কোড দিয়ে সরাসরি কুইজ ম্যাচ</div>
+                  </div>
+                  <button type="button" className="ev-btn ev-btn-soft ev-btn-sm" onClick={() => setView('battle')}>ব্যাটল শুরু করুন →</button>
+                </div>
+
+                <div className="ev-card" style={{ borderLeft: '4px solid #D97706', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: '0.75rem' }}>
+                  <div>
+                    <span className="ev-badge-pill ev-badge-warning">Speed Mode</span>
+                    <h3 className="font-bn" style={{ fontSize: '1.05rem', fontWeight: 800, marginTop: '0.3rem' }}>⚡ ৬০-সেকেন্ড র‍্যাপিড ফায়ার</h3>
+                    <div className="font-bn" style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>৬০ সেকেন্ডে সর্বোচ্চ সঠিক উত্তরের রেকর্ড গড়ুন</div>
+                  </div>
+                  <button type="button" className="ev-btn ev-btn-soft ev-btn-sm" onClick={() => setView('rapid')}>স্প্রিন্ট খেলুন →</button>
                 </div>
               </div>
 
@@ -387,7 +471,7 @@ export const App: React.FC = () => {
                       mastery={state.stats.subjectMastery[subj.id] || 0}
                       onStart={(sId) =>
                         startQuiz(
-                          QUESTIONS_MCQ.filter((q) => q.subjectId === sId),
+                          allQuestions.filter((q) => q.subjectId === sId),
                           `${subj.name} Practice`
                         )
                       }
@@ -412,7 +496,7 @@ export const App: React.FC = () => {
                           type="button"
                           className="ev-btn ev-btn-primary ev-btn-sm"
                           style={{ flex: 1 }}
-                          onClick={() => startQuiz(QUESTIONS_MCQ.filter((q) => pack.questionIds.includes(q.id)), pack.title, 'practice')}
+                          onClick={() => startQuiz(allQuestions.filter((q) => pack.questionIds.includes(q.id)), pack.title, 'practice')}
                         >
                           Practice
                         </button>
@@ -420,7 +504,7 @@ export const App: React.FC = () => {
                           type="button"
                           className="ev-btn ev-btn-secondary ev-btn-sm"
                           style={{ flex: 1 }}
-                          onClick={() => startQuiz(QUESTIONS_MCQ.filter((q) => pack.questionIds.includes(q.id)), pack.title, 'exam')}
+                          onClick={() => startQuiz(allQuestions.filter((q) => pack.questionIds.includes(q.id)), pack.title, 'exam')}
                         >
                           Exam Mode
                         </button>
@@ -489,45 +573,73 @@ export const App: React.FC = () => {
                     <button
                       type="button"
                       className="ev-btn ev-btn-primary ev-btn-sm"
-                      onClick={() => startQuiz(QUESTIONS_MCQ.filter((q) => q.subjectId === subj.id), subj.name, 'exam')}
+                      onClick={() => startQuiz(allQuestions.filter((q) => q.subjectId === subj.id), subj.name, 'exam')}
                     >
                       Full Subject Exam
                     </button>
                   </div>
                   <div className="ev-grid-2">
-                    {subj.chapters.map((ch) => (
-                      <div key={ch.id} style={{ padding: '0.8rem', background: 'var(--bg-surface-muted)', borderRadius: 'var(--radius-sm)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem' }}>
-                        <div>
-                          <div style={{ fontSize: '0.88rem', fontWeight: 700 }}>{ch.title}</div>
-                          <div className="font-bn" style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
-                            {ch.titleBn} • {getChapterQuestionCount(ch.id)} MCQ
+                    {subj.chapters.map((ch) => {
+                      const chCount = allQuestions.filter((q) => q.chapterId === ch.id).length;
+                      return (
+                        <div key={ch.id} style={{ padding: '0.8rem', background: 'var(--bg-surface-muted)', borderRadius: 'var(--radius-sm)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem' }}>
+                          <div>
+                            <div style={{ fontSize: '0.88rem', fontWeight: 700 }}>{ch.title}</div>
+                            <div className="font-bn" style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                              {ch.titleBn} • {chCount} MCQ
+                            </div>
+                          </div>
+                          <div style={{ display: 'flex', gap: '0.35rem' }}>
+                            <button
+                              type="button"
+                              className="ev-btn ev-btn-soft ev-btn-sm"
+                              onClick={() => startQuiz(allQuestions.filter((q) => q.chapterId === ch.id), ch.title, 'practice')}
+                            >
+                              Practice
+                            </button>
+                            <button
+                              type="button"
+                              className="ev-btn ev-btn-primary ev-btn-sm"
+                              onClick={() => startQuiz(allQuestions.filter((q) => q.chapterId === ch.id), ch.title, 'exam')}
+                            >
+                              Exam
+                            </button>
                           </div>
                         </div>
-                        <div style={{ display: 'flex', gap: '0.35rem' }}>
-                          <button
-                            type="button"
-                            className="ev-btn ev-btn-soft ev-btn-sm"
-                            onClick={() => startQuiz(QUESTIONS_MCQ.filter((q) => q.chapterId === ch.id), ch.title, 'practice')}
-                          >
-                            Practice
-                          </button>
-                          <button
-                            type="button"
-                            className="ev-btn ev-btn-primary ev-btn-sm"
-                            onClick={() => startQuiz(QUESTIONS_MCQ.filter((q) => q.chapterId === ch.id), ch.title, 'exam')}
-                          >
-                            Exam
-                          </button>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               ))}
             </div>
           )}
 
-          {/* 3. QUIZ VIEW */}
+          {/* 3. FEATURE 1: PAST YEAR ARCHIVE VIEW */}
+          {view === 'archive' && (
+            <PastYearArchiveView
+              allQuestions={allQuestions}
+              onStartPaper={(qs, title, mode) => startQuiz(qs, title, mode)}
+            />
+          )}
+
+          {/* 4. FEATURE 3: 1v1 QUIZ BATTLE VIEW */}
+          {view === 'battle' && (
+            <QuizBattleView
+              allQuestions={allQuestions}
+              userName={state.user.name}
+              onAwardBattleXp={(xp) => awardBonusXp(xp, `⚔️ ব্যাটল বোনাস +${xp} XP অর্জিত!`)}
+            />
+          )}
+
+          {/* 5. FEATURE 11: 60-SECOND RAPID FIRE VIEW */}
+          {view === 'rapid' && (
+            <RapidFireView
+              allQuestions={allQuestions}
+              onAwardSprintXp={(xp) => awardBonusXp(xp, `⚡ র‍্যাপিড ফায়ার +${xp} XP যুক্ত হয়েছে!`)}
+            />
+          )}
+
+          {/* 6. QUIZ VIEW */}
           {view === 'quiz' && (
             <QuizSection
               session={session}
@@ -542,73 +654,29 @@ export const App: React.FC = () => {
                   bookmarks: s.bookmarks.includes(qId) ? s.bookmarks.filter((id) => id !== qId) : [qId, ...s.bookmarks]
                 }))
               }
-              onStartNewQuiz={() => startQuiz(QUESTIONS_MCQ.slice(0, 8), 'Quick Practice Set')}
+              onStartNewQuiz={() => startQuiz(allQuestions.slice(0, 8), 'Quick Practice Set')}
             />
           )}
 
-          {/* 4. CREATIVE QUESTIONS (CQ) VIEW */}
+          {/* 7. CREATIVE QUESTIONS (CQ) VIEW */}
           {view === 'cq' && <CreativeQuestionsView />}
 
-          {/* 5. EYE-CATCHING LEADERBOARD VIEW */}
-          {view === 'leaderboard' && (
-            <div>
-              <h1 style={{ fontSize: '1.38rem', fontWeight: 800, marginBottom: '1.1rem' }}>🏆 National Merit Leaderboard</h1>
-              <div className="ev-podium-grid">
-                {BENCHMARK_LEADERBOARD.slice(0, 3).map((item, idx) => (
-                  <div key={item.handle} className={`ev-podium-card rank-${idx + 1}`}>
-                    <div style={{ fontSize: '1.6rem' }}>{idx === 0 ? '👑 #1 Gold' : idx === 1 ? '🥈 #2 Silver' : '🥉 #3 Bronze'}</div>
-                    <div style={{ fontSize: '1.08rem', fontWeight: 800 }}>{item.name}</div>
-                    <span className="ev-badge-pill ev-badge-indigo">{item.badge}</span>
-                    <div className="font-mono" style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--brand-primary)' }}>
-                      {item.xp.toLocaleString()} XP • Lv.{item.level}
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div className="ev-card">
-                {[
-                  ...BENCHMARK_LEADERBOARD,
-                  {
-                    rank: 6,
-                    name: `${state.user.name} (You)`,
-                    handle: state.user.username,
-                    avatar: state.user.avatarInitials,
-                    level: state.user.level,
-                    xp: state.user.xp,
-                    badge: state.user.targetTrack,
-                    isCurrentUser: true
-                  }
-                ]
-                  .sort((a, b) => b.xp - a.xp)
-                  .map((row, i) => (
-                    <div
-                      key={row.handle}
-                      style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        padding: '0.8rem 1rem',
-                        borderBottom: '1px solid var(--border-subtle)',
-                        background: row.isCurrentUser ? 'var(--brand-primary-soft)' : 'transparent',
-                        borderRadius: row.isCurrentUser ? '8px' : '0'
-                      }}
-                    >
-                      <div>
-                        <strong>#{i + 1} {row.name}</strong> <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>({row.badge})</span>
-                      </div>
-                      <div className="font-mono" style={{ fontWeight: 800, color: 'var(--brand-primary)' }}>
-                        {row.xp.toLocaleString()} XP • Lv.{row.level}
-                      </div>
-                    </div>
-                  ))}
-              </div>
-            </div>
+          {/* 8. FEATURE 14: SUBJECT-WISE LEADERBOARD VIEW */}
+          {view === 'leaderboard' && <SubjectLeaderboardView state={state} />}
+
+          {/* 9. FEATURE 15: ADMIN PANEL & BULK UPLOADER VIEW */}
+          {view === 'admin' && (
+            <AdminDashboardView
+              customQuestions={customQuestions}
+              onAddQuestions={(newQs) => setCustomQuestions((prev) => [...newQs, ...prev])}
+              onDeleteCustomQuestion={(id) => setCustomQuestions((prev) => prev.filter((q) => q.id !== id))}
+              showToast={showToast}
+            />
           )}
 
-          {/* 6. PROFILE & GOOGLE/FACEBOOK LOGIN VIEW */}
+          {/* 10. PROFILE & GOOGLE/FACEBOOK LOGIN VIEW */}
           {(view === 'profile' || view === 'stats' || view === 'bookmarks' || view === 'mistakes' || view === 'settings') && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-              {/* Prominent Login & Cloud Account Card at the Top */}
               <div className="ev-card" style={{ border: '1.5px solid var(--brand-primary-border)', background: 'linear-gradient(135deg, var(--bg-surface) 0%, var(--brand-primary-soft) 100%)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
                 <div>
                   <span className={`ev-badge-pill ${authEmail ? 'ev-badge-success' : 'ev-badge-indigo'}`} style={{ marginBottom: '0.35rem' }}>
@@ -621,6 +689,9 @@ export const App: React.FC = () => {
                 <div style={{ display: 'flex', gap: '0.55rem', flexWrap: 'wrap' }}>
                   <button type="button" className="ev-btn ev-btn-primary" onClick={() => setAuthModalOpen(true)}>
                     {authEmail ? 'Manage Account' : 'Sign In / Create Account'}
+                  </button>
+                  <button type="button" className="ev-btn ev-btn-soft" onClick={() => setView('admin')}>
+                    🛠️ Open Admin Panel
                   </button>
                   <button
                     type="button"
@@ -635,7 +706,6 @@ export const App: React.FC = () => {
                 </div>
               </div>
 
-              {/* Performance Analytics */}
               <div className="ev-grid-4">
                 <div className="ev-card">
                   <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Total XP &amp; Level</div>
@@ -655,7 +725,6 @@ export const App: React.FC = () => {
                 </div>
               </div>
 
-              {/* Achievement Badges */}
               <div className="ev-card">
                 <h3 style={{ fontSize: '1.05rem', fontWeight: 800, marginBottom: '0.85rem' }}>🏅 Achievement Badges</h3>
                 <div className="ev-grid-2">
@@ -679,8 +748,8 @@ export const App: React.FC = () => {
       <nav className="ev-bottom-nav">
         {([
           ['home', 'Home'],
-          ['exams', 'Exams'],
-          ['quiz', 'Quiz'],
+          ['archive', 'Archive'],
+          ['battle', '1v1 Battle'],
           ['leaderboard', 'Ranks'],
           ['profile', 'Profile']
         ] as const).map(([k, lbl]) => (
@@ -688,7 +757,7 @@ export const App: React.FC = () => {
             key={k}
             type="button"
             className={`ev-bottom-nav-btn ${view === k ? 'is-active' : ''}`}
-            onClick={() => setView(k as ViewName)}
+            onClick={() => setView(k)}
           >
             <span>{lbl}</span>
           </button>
