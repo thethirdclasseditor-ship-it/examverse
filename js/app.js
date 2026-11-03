@@ -2975,25 +2975,197 @@
   };
 
   /* ======================================================================
-     STEP 4 ADDON: Supabase Cloud Auth, JSON Backup & Question Error Report
+     COMPLETE GROUP SUBJECTS (Science, Commerce, Arts, Common) & REAL-TIME AUTH UI
      ====================================================================== */
+  (function injectAllGroupSubjects() {
+    var d = window.EXAMVERSE_DATA;
+    if (!d || !Array.isArray(d.subjects)) return;
+
+    /* Standardize existing subject group names */
+    d.subjects.forEach(function (s) {
+      if (s.id === 'math') s.group = 'Science';
+      if (s.id === 'gk') s.group = 'Common';
+      if (s.id === 'accounting') {
+        s.group = 'Commerce';
+        s.name = 'Accounting (1st & 2nd Paper)';
+        s.nameBn = 'হিসাববিজ্ঞান (১ম ও ২য় পত্র)';
+      }
+      if (s.id === 'economics') {
+        s.group = 'Arts';
+        s.name = 'Economics (1st & 2nd Paper)';
+        s.nameBn = 'অর্থনীতি (১ম ও ২য় পত্র)';
+      }
+    });
+
+    var extraSubjects = [
+      {
+        id: 'management',
+        name: 'Business Org. & Management (1st & 2nd)',
+        nameBn: 'ব্যবসায় সংগঠন ও ব্যবস্থাপনা (১ম ও ২য় পত্র)',
+        group: 'Commerce',
+        icon: 'briefcase',
+        accent: 'violet',
+        chapters: [
+          { id: 'mgt-1', paper: '1st Paper', title: 'Sole Proprietorship, Partnership & Joint Stock Business', titleBn: 'এক মালিকানা, অংশীদারি ও যৌথ মূলধনী ব্যবসায় (১ম পত্র)', difficulty: 'Easy' },
+          { id: 'mgt-2', paper: '1st Paper', title: 'Co-operative Society, State Enterprise & Business Ethics', titleBn: 'সমবায় সমিতি, রাষ্ট্রীয় ব্যবসায় ও ব্যবসায়িক মূল্যবোধ (১ম পত্র)', difficulty: 'Medium' },
+          { id: 'mgt-3', paper: '2nd Paper', title: 'Principles of Management: Fayol & Scientific Management', titleBn: 'ব্যবস্থাপনার নীতি: হেনরি ফেয়ল ও বৈজ্ঞানিক ব্যবস্থাপনা (২য় পত্র)', difficulty: 'Medium' },
+          { id: 'mgt-4', paper: '2nd Paper', title: 'Planning, Organizing, Staffing, Leadership & Controlling', titleBn: 'পরিকল্পনা, সংগঠন, কর্মীসংস্থান, নেতৃত্ব ও নিয়ন্ত্রণ (২য় পত্র)', difficulty: 'Hard' }
+        ]
+      },
+      {
+        id: 'finance',
+        name: 'Finance, Banking & Insurance (1st & 2nd)',
+        nameBn: 'ফিন্যান্স, ব্যাংকিং ও বিমা (১ম ও ২য় পত্র)',
+        group: 'Commerce',
+        icon: 'briefcase',
+        accent: 'emerald',
+        chapters: [
+          { id: 'fin-1', paper: '1st Paper', title: 'Time Value of Money (PV, FV, Annuity & Rule of 72)', titleBn: 'অর্থের সময়মূল্য ও বার্ষিক বৃত্তি (১ম পত্র)', difficulty: 'Medium' },
+          { id: 'fin-2', paper: '1st Paper', title: 'Capital Budgeting (NPV, IRR, Payback) & Cost of Capital', titleBn: 'মূলধন বাজেটিং (NPV, IRR) ও মূলধন ব্যয় (১ম পত্র)', difficulty: 'Hard' },
+          { id: 'fin-3', paper: '2nd Paper', title: 'Central Banking (Bangladesh Bank) & Commercial Banks', titleBn: 'কেন্দ্রীয় ব্যাংক ও বাণিজ্যিক ব্যাংকিং কার্যক্রম (২য় পত্র)', difficulty: 'Easy' },
+          { id: 'fin-4', paper: '2nd Paper', title: 'Principles of Insurance: Life, Marine & Fire Insurance', titleBn: 'বিমার মৌলিক ধারণা: জীবন, নৌ ও অগ্নি বিমা (২য় পত্র)', difficulty: 'Medium' }
+        ]
+      },
+      {
+        id: 'marketing',
+        name: 'Production Management & Marketing',
+        nameBn: 'উৎপাদন ব্যবস্থাপনা ও বিপণন (১ম ও ২য় পত্র)',
+        group: 'Commerce',
+        icon: 'briefcase',
+        accent: 'indigo',
+        chapters: [
+          { id: 'mkt-1', paper: '1st Paper', title: 'Production, Utility (Form, Place, Time) & Productivity', titleBn: 'উৎপাদন, উপযোগ ও উৎপাদনশীলতা (১ম পত্র)', difficulty: 'Easy' },
+          { id: 'mkt-2', paper: '1st Paper', title: 'Factors of Production, Scale & Plant Layout', titleBn: 'উৎপাদনের উপকরণ, মাত্রা ও কারখানা বিন্যাস (১ম পত্র)', difficulty: 'Medium' },
+          { id: 'mkt-3', paper: '2nd Paper', title: 'Marketing Functions, 4Ps Marketing Mix & Segmentation', titleBn: 'বিপণন কার্যাবলি, বিপণন মিশ্রণ (4Ps) ও বাজার বিভক্তিকরণ (২য় পত্র)', difficulty: 'Easy' },
+          { id: 'mkt-4', paper: '2nd Paper', title: 'Branding, Packaging, Advertising & Sales Promotion', titleBn: 'পণ্য ডিজাইন, ব্র্যান্ডিং, বিজ্ঞাপন ও বিক্রয় প্রসার (২য় পত্র)', difficulty: 'Medium' }
+        ]
+      },
+      {
+        id: 'civics',
+        name: 'Civics & Good Governance (1st & 2nd)',
+        nameBn: 'পৌরনীতি ও সুশাসন (১ম ও ২য় পত্র)',
+        group: 'Arts',
+        icon: 'landmark',
+        accent: 'indigo',
+        chapters: [
+          { id: 'civ-1', paper: '1st Paper', title: 'Good Governance, Rule of Law, Liberty & Equality', titleBn: 'সুশাসন, মূল্যবোধ, আইন, স্বাধীনতা ও সাম্য (১ম পত্র)', difficulty: 'Easy' },
+          { id: 'civ-2', paper: '1st Paper', title: 'Organs of Government, Constitution & Public Admin', titleBn: 'সরকার কাঠামো, সংবিধান ও জনপ্রশাসন (১ম পত্র)', difficulty: 'Medium' },
+          { id: 'civ-3', paper: '2nd Paper', title: 'Political History of British India & Pakistan Period (1947–1971)', titleBn: 'ব্রিটিশ ভারত ও পাকিস্তান আমলে বাংলাদেশের রাজনীতি (২য় পত্র)', difficulty: 'Medium' },
+          { id: 'civ-4', paper: '2nd Paper', title: 'Constitutional Bodies of Bangladesh (EC, PSC, CAG, ACC)', titleBn: 'বাংলাদেশের সাংবিধানিক প্রতিষ্ঠানসমূহ (২য় পত্র)', difficulty: 'Hard' }
+        ]
+      },
+      {
+        id: 'history',
+        name: 'History & Islamic History (1st & 2nd)',
+        nameBn: 'ইতিহাস ও ইসলামের ইতিহাস ও সংস্কৃতি (১ম ও ২য় পত্র)',
+        group: 'Arts',
+        icon: 'scroll',
+        accent: 'violet',
+        chapters: [
+          { id: 'his-1', paper: '1st Paper', title: 'Ancient Janapadas of Bengal, Maurya, Gupta & Pala-Sena', titleBn: 'প্রাচীন বাংলার জনপদ, মৌর্য, গুপ্ত ও পাল-সেন যুগ (১ম পত্র)', difficulty: 'Easy' },
+          { id: 'his-2', paper: '1st Paper', title: 'Sultanate, Mughal Subah Bangla & Battle of Plassey (1757)', titleBn: 'সুলতানি ও মুঘল আমল এবং পলাশীর যুদ্ধ (১ম পত্র)', difficulty: 'Medium' },
+          { id: 'his-3', paper: 'Islamic Hist.', title: 'Prophetic Era, Khulafa-e-Rashidun, Umayyad & Abbasid Era', titleBn: 'মহানবী (সা.), খোলাফায়ে রাশেদীন, উমাইয়া ও আব্বাসীয় যুগ', difficulty: 'Medium' },
+          { id: 'his-4', paper: '2nd Paper', title: 'French Revolution, World Wars & Liberation of Bangladesh', titleBn: 'ফরাসি বিপ্লব, বিশ্বযুদ্ধ ও বাংলাদেশের অভ্যুদয় (২য় পত্র)', difficulty: 'Hard' }
+        ]
+      },
+      {
+        id: 'logic',
+        name: 'Logic (1st & 2nd Paper)',
+        nameBn: 'যুক্তিবিদ্যা (১ম ও ২য় পত্র)',
+        group: 'Arts',
+        icon: 'feather',
+        accent: 'emerald',
+        chapters: [
+          { id: 'log-1', paper: '1st Paper', title: 'Introduction to Logic, Terms, Propositions & Predicables', titleBn: 'যুক্তিবিদ্যার পরিচিতি, পদ, যুক্তিবাক্য ও বিধেয়ক (১ম পত্র)', difficulty: 'Easy' },
+          { id: 'log-2', paper: '1st Paper', title: 'Deductive Inference, Syllogism & Venn Diagrams', titleBn: 'অবরোহ অনুমান, সহানুমান ও ভেন চিত্র (১ম পত্র)', difficulty: 'Hard' },
+          { id: 'log-3', paper: '2nd Paper', title: 'Logical Definition, Logical Division & Classification', titleBn: 'যৌক্তিক সংজ্ঞা, যৌক্তিক বিভাগ ও শ্রেণিকরণ (২য় পত্র)', difficulty: 'Medium' },
+          { id: 'log-4', paper: '2nd Paper', title: 'Inductive Logic, Hypothesis, Causation & Mill’s Methods', titleBn: 'আরোহ অনুমান, প্রকল্প, কার্যকারণ ও মিলের পদ্ধতি (২য় পত্র)', difficulty: 'Medium' }
+        ]
+      },
+      {
+        id: 'sociology',
+        name: 'Sociology, Social Work & Geography',
+        nameBn: 'সমাজবিজ্ঞান, সমাজকর্ম ও ভূগোল (১ম ও ২য় পত্র)',
+        group: 'Arts',
+        icon: 'globe',
+        accent: 'indigo',
+        chapters: [
+          { id: 'soc-1', paper: 'Sociology', title: 'Origin of Sociology (Ibn Khaldun, Comte, Durkheim, Weber)', titleBn: 'সমাজবিজ্ঞানের উৎপত্তি, সংস্কৃতি ও সামাজিক স্তরবিন্যাস', difficulty: 'Easy' },
+          { id: 'soc-2', paper: 'Sociology', title: 'Social Structure of Bangladesh & Wari-Bateshwar Archaeology', titleBn: 'বাংলাদেশের সমাজ ও সভ্যতা এবং প্রত্নতত্ত্ব', difficulty: 'Medium' },
+          { id: 'soc-3', paper: 'Social Work', title: 'Basic & Auxiliary Methods of Social Work & NGOs', titleBn: 'সমাজকর্মের পদ্ধতি, সামাজিক আইন ও উন্নয়ন সংস্থা', difficulty: 'Easy' },
+          { id: 'soc-4', paper: 'Geography', title: 'Geomorphology, River Systems of Bangladesh, Climate & GIS', titleBn: 'প্রাকৃতিক ভূগোল, বাংলাদেশের নদ-নদী, জলবায়ু ও জিআইএস (GIS)', difficulty: 'Medium' }
+        ]
+      }
+    ];
+
+    extraSubjects.forEach(function (es) {
+      if (!d.subjects.some(function (s) { return s.id === es.id; })) {
+        d.subjects.push(es);
+      }
+      d.examCategories.forEach(function (cat) {
+        if (['ssc', 'hsc', 'uni', 'bcs', 'bank', 'gov'].indexOf(cat.id) !== -1 && cat.subjects.indexOf(es.id) === -1) {
+          cat.subjects.push(es.id);
+        }
+      });
+    });
+
+    var extraQuestions = [
+      { id: 'q-mgt-1101', subjectId: 'management', chapterId: 'mgt-1', categories: ['ssc', 'hsc', 'uni', 'bank'], difficulty: 'Easy', questionType: 'standard', examTag: 'HSC & DU C-Unit • Business Org.', question: 'According to the Partnership Act of 1932 in Bangladesh, what is the maximum number of partners allowed in a general partnership business?', questionBn: '১৯৩২ সালের অংশীদারি আইন অনুযায়ী সাধারণ অংশীদারি ব্যবসায় সর্বোচ্চ সদস্য সংখ্যা কতজন?', options: ['10 persons (১০ জন)', '20 persons (২০ জন)', '50 persons (৫০ জন)', 'Unlimited (অসীম)'], correctIndex: 1, explanation: 'In a general partnership business, the minimum number of partners is 2 and the maximum is 20 (10 for banking partnership).' },
+      { id: 'q-mgt-1102', subjectId: 'management', chapterId: 'mgt-2', categories: ['hsc', 'uni', 'bank'], difficulty: 'Medium', questionType: 'standard', examTag: 'HSC • Co-operative Society', question: 'What is the core voting principle of a Co-operative Society (সমবায় সমিতি)?', questionBn: 'সমবায় সমিতির ভোটাধিকারের মূলনীতি কোনটি?', options: ['One Share One Vote', 'One Member One Vote (এক ব্যক্তি এক ভোট)', 'Vote by Capital', 'Director-only Vote'], correctIndex: 1, explanation: 'Every member of a Co-operative Society has one vote regardless of the number of shares held.' },
+      { id: 'q-mgt-1103', subjectId: 'management', chapterId: 'mgt-3', categories: ['hsc', 'uni', 'bank'], difficulty: 'Easy', questionType: 'standard', examTag: 'Management 2nd Paper', question: 'Who is universally recognized as the Father of Modern Administrative Management and author of the 14 Principles of Management?', questionBn: 'আধুনিক ব্যবস্থাপনার জনক এবং ব্যবস্থাপনার ১৪টি নীতির প্রবক্তা কে?', options: ['F.W. Taylor', 'Henri Fayol (হেনরি ফেয়ল)', 'Elton Mayo', 'Peter Drucker'], correctIndex: 1, explanation: 'Henri Fayol formulated the 14 Principles of Management and is known as the Father of Modern Management.' },
+      { id: 'q-mgt-1104', subjectId: 'management', chapterId: 'mgt-4', categories: ['hsc', 'uni'], difficulty: 'Medium', questionType: 'standard', examTag: 'Management Functions', question: 'Which management function bridges the gap between where the organization is now and where it wants to be in the future?', questionBn: 'ব্যবস্থাপনা চক্রের কোন কাজটি বর্তমান ও ভবিষ্যতের মধ্যকার সেতুবন্ধন রচনা করে?', options: ['Organizing (সংগঠন)', 'Planning (পরিকল্পনা)', 'Staffing (কর্মীসংস্থান)', 'Directing (নির্দেশনা)'], correctIndex: 1, explanation: 'Planning determines future objectives in advance and bridges the gap between present and future.' },
+      { id: 'q-fin-1201', subjectId: 'finance', chapterId: 'fin-1', categories: ['ssc', 'hsc', 'uni', 'bank'], difficulty: 'Medium', questionType: 'standard', examTag: 'Finance 1st Paper • Rule of 72', question: 'According to the Rule of 72, how many years will it take for an investment to double at an annual compound interest rate of 12%?', questionBn: '৭২ বিধি (Rule of 72) অনুযায়ী বার্ষিক ১২% চক্রবৃদ্ধি সুদে কোনো আসল কত বছরে দ্বিগুণ হবে?', options: ['4 years', '6 years (৬ বছর)', '8 years', '12 years'], correctIndex: 1, explanation: 'By the Rule of 72, doubling time n = 72 / 12 = 6 years.' },
+      { id: 'q-fin-1202', subjectId: 'finance', chapterId: 'fin-2', categories: ['hsc', 'uni', 'bank'], difficulty: 'Hard', questionType: 'standard', examTag: 'Capital Budgeting', question: 'At the Internal Rate of Return (IRR), what is the Net Present Value (NPV) of a capital project?', questionBn: 'অভ্যন্তরীণ আয়ের হারে (IRR) কোনো প্রকল্পের নিট বর্তমান মূল্য (NPV) কত হয়?', options: ['Greater than 1', 'Exactly Zero (NPV = 0)', 'Equal to Initial Outlay', 'Negative'], correctIndex: 1, explanation: 'IRR is the discount rate at which the present value of inflows equals outflows, so NPV = 0.' },
+      { id: 'q-fin-1203', subjectId: 'finance', chapterId: 'fin-3', categories: ['ssc', 'hsc', 'uni', 'bank'], difficulty: 'Easy', questionType: 'standard', examTag: 'Banking 2nd Paper', question: 'Which institution acts as the "Lender of Last Resort" (ঋণদানের শেষ আশ্রয়স্থল) in Bangladesh?', questionBn: 'বাংলাদেশে "ঋণদানের শেষ আশ্রয়স্থল" হিসেবে কাজ করে কোন ব্যাংক?', options: ['Sonali Bank', 'Bangladesh Bank (বাংলাদেশ ব্যাংক)', 'World Bank', 'IDLC'], correctIndex: 1, explanation: 'As the Central Bank, Bangladesh Bank acts as the Lender of Last Resort for scheduled commercial banks.' },
+      { id: 'q-fin-1204', subjectId: 'finance', chapterId: 'fin-4', categories: ['ssc', 'hsc', 'uni'], difficulty: 'Medium', questionType: 'standard', examTag: 'Insurance Principles', question: 'Which type of insurance contract is NOT considered a "Contract of Indemnity" (ক্ষতিপূরণের চুক্তি)?', questionBn: 'নিচের কোন বিমা চুক্তিকে "ক্ষতিপূরণের চুক্তি" বলা হয় না?', options: ['Marine Insurance', 'Fire Insurance', 'Life Insurance (জীবন বিমা)', 'Motor Insurance'], correctIndex: 2, explanation: 'Human life cannot be measured in monetary replacement terms, so Life Insurance is not a contract of indemnity.' },
+      { id: 'q-mkt-1301', subjectId: 'marketing', chapterId: 'mkt-1', categories: ['hsc', 'uni'], difficulty: 'Easy', questionType: 'standard', examTag: 'Marketing 1st Paper', question: 'Converting raw cotton into yarn and fabric creates which type of economic utility (উপযোগ)?', questionBn: 'তুলা থেকে সুতা ও কাপড় তৈরি করার মাধ্যমে কোন ধরনের উপযোগ সৃষ্টি হয়?', options: ['Place Utility', 'Time Utility', 'Form Utility (রূপগত উপযোগ)', 'Possession Utility'], correctIndex: 2, explanation: 'Changing the physical form of raw materials through manufacturing creates Form Utility.' },
+      { id: 'q-mkt-1302', subjectId: 'marketing', chapterId: 'mkt-2', categories: ['hsc', 'uni'], difficulty: 'Medium', questionType: 'standard', examTag: 'Factors of Production', question: 'Among the four factors of production, which one is the active risk-bearer and coordinator?', questionBn: 'উৎপাদনের চারটি উপকরণের মধ্যে ঝুঁকি গ্রহণকারী ও সমন্বয়কারী উপাদান কোনটি?', options: ['Land (ভূমি)', 'Labor (শ্রম)', 'Capital (মূলধন)', 'Organization / Entrepreneurship (সংগঠন)'], correctIndex: 3, explanation: 'Organization (Entrepreneurship) coordinates Land, Labor, and Capital while bearing business risk.' },
+      { id: 'q-mkt-1303', subjectId: 'marketing', chapterId: 'mkt-3', categories: ['hsc', 'uni', 'bank'], difficulty: 'Easy', questionType: 'standard', examTag: 'Marketing 2nd Paper', question: 'Who introduced the famous "4Ps of Marketing Mix" (Product, Price, Place, Promotion)?', questionBn: 'বিপণন মিশ্রণের (Marketing Mix) বিখ্যাত "4Ps"-এর প্রবক্তা কে?', options: ['E. Jerome McCarthy (ই. জেরোম ম্যাককার্থি)', 'Adam Smith', 'Alfred Marshall', 'David Ricardo'], correctIndex: 0, explanation: 'Professor E. Jerome McCarthy classified the Marketing Mix into Product, Price, Place, and Promotion.' },
+      { id: 'q-mkt-1304', subjectId: 'marketing', chapterId: 'mkt-4', categories: ['hsc', 'uni'], difficulty: 'Medium', questionType: 'standard', examTag: 'Advertising & Branding', question: 'Any paid form of non-personal presentation and promotion of goods or services by an identified sponsor is called:', questionBn: 'নির্দিষ্ট অর্থের বিনিময়ে উদ্যোক্তা কর্তৃক নৈর্ব্যক্তিকভাবে পণ্য বা সেবার তথ্য উপস্থাপনকে কী বলে?', options: ['Personal Selling', 'Advertising (বিজ্ঞাপন)', 'Publicity', 'Packaging'], correctIndex: 1, explanation: 'Advertising is any paid form of non-personal presentation and promotion by an identified sponsor.' },
+      { id: 'q-civ-1401', subjectId: 'civics', chapterId: 'civ-1', categories: ['hsc', 'uni', 'bcs', 'gov'], difficulty: 'Easy', questionType: 'standard', examTag: 'Civics 1st Paper', question: 'Which international organization first formally introduced the concept of "Good Governance" (সুশাসন) in 1989?', questionBn: '১৯৮৯ সালে কোন আন্তর্জাতিক সংস্থা সর্বপ্রথম "সুশাসন" (Good Governance) প্রত্যয়টি ব্যবহার করে?', options: ['IMF', 'World Bank (বিশ্বব্যাংক)', 'UNESCO', 'WTO'], correctIndex: 1, explanation: 'The World Bank first coined the term Good Governance in its 1989 developmental study.' },
+      { id: 'q-civ-1402', subjectId: 'civics', chapterId: 'civ-2', categories: ['hsc', 'uni', 'bcs'], difficulty: 'Medium', questionType: 'standard', examTag: 'Rule of Law', question: 'Who popularized the constitutional doctrine of "Rule of Law" (আইনের শাসন)?', questionBn: '"Rule of Law" বা আইনের শাসন তত্ত্বের প্রধান প্রবক্তা কে?', options: ['Professor A.V. Dicey (অধ্যাপক এ. ভি. ডাইসি)', 'Thomas Hobbes', 'Jean Bodin', 'Jeremy Bentham'], correctIndex: 0, explanation: 'British jurist A.V. Dicey expounded the modern doctrine of the Rule of Law in 1885.' },
+      { id: 'q-civ-1403', subjectId: 'civics', chapterId: 'civ-3', categories: ['ssc', 'hsc', 'uni', 'bcs', 'gk'], difficulty: 'Easy', questionType: 'standard', examTag: 'Civics 2nd Paper', question: 'In which year was the historic Six-Point Programme (ঐতিহাসিক ৬ দফা দাবি) presented in Lahore?', questionBn: 'বাঙালি জাতির মুক্তির সনদ "ঐতিহাসিক ৬ দফা" দাবি কত সালে পেশ করা হয়?', options: ['1954', '1962', '1966 (১৯৬৬ সালে)', '1969'], correctIndex: 2, explanation: 'The historic Six-Point Programme was presented in February 1966 in Lahore.' },
+      { id: 'q-civ-1404', subjectId: 'civics', chapterId: 'civ-4', categories: ['hsc', 'uni', 'bcs'], difficulty: 'Hard', questionType: 'standard', examTag: 'Constitutional Bodies', question: 'Under which Article of the Constitution of Bangladesh is the Public Service Commission (BPSC) established?', questionBn: 'সংবিধানের কত নং অনুচ্ছেদ অনুযায়ী বাংলাদেশ সরকারি কর্ম কমিশন (BPSC) গঠিত হয়েছে?', options: ['Article 118', 'Article 127', 'Article 137 (১৩৭ নং অনুচ্ছেদ)', 'Article 141A'], correctIndex: 2, explanation: 'Article 137 provides for the establishment of the Bangladesh Public Service Commission.' },
+      { id: 'q-his-1501', subjectId: 'history', chapterId: 'his-1', categories: ['ssc', 'hsc', 'uni', 'bcs', 'gk'], difficulty: 'Easy', questionType: 'standard', examTag: 'Ancient Bengal', question: 'Which was the oldest Janapada of ancient Bengal with Pundranagara (Mahasthangarh) as its capital?', questionBn: 'প্রাচীন বাংলার সবচেয়ে প্রাচীন জনপদ কোনটি যার রাজধানী ছিল পুণ্ড্রনগর (মহাস্থানগড়)?', options: ['Vanga', 'Pundra (পুণ্ড্র)', 'Samatata', 'Harikela'], correctIndex: 1, explanation: 'Pundra was the oldest Janapada of ancient Bengal, centered at Mahasthangarh in Bogura.' },
+      { id: 'q-his-1502', subjectId: 'history', chapterId: 'his-2', categories: ['ssc', 'hsc', 'uni', 'bcs'], difficulty: 'Medium', questionType: 'standard', examTag: 'Mughal Bengal', question: 'Which Mughal Subahdar established Dhaka as the capital of Bengal in 1610 CE?', questionBn: '১৬১০ খ্রিস্টাব্দে কোন মুঘল সুবাদার সর্বপ্রথম ঢাকায় বাংলার রাজধানী স্থাপন করেন?', options: ['Shaista Khan', 'Islam Khan Chishti (ইসলাম খান চিশতী)', 'Mir Jumla', 'Murshid Quli Khan'], correctIndex: 1, explanation: 'Subahdar Islam Khan Chishti shifted the capital of Bengal to Dhaka in 1610 CE.' },
+      { id: 'q-his-1503', subjectId: 'history', chapterId: 'his-3', categories: ['hsc', 'uni', 'bcs'], difficulty: 'Medium', questionType: 'standard', examTag: 'Islamic History', question: 'Which Abbasid Caliphs founded and expanded the famous scientific academy "Bayt al-Hikmah" (House of Wisdom) in Baghdad?', questionBn: 'বাগদাদে বিশ্বখ্যাত জ্ঞানচর্চা কেন্দ্র "বায়তুল হিকমাহ" প্রতিষ্ঠা ও সম্প্রসারণ করেন কোন আব্বাসীয় খলিফা?', options: ['Al-Mansur', 'Harun al-Rashid & Al-Ma’mun (হারুন-অর-রশিদ ও আল-মামুন)', 'Al-Mu’tasim', 'Al-Mutawakkil'], correctIndex: 1, explanation: 'Bayt al-Hikmah was founded under Caliph Harun al-Rashid and formalized as an academy by Caliph Al-Ma’mun.' },
+      { id: 'q-his-1504', subjectId: 'history', chapterId: 'his-4', categories: ['hsc', 'uni', 'bcs'], difficulty: 'Easy', questionType: 'standard', examTag: 'World History', question: 'What was the iconic three-word motto of the French Revolution of 1789?', questionBn: '১৭৮৯ সালের ফরাসি বিপ্লবের মূল স্লোগান কী ছিল?', options: ['Peace, Land, Bread', 'Liberty, Equality, Fraternity (স্বাধীনতা, সাম্য, ভ্রাতৃত্ব)', 'Unity, Faith, Discipline', 'Blood and Iron'], correctIndex: 1, explanation: 'Liberty, Equality, Fraternity was the motto of the 1789 French Revolution.' },
+      { id: 'q-log-1601', subjectId: 'logic', chapterId: 'log-1', categories: ['hsc', 'uni'], difficulty: 'Easy', questionType: 'standard', examTag: 'Logic 1st Paper', question: 'Who is universally regarded as the Father of Formal Logic?', questionBn: 'যুক্তিবিদ্যার জনক (Father of Logic) কে?', options: ['Socrates', 'Plato', 'Aristotle (এরিস্টটল)', 'John Stuart Mill'], correctIndex: 2, explanation: 'Aristotle is the Father of Classical Formal Logic.' },
+      { id: 'q-log-1602', subjectId: 'logic', chapterId: 'log-2', categories: ['hsc', 'uni'], difficulty: 'Medium', questionType: 'standard', examTag: 'Deductive Syllogism', question: 'How many distinct terms (পদ) must exist in a standard categorical syllogism (সহানুমান)?', questionBn: 'একটি আদর্শ নিরপেক্ষ সহানুমানে মোট কয়টি পদ থাকে?', options: ['2 terms', '3 terms (৩টি — প্রধান, অপ্রধান ও মধ্যপদ)', '4 terms', '5 terms'], correctIndex: 1, explanation: 'Every categorical syllogism has 3 terms: Major, Minor, and Middle term.' },
+      { id: 'q-log-1603', subjectId: 'logic', chapterId: 'log-3', categories: ['hsc', 'uni'], difficulty: 'Medium', questionType: 'standard', examTag: 'Logic 2nd Paper', question: 'Using metaphorical or obscure language in a logical definition causes which fallacy?', questionBn: 'যৌক্তিক সংজ্ঞায় রূপক বা দুর্বোধ্য শব্দ ব্যবহার করলে কোন অনুপপত্তি ঘটে?', options: ['Circular Definition', 'Figurative / Obscure Definition (রূপক বা দুর্বোধ্য সংজ্ঞা অনুপপত্তি)', 'Negative Definition', 'Too Narrow Definition'], correctIndex: 1, explanation: 'Using metaphors violates the clarity rule and causes Figurative/Obscure Definition fallacy.' },
+      { id: 'q-log-1604', subjectId: 'logic', chapterId: 'log-4', categories: ['hsc', 'uni'], difficulty: 'Hard', questionType: 'standard', examTag: 'Inductive Logic', question: 'What is the formal ground (আকারগত ভিত্তি) of Scientific Induction (বৈজ্ঞানিক আরোহ)?', questionBn: 'বৈজ্ঞানিক আরোহের আকারগত ভিত্তি কোনটি?', options: ['Observation & Experiment', 'Law of Uniformity of Nature & Law of Causation (প্রকৃতির নিয়মানুবর্তিতা নীতি ও কার্যকারণ নিয়ম)', 'Analogy', 'Hypothesis'], correctIndex: 1, explanation: 'The Law of Uniformity of Nature and Law of Causation are the formal grounds of induction.' },
+      { id: 'q-soc-1701', subjectId: 'sociology', chapterId: 'soc-1', categories: ['hsc', 'uni', 'bcs'], difficulty: 'Easy', questionType: 'standard', examTag: 'Sociology 1st Paper', question: 'Who coined the term "Sociology" in 1839 in his work "Positive Philosophy"?', questionBn: '১৮৩৯ সালে সর্বপ্রথম "Sociology" (সমাজবিজ্ঞান) শব্দটি প্রবর্তন করেন কে?', options: ['Ibn Khaldun', 'Auguste Comte (অগাস্ট কোঁৎ)', 'Emile Durkheim', 'Max Weber'], correctIndex: 1, explanation: 'Auguste Comte coined the term Sociology in 1839.' },
+      { id: 'q-soc-1702', subjectId: 'sociology', chapterId: 'soc-2', categories: ['hsc', 'uni', 'bcs', 'gk'], difficulty: 'Medium', questionType: 'standard', examTag: 'Sociology 2nd Paper', question: 'The ancient archaeological site of Wari-Bateshwar (উয়ারী-বটেশ্বর) is located in which district of Bangladesh?', questionBn: 'আড়াই হাজার বছরের প্রাচীন প্রত্নতাত্ত্বিক স্থান "উয়ারী-বটেশ্বর" কোন জেলায় অবস্থিত?', options: ['Bogura', 'Narsingdi (নরসিংদী)', 'Naogaon', 'Cumilla'], correctIndex: 1, explanation: 'Wari-Bateshwar is located in Belabo and Shibpur upazilas of Narsingdi district.' },
+      { id: 'q-soc-1703', subjectId: 'sociology', chapterId: 'soc-3', categories: ['hsc', 'uni'], difficulty: 'Easy', questionType: 'standard', examTag: 'Social Work', question: 'Which of the following is a Basic Method (মৌলিক পদ্ধতি) of professional Social Work?', questionBn: 'পেশাদার সমাজকর্মের মৌলিক পদ্ধতি নিচের কোনটি?', options: ['Social Action', 'Social Casework (ব্যক্তি সমাজকর্ম)', 'Social Research', 'Social Administration'], correctIndex: 1, explanation: 'Social Casework, Social Group Work, and Community Organization are the 3 basic methods.' },
+      { id: 'q-soc-1704', subjectId: 'sociology', chapterId: 'soc-4', categories: ['ssc', 'hsc', 'uni', 'bcs', 'gk'], difficulty: 'Medium', questionType: 'standard', examTag: 'Geography & GIS', question: 'What does "GIS" stand for in modern cartography and geography?', questionBn: 'আধুনিক মানচিত্র অঙ্কন ও ভূগোলে ব্যবহৃত "GIS"-এর পূর্ণরূপ কী?', options: ['Global Internet System', 'Geographic Information System (ভৌগোলিক তথ্য ব্যবস্থা)', 'Geological Index Survey', 'Geostationary Imaging Satellite'], correctIndex: 1, explanation: 'GIS stands for Geographic Information System.' }
+    ];
+
+    extraQuestions.forEach(function (eq) {
+      if (!d.questions.some(function (q) { return q.id === eq.id; })) {
+        d.questions.push(eq);
+      }
+    });
+  })();
+
+  App.homeGroupFilter = 'all';
+  App.authTab = 'signin';
+
   var _origSyncHeader = App.syncHeaderAndThemeUI;
   App.syncHeaderAndThemeUI = function () {
     _origSyncHeader.call(this);
     var cloudBadge = document.getElementById('ev-cloud-status-badge');
     var sidebarCloudLabel = document.getElementById('ev-sidebar-cloud-label');
     var isCloudAuth = window.ExamVerseCloud && window.ExamVerseCloud.isAuthenticated();
-    var isCloudCfg = window.ExamVerseCloud && window.ExamVerseCloud.isConfigured();
     if (cloudBadge) {
+      cloudBadge.style.cursor = 'pointer';
+      cloudBadge.onclick = function () { window.evOpenAuthModal(); };
       if (isCloudAuth) {
-        cloudBadge.textContent = 'Cloud Synced ✓';
+        var provLabel = window.ExamVerseCloud.getAuthProviderLabel ? window.ExamVerseCloud.getAuthProviderLabel() : 'Cloud Synced';
+        cloudBadge.textContent = provLabel + ' ✓';
         cloudBadge.className = 'ev-badge-pill ev-badge-success';
-      } else if (isCloudCfg) {
-        cloudBadge.textContent = 'Cloud Ready';
-        cloudBadge.className = 'ev-badge-pill ev-badge-indigo';
       } else {
-        cloudBadge.textContent = 'Local Mode';
-        cloudBadge.className = 'ev-badge-pill ev-badge-neutral';
+        cloudBadge.textContent = 'Sign In / Sign Up';
+        cloudBadge.className = 'ev-badge-pill ev-badge-indigo';
       }
     }
     if (sidebarCloudLabel) {
@@ -3009,33 +3181,96 @@
     var isAuth = cloud && cloud.isAuthenticated();
     var savedUrl = (cloud && cloud.config && cloud.config.url) ? cloud.config.url : '';
     var savedKey = (cloud && cloud.config && cloud.config.anonKey) ? cloud.config.anonKey : '';
+    var activeTab = App.authTab || 'signin';
+
+    var googleSvg = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="#EA4335" d="M12 5c1.6 0 3 .6 4.1 1.7l3.1-3.1C17.3 1.8 14.8 1 12 1 7.4 1 3.5 3.6 1.6 7.4l3.7 2.8C6.2 7.2 8.9 5 12 5z"/><path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5c-.3 1.5-1.1 2.8-2.4 3.6l3.7 2.9c2.2-2 3.7-5 3.7-8.7z"/><path fill="#FBBC05" d="M5.3 14.8c-.2-.8-.4-1.6-.4-2.5s.2-1.7.4-2.5L1.6 7C.6 9 0 11.2 0 13.5s.6 4.5 1.6 6.5l3.7-2.9z"/><path fill="#34A853" d="M12 24c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3.1 0-5.8-2.1-6.7-5l-3.7 2.8C3.5 21.4 7.4 24 12 24z"/></svg>';
+    var facebookSvg = '<svg viewBox="0 0 24 24" width="18" height="18" fill="#1877F2" aria-hidden="true"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>';
 
     var authStatusHtml = '';
     if (isAuth) {
-      var email = (cloud.authSession && cloud.authSession.user && cloud.authSession.user.email) || 'Authenticated User';
+      var uObj = cloud.authSession.user || {};
+      var email = uObj.email || 'Verified Student';
+      var provLabel = cloud.getAuthProviderLabel ? cloud.getAuthProviderLabel() : 'Verified';
+      var stUser = window.ExamVerseStorage.state.user;
       authStatusHtml = (
-        '<div style="padding:1rem; border-radius:var(--radius-sm); background-color:var(--status-success-bg); border:1px solid var(--status-success-border); margin-bottom:1rem;">' +
-          '<div style="font-size:0.9rem; font-weight:700; color:var(--status-success-text);">✓ Signed In to Supabase Cloud</div>' +
-          '<div style="font-size:0.8rem; color:var(--text-secondary); margin-top:0.2rem;">Account: <strong>' + escapeHtml(email) + '</strong></div>' +
-          '<div style="display:flex; gap:0.5rem; margin-top:0.75rem;">' +
-            '<button type="button" class="ev-btn ev-btn-primary ev-btn-sm" onclick="window.evSyncCloudNow()">Sync Profile Now</button>' +
+        '<div style="padding:1.15rem; border-radius:var(--radius-sm); background-color:var(--status-success-bg); border:1px solid var(--status-success-border); margin-bottom:1rem;">' +
+          '<div style="display:flex; align-items:center; justify-content:space-between; gap:0.5rem; flex-wrap:wrap; margin-bottom:0.4rem;">' +
+            '<span style="font-size:0.95rem; font-weight:800; color:var(--status-success-text);">✓ Signed In (' + escapeHtml(provLabel) + ')</span>' +
+            '<span class="ev-badge-pill ev-badge-success">Real-Time DB Active</span>' +
+          '</div>' +
+          '<div style="font-size:0.84rem; color:var(--text-primary); margin-bottom:0.2rem;">Name: <strong>' + escapeHtml(stUser.name) + '</strong> (' + escapeHtml(stUser.targetTrack) + ')</div>' +
+          '<div style="font-size:0.8rem; color:var(--text-secondary);">Email: <strong>' + escapeHtml(email) + '</strong> • Level ' + stUser.level + ' (' + stUser.xp + ' XP)</div>' +
+          '<div style="display:flex; gap:0.5rem; margin-top:0.85rem; flex-wrap:wrap;">' +
+            '<button type="button" class="ev-btn ev-btn-primary ev-btn-sm" onclick="window.evSyncCloudNow()">Sync Profile with Database Now</button>' +
             '<button type="button" class="ev-btn ev-btn-danger ev-btn-sm" onclick="window.evSignOutCloud()">Sign Out</button>' +
           '</div>' +
         '</div>'
       );
     } else if (isCfg) {
       authStatusHtml = (
-        '<div style="padding:1rem; border-radius:var(--radius-sm); background-color:var(--bg-surface-muted); border:1px solid var(--border-subtle); margin-bottom:1rem;">' +
-          '<div style="font-size:0.92rem; font-weight:700; margin-bottom:0.65rem;">Student Sign In / Sign Up</div>' +
-          '<div style="display:flex; flex-direction:column; gap:0.65rem; margin-bottom:0.85rem;">' +
-            '<input type="text" id="ev-auth-fullname" class="ev-input" placeholder="Full Name (for new Sign Up)" />' +
-            '<input type="email" id="ev-auth-email" class="ev-input" placeholder="Email Address (e.g., student@example.com)" />' +
-            '<input type="password" id="ev-auth-password" class="ev-input" placeholder="Password (min 6 characters)" />' +
+        '<div style="margin-bottom:1rem;">' +
+          '<div style="display:grid; grid-template-columns:1fr 1fr; gap:0.6rem; margin-bottom:0.9rem;">' +
+            '<button type="button" class="ev-btn ev-btn-secondary" style="width:100%; justify-content:center; font-weight:700; padding:0.65rem;" onclick="window.evSignInGoogleCloud()">' +
+              googleSvg + '<span>Continue with Google</span>' +
+            '</button>' +
+            '<button type="button" class="ev-btn ev-btn-secondary" style="width:100%; justify-content:center; font-weight:700; padding:0.65rem;" onclick="window.evSignInFacebookCloud()">' +
+              facebookSvg + '<span>Continue with Facebook</span>' +
+            '</button>' +
           '</div>' +
-          '<div style="display:flex; gap:0.5rem; flex-wrap:wrap;">' +
-            '<button type="button" class="ev-btn ev-btn-primary ev-btn-sm" onclick="window.evSignInCloud()">Sign In</button>' +
-            '<button type="button" class="ev-btn ev-btn-soft ev-btn-sm" onclick="window.evSignUpCloud()">Create Account (Sign Up)</button>' +
-            '<button type="button" class="ev-btn ev-btn-secondary ev-btn-sm" onclick="window.evSignInGoogleCloud()">Sign In with Google</button>' +
+
+          '<div style="display:flex; align-items:center; gap:0.6rem; margin-bottom:0.9rem; color:var(--text-muted); font-size:0.72rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em;">' +
+            '<div style="flex:1; height:1px; background:var(--border-subtle);"></div>' +
+            '<span>OR USE VERIFIED EMAIL ACCOUNT</span>' +
+            '<div style="flex:1; height:1px; background:var(--border-subtle);"></div>' +
+          '</div>' +
+
+          '<div style="display:grid; grid-template-columns:1fr 1fr; gap:0.4rem; padding:0.25rem; background:var(--bg-surface-muted); border-radius:var(--radius-sm); margin-bottom:0.9rem;">' +
+            '<button type="button" class="ev-btn ' + (activeTab === 'signin' ? 'ev-btn-primary' : 'ev-btn-secondary') + ' ev-btn-sm" onclick="window.evSetAuthTab(\'signin\')">Sign In (লগইন)</button>' +
+            '<button type="button" class="ev-btn ' + (activeTab === 'signup' ? 'ev-btn-primary' : 'ev-btn-secondary') + ' ev-btn-sm" onclick="window.evSetAuthTab(\'signup\')">Create Account (নতুন একাউন্ট)</button>' +
+          '</div>' +
+
+          '<div style="padding:1rem; border-radius:var(--radius-sm); background-color:var(--bg-surface-muted); border:1px solid var(--border-subtle);">' +
+            (activeTab === 'signup'
+              ? (
+                '<div style="display:flex; flex-direction:column; gap:0.65rem; margin-bottom:0.85rem;">' +
+                  '<div>' +
+                    '<label for="ev-auth-fullname" style="font-size:0.75rem; font-weight:700; display:block; margin-bottom:0.2rem;">Full Name (আপনার আসল নাম)</label>' +
+                    '<input type="text" id="ev-auth-fullname" class="ev-input" placeholder="e.g., Tahmid Hasan" />' +
+                  '</div>' +
+                  '<div>' +
+                    '<label for="ev-auth-group" style="font-size:0.75rem; font-weight:700; display:block; margin-bottom:0.2rem;">Academic Group / Track (আপনার বিভাগ)</label>' +
+                    '<select id="ev-auth-group" class="ev-select">' +
+                      '<option value="Science (বিজ্ঞান বিভাগ)">Science (বিজ্ঞান বিভাগ — পদার্থ, রসায়ন, গণিত, জীববিজ্ঞান)</option>' +
+                      '<option value="Commerce (ব্যবসায় শিক্ষা বিভাগ)">Commerce (ব্যবসায় শিক্ষা — হিসাববিজ্ঞান, ব্যবস্থাপনা, ফিন্যান্স, বিপণন)</option>' +
+                      '<option value="Arts / Humanities (মানবিক বিভাগ)">Arts / Humanities (মানবিক — অর্থনীতি, পৌরনীতি, ইতিহাস, যুক্তিবিদ্যা)</option>' +
+                      '<option value="BCS & Government Jobs (বিসিএস ও ব্যাংক জব)">BCS, Bank &amp; Government Jobs (চাকরি প্রস্তুতি)</option>' +
+                    '</select>' +
+                  '</div>' +
+                  '<div>' +
+                    '<label for="ev-auth-email" style="font-size:0.75rem; font-weight:700; display:block; margin-bottom:0.2rem;">Authentic Email Address (আসল Gmail / Email — ফেইক ইমেইল ব্লকড)</label>' +
+                    '<input type="email" id="ev-auth-email" class="ev-input" placeholder="yourname@gmail.com" />' +
+                  '</div>' +
+                  '<div>' +
+                    '<label for="ev-auth-password" style="font-size:0.75rem; font-weight:700; display:block; margin-bottom:0.2rem;">Password (কমপক্ষে ৬ অক্ষর)</label>' +
+                    '<input type="password" id="ev-auth-password" class="ev-input" placeholder="••••••••" />' +
+                  '</div>' +
+                '</div>' +
+                '<button type="button" id="ev-auth-submit-btn" class="ev-btn ev-btn-primary" style="width:100%;" onclick="window.evSignUpCloud()">Create Verified Account &amp; Sync Database</button>'
+              )
+              : (
+                '<div style="display:flex; flex-direction:column; gap:0.65rem; margin-bottom:0.85rem;">' +
+                  '<div>' +
+                    '<label for="ev-auth-email" style="font-size:0.75rem; font-weight:700; display:block; margin-bottom:0.2rem;">Email Address (আপনার ইমেইল)</label>' +
+                    '<input type="email" id="ev-auth-email" class="ev-input" placeholder="yourname@gmail.com" />' +
+                  '</div>' +
+                  '<div>' +
+                    '<label for="ev-auth-password" style="font-size:0.75rem; font-weight:700; display:block; margin-bottom:0.2rem;">Password (পাসওয়ার্ড)</label>' +
+                    '<input type="password" id="ev-auth-password" class="ev-input" placeholder="••••••••" />' +
+                  '</div>' +
+                '</div>' +
+                '<button type="button" id="ev-auth-submit-btn" class="ev-btn ev-btn-primary" style="width:100%;" onclick="window.evSignInCloud()">Sign In to ExamVerse</button>'
+              )
+            ) +
           '</div>' +
         '</div>'
       );
@@ -3043,27 +3278,95 @@
 
     bodyEl.innerHTML = (
       authStatusHtml +
-      '<div style="padding:1rem; border-radius:var(--radius-sm); border:1px solid var(--border-subtle); background-color:var(--bg-surface-hover);">' +
-        '<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.4rem;">' +
-          '<span style="font-size:0.88rem; font-weight:700;">Supabase Project Connection</span>' +
-          '<span class="ev-badge-pill ' + (isCfg ? 'ev-badge-success' : 'ev-badge-neutral') + '">' + (isCfg ? 'Connected' : 'Not Connected') + '</span>' +
-        '</div>' +
-        '<div style="display:flex; flex-direction:column; gap:0.65rem; margin-bottom:0.85rem;">' +
+      '<details style="padding:0.75rem 0.95rem; border-radius:var(--radius-sm); border:1px solid var(--border-subtle); background-color:var(--bg-surface-hover);">' +
+        '<summary style="font-size:0.8rem; font-weight:700; cursor:pointer; color:var(--text-secondary);">⚙️ Supabase Cloud API Settings (' + (isCfg ? 'Connected ✓' : 'Not Connected') + ')</summary>' +
+        '<div style="margin-top:0.75rem; display:flex; flex-direction:column; gap:0.6rem;">' +
           '<div>' +
-            '<label for="ev-supa-url" style="font-size:0.75rem; font-weight:700; display:block; margin-bottom:0.2rem;">Supabase Project URL</label>' +
-            '<input type="url" id="ev-supa-url" class="ev-input font-mono" style="font-size:0.78rem;" value="' + escapeHtml(savedUrl) + '" />' +
+            '<label for="ev-supa-url" style="font-size:0.74rem; font-weight:700; display:block; margin-bottom:0.15rem;">Supabase Project URL</label>' +
+            '<input type="url" id="ev-supa-url" class="ev-input font-mono" style="font-size:0.76rem;" value="' + escapeHtml(savedUrl) + '" />' +
           '</div>' +
           '<div>' +
-            '<label for="ev-supa-key" style="font-size:0.75rem; font-weight:700; display:block; margin-bottom:0.2rem;">Supabase Anon Public Key</label>' +
-            '<input type="text" id="ev-supa-key" class="ev-input font-mono" style="font-size:0.78rem;" value="' + escapeHtml(savedKey) + '" />' +
+            '<label for="ev-supa-key" style="font-size:0.74rem; font-weight:700; display:block; margin-bottom:0.15rem;">Supabase Anon Public Key</label>' +
+            '<input type="text" id="ev-supa-key" class="ev-input font-mono" style="font-size:0.76rem;" value="' + escapeHtml(savedKey) + '" />' +
+          '</div>' +
+          '<div style="display:flex; justify-content:space-between; gap:0.5rem; margin-top:0.25rem;">' +
+            (isCfg ? '<button type="button" class="ev-btn ev-btn-danger ev-btn-sm" onclick="window.evDisconnectSupabaseConfig()">Disconnect</button>' : '<span></span>') +
+            '<button type="button" class="ev-btn ev-btn-primary ev-btn-sm" onclick="window.evSaveSupabaseConfig()">Save API Config</button>' +
           '</div>' +
         '</div>' +
-        '<div style="display:flex; justify-content:space-between; gap:0.5rem; flex-wrap:wrap;">' +
-          (isCfg ? '<button type="button" class="ev-btn ev-btn-danger ev-btn-sm" onclick="window.evDisconnectSupabaseConfig()">Disconnect Cloud</button>' : '<span></span>') +
-          '<button type="button" class="ev-btn ev-btn-primary ev-btn-sm" onclick="window.evSaveSupabaseConfig()">Save &amp; Connect Supabase</button>' +
-        '</div>' +
-      '</div>'
+      '</details>'
     );
+  };
+
+  /* Inject Group Filter Tabs on Home Page & Exams Page dynamically */
+  var _origRenderCurrentView = App.renderCurrentView;
+  App.renderCurrentView = function () {
+    _origRenderCurrentView.call(this);
+    if (this.currentView === 'home') {
+      var headers = document.querySelectorAll('.ev-section-title');
+      for (var i = 0; i < headers.length; i++) {
+        if (headers[i].textContent.indexOf('Explore') !== -1) {
+          headers[i].textContent = 'Explore Subjects by Group (বিজ্ঞান • ব্যবসায় শিক্ষা • মানবিক • আবশ্যিক)';
+          var parentSec = headers[i].parentElement.parentElement;
+          var gridEl = parentSec.querySelector('.ev-grid-4');
+          if (gridEl && !parentSec.querySelector('#ev-home-group-tabs')) {
+            var tabsBar = document.createElement('div');
+            tabsBar.id = 'ev-home-group-tabs';
+            tabsBar.style.cssText = 'display:flex; gap:0.45rem; flex-wrap:wrap; margin-bottom:1rem;';
+            var groups = [
+              { id: 'all', label: 'All Subjects (সকল বিষয় — 17)' },
+              { id: 'Science', label: 'বিজ্ঞান বিভাগ (Science — 4)' },
+              { id: 'Commerce', label: 'ব্যবসায় শিক্ষা (Commerce — 4)' },
+              { id: 'Arts', label: 'মানবিক বিভাগ (Arts — 5)' },
+              { id: 'Common', label: 'আবশ্যিক ও সাধারণ (Compulsory — 4)' }
+            ];
+            tabsBar.innerHTML = groups.map(function (g) {
+              var active = App.homeGroupFilter === g.id;
+              return '<button type="button" class="ev-btn ' + (active ? 'ev-btn-primary' : 'ev-btn-secondary') + ' ev-btn-sm" onclick="window.evSetHomeGroupFilter(\'' + g.id + '\')">' + g.label + '</button>';
+            }).join('');
+            parentSec.insertBefore(tabsBar, gridEl);
+          }
+          if (gridEl && App.homeGroupFilter !== 'all') {
+            var filtered = window.EXAMVERSE_DATA.subjects.filter(function (s) { return s.group === App.homeGroupFilter; });
+            var state = window.ExamVerseStorage.state;
+            gridEl.innerHTML = filtered.map(function (subj) {
+              var mastery = state.stats.subjectMastery[subj.id] || 0;
+              var realCount = window.EXAMVERSE_DATA.getSubjectQuestionCount(subj.id);
+              return (
+                '<button type="button" class="ev-card ev-card-interactive ev-subject-card" style="text-align:left; width:100%; font-family:inherit;" onclick="window.evStartSubjectQuiz(\'' + subj.id + '\', \'practice\')">' +
+                  '<div style="display:flex; align-items:center; justify-content:space-between; gap:0.5rem; width:100%;">' +
+                    '<div class="ev-subject-icon-box">' + App.getIconSvg(subj.icon) + '</div>' +
+                    '<span class="ev-badge-pill ev-badge-indigo">' + escapeHtml(subj.group) + ' • ' + realCount + ' MCQs</span>' +
+                  '</div>' +
+                  '<div>' +
+                    '<div style="font-size:0.95rem; font-weight:700; color:var(--text-primary);">' + escapeHtml(subj.name) + '</div>' +
+                    '<div class="font-bn" style="font-size:0.79rem; color:var(--text-muted);">' + escapeHtml(subj.nameBn) + '</div>' +
+                  '</div>' +
+                  '<div style="width:100%;">' +
+                    '<div style="display:flex; justify-content:space-between; font-size:0.74rem; font-weight:600; color:var(--text-secondary); margin-bottom:0.35rem;">' +
+                      '<span>' + subj.chapters.length + ' Chapters</span>' +
+                      '<span>Mastery: ' + mastery + '%</span>' +
+                    '</div>' +
+                    '<div class="ev-progress-track"><div class="ev-progress-fill" style="width:' + mastery + '%;"></div></div>' +
+                  '</div>' +
+                '</button>'
+              );
+            }).join('');
+          }
+          break;
+        }
+      }
+    }
+  };
+
+  window.evSetHomeGroupFilter = function (groupId) {
+    App.homeGroupFilter = groupId || 'all';
+    App.renderCurrentView();
+  };
+
+  window.evSetAuthTab = function (tabName) {
+    App.authTab = (tabName === 'signup') ? 'signup' : 'signin';
+    App.renderAuthModalContent();
   };
 
   window.evOpenAuthModal = function () {
@@ -3092,42 +3395,66 @@
   window.evSignInCloud = async function () {
     var emailEl = document.getElementById('ev-auth-email');
     var passEl = document.getElementById('ev-auth-password');
+    var btn = document.getElementById('ev-auth-submit-btn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Signing in...'; }
     try {
       await window.ExamVerseCloud.signInWithEmail(emailEl ? emailEl.value.trim() : '', passEl ? passEl.value : '');
       App.syncHeaderAndThemeUI();
       App.renderAuthModalContent();
       App.renderCurrentView();
-      App.showToast('Signed in & synced with Supabase Cloud!');
+      App.showToast('সফলভাবে লগইন এবং ডাটাবেস সিঙ্ক হয়েছে!');
     } catch (err) {
       App.showToast(err.message || 'Sign in failed');
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = 'Sign In to ExamVerse'; }
     }
   };
   window.evSignUpCloud = async function () {
     var nameEl = document.getElementById('ev-auth-fullname');
+    var groupEl = document.getElementById('ev-auth-group');
     var emailEl = document.getElementById('ev-auth-email');
     var passEl = document.getElementById('ev-auth-password');
+    var btn = document.getElementById('ev-auth-submit-btn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Verifying & Creating Account...'; }
     try {
-      await window.ExamVerseCloud.signUpWithEmail(emailEl ? emailEl.value.trim() : '', passEl ? passEl.value : '', nameEl ? nameEl.value.trim() : 'Student Scholar');
+      var res = await window.ExamVerseCloud.signUpWithEmail(
+        emailEl ? emailEl.value.trim() : '',
+        passEl ? passEl.value : '',
+        nameEl ? nameEl.value.trim() : '',
+        groupEl ? groupEl.value : 'Science (বিজ্ঞান বিভাগ)'
+      );
       App.syncHeaderAndThemeUI();
       App.renderAuthModalContent();
       App.renderCurrentView();
-      App.showToast('Account created in Supabase Cloud!');
+      if (res && res.access_token) {
+        App.showToast('একাউন্ট তৈরি ও ডাটাবেসে সিঙ্ক সম্পন্ন হয়েছে!');
+      } else {
+        App.showToast('একাউন্ট তৈরি হয়েছে! আপনার ইমেইলের ইনবক্স থেকে ভেরিফিকেশন লিংকটি কনফার্ম করুন।');
+      }
     } catch (err) {
       App.showToast(err.message || 'Sign up failed');
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = 'Create Verified Account & Sync Database'; }
     }
   };
   window.evSignInGoogleCloud = function () {
     var oauthUrl = window.ExamVerseCloud.getGoogleOAuthUrl();
     if (oauthUrl) window.location.href = oauthUrl;
   };
+  window.evSignInFacebookCloud = function () {
+    var oauthUrl = window.ExamVerseCloud.getFacebookOAuthUrl();
+    if (oauthUrl) window.location.href = oauthUrl;
+  };
   window.evSyncCloudNow = async function () {
+    await window.ExamVerseCloud.pushCloudProfile();
     await window.ExamVerseCloud.pullCloudProfile();
     App.syncHeaderAndThemeUI();
+    App.renderAuthModalContent();
     App.renderCurrentView();
-    App.showToast('Profile synced from Supabase Cloud');
+    App.showToast('প্রোফাইল সফলভাবে Supabase ডাটাবেসের সাথে সিঙ্ক হয়েছে!');
   };
-  window.evSignOutCloud = function () {
-    window.ExamVerseCloud.signOut();
+  window.evSignOutCloud = async function () {
+    await window.ExamVerseCloud.signOut();
     App.syncHeaderAndThemeUI();
     App.renderAuthModalContent();
     App.renderCurrentView();
