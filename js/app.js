@@ -1,18 +1,61 @@
 /* ==========================================================================
    ExamVerse — Main Application Controller & View Renderer (js/app.js)
-   Step 1 Audit Fixes Applied:
-   - XSS HTML escaping helper (escapeHtml) on all dynamic strings
-   - Dynamic real question counts across Home, Subjects, Categories & Chapters
-   - Empty Chapter state with "Back to Chapters" action
-   - Active Exam Navigation guard modal & Unanswered Submit confirmation modal
-   - Safe Mode Switching confirmation modal (restarts session cleanly)
-   - Full Historical Attempt Review & Exact Snapshot Retry from Quiz History
-   - Search input cursor preservation (no full-page input replacement on typing)
-   - Fixed Keyboard Shortcut precedence bug (Ctrl+B no longer triggers Option B)
-   - Added Vibration support (navigator.vibrate) & Notification Mark Read / Clear
+   Step 1 + Step 2 Audit Fixes Applied:
+   - URL Hash Routing (#/home, #/exams, etc.) with Back/Forward/Refresh support
+   - Mobile Bottom Nav "More" Drawer (#ev-mobile-more-modal) for all 15 views
+   - KaTeX Math & Scientific Formula Rendering (renderAcademicMath)
+   - Debounced Search across Chapter Titles, Questions & Tags + <mark> Highlighting
+   - Full UI Localization (English, বাংলা, Bilingual)
+   - Sound Volume Slider + Test Sound Preview Button
+   - Bookmark Custom Notes & Subject Filter + Mistake Bank Weak-Topic Insights
+   - Modal Focus Trap, Focus Restoration & Escape Key Accessibility
+   - PWA Service Worker Registration with Update Notification
    ========================================================================== */
 
 (function () {
+  var VALID_VIEWS = [
+    'home', 'exams', 'quiz', 'results', 'review', 'stats',
+    'leaderboard', 'profile', 'bookmarks', 'mistakes',
+    'history', 'daily', 'settings', 'about', 'privacy'
+  ];
+
+  var VIEW_TITLES = {
+    en: {
+      home: 'Home Dashboard',
+      exams: 'Exams & Syllabus',
+      quiz: 'Quiz & Examination',
+      results: 'Diagnostic Results',
+      review: 'Answer Review',
+      stats: 'Analytics & Stats',
+      leaderboard: 'Merit Leaderboard',
+      profile: 'Student Profile',
+      bookmarks: 'Saved Bookmarks',
+      mistakes: 'Mistake Bank',
+      history: 'Quiz History',
+      daily: 'Daily Challenge',
+      settings: 'Settings',
+      about: 'About ExamVerse',
+      privacy: 'Privacy Policy'
+    },
+    bn: {
+      home: 'হোম ড্যাশবোর্ড',
+      exams: 'পরীক্ষা ও সিলেবাস',
+      quiz: 'কুইজ ও পরীক্ষা',
+      results: 'ফলাফল বিশ্লেষণ',
+      review: 'উত্তর পর্যালোচনা',
+      stats: 'পরিসংখ্যান',
+      leaderboard: 'মেধা তালিকা',
+      profile: 'শিক্ষার্থী প্রোফাইল',
+      bookmarks: 'বুকমার্কসমূহ',
+      mistakes: 'মিসটেক ব্যাংক',
+      history: 'পরীক্ষার ইতিহাস',
+      daily: 'ডেইলি চ্যালেঞ্জ',
+      settings: 'সেটিংস',
+      about: 'ExamVerse সম্পর্কে',
+      privacy: 'গোপনীয়তা নীতি'
+    }
+  };
+
   /* XSS Protection Helper (Audit 10.1) */
   function escapeHtml(str) {
     if (str === null || typeof str === 'undefined') return '';
@@ -24,25 +67,182 @@
       .replace(/'/g, '&#39;');
   }
 
+  /* Highlight matched search substring safely */
+  function highlightMatch(text, query) {
+    var safeText = escapeHtml(text);
+    var q = String(query || '').trim();
+    if (!q) return safeText;
+    var safeQ = escapeHtml(q).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    try {
+      var re = new RegExp('(' + safeQ + ')', 'gi');
+      return safeText.replace(re, '<mark class="ev-search-highlight">$1</mark>');
+    } catch (e) {
+      return safeText;
+    }
+  }
+
+  /* Render Scientific & Mathematical Notation via KaTeX (if loaded) or Semantic HTML (Audit 7.4) */
+  function renderAcademicMath(rawText) {
+    if (!rawText) return '';
+    var text = String(rawText);
+
+    /* If text contains explicit $...$ LaTeX delimiters and KaTeX is loaded */
+    if (window.katex && text.indexOf('$') !== -1) {
+      return escapeHtml(text).replace(/\$([^$]+)\$/g, function (_, tex) {
+        try {
+          var decodedTex = tex
+            .replace(/&amp;/g, '&')
+            .replace(/&lt;/g, '<')
+            .replace(/&gt;/g, '>')
+            .replace(/&quot;/g, '"')
+            .replace(/&#39;/g, "'");
+          return window.katex.renderToString(decodedTex, { throwOnError: false });
+        } catch (err) {
+          return tex;
+        }
+      });
+    }
+
+    /* Also format common scientific formulas & exponents cleanly */
+    var escaped = escapeHtml(text);
+    return escaped
+      .replace(/\^\{([^}]+)\}/g, '<sup>$1</sup>')
+      .replace(/\^\(([^)]+)\)/g, '<sup>($1)</sup>')
+      .replace(/_\{([^}]+)\}/g, '<sub>$1</sub>')
+      .replace(/_\(([^)]+)\)/g, '<sub>($1)</sub>');
+  }
+
   var App = {
     currentView: 'home',
     selectedExamCategory: 'uni',
     examSearchQuery: '',
     examSubjectFilter: 'all',
     examDifficultyFilter: 'all',
+    bookmarkSubjectFilter: 'all',
     leaderboardScope: 'global',
     leaderboardPeriod: 'week',
     pendingNavigationTarget: null,
     pendingModeSwitchTarget: null,
+    lastFocusedElement: null,
+    activeModalId: null,
+    searchDebounceTimer: null,
     audioCtx: null,
 
     init: function () {
       window.ExamVerseStorage.init();
       window.ExamVerseQuiz.restoreFromStorage();
 
+      /* Determine initial view from URL hash if present (Audit 7.1) */
+      var initialHashView = this.getViewFromHash();
+      if (initialHashView) {
+        this.currentView = initialHashView;
+      } else {
+        this.updateUrlHash('home', true);
+      }
+
+      if (this.currentView === 'quiz' && (!window.ExamVerseQuiz.session || window.ExamVerseQuiz.session.isSubmitted)) {
+        var pack = window.EXAMVERSE_DATA.recommendedQuizzes[0];
+        window.ExamVerseQuiz.startSession({
+          title: pack.title,
+          categoryLabel: 'University & Engineering Track',
+          categoryId: 'uni',
+          subjectId: 'all',
+          questionIds: pack.questionIds,
+          mode: 'practice',
+          isDailyChallenge: false
+        });
+      }
+
       this.syncHeaderAndThemeUI();
       this.renderCurrentView();
       this.bindGlobalKeyboardShortcuts();
+      this.bindHashChangeRouter();
+      this.registerServiceWorker();
+    },
+
+    /* URL Hash Routing (Audit 7.1) */
+    getViewFromHash: function () {
+      var h = (window.location.hash || '').replace(/^#\/?/, '').trim().toLowerCase();
+      if (VALID_VIEWS.indexOf(h) !== -1) {
+        return h;
+      }
+      return null;
+    },
+
+    updateUrlHash: function (viewName, replace) {
+      var targetHash = '#/' + viewName;
+      if (window.location.hash === targetHash) return;
+      try {
+        if (replace && window.history && window.history.replaceState) {
+          window.history.replaceState(null, '', targetHash);
+        } else {
+          window.location.hash = targetHash;
+        }
+      } catch (e) {}
+    },
+
+    bindHashChangeRouter: function () {
+      var self = this;
+      window.addEventListener('hashchange', function () {
+        var targetView = self.getViewFromHash();
+        if (targetView && targetView !== self.currentView) {
+          self.navigate(targetView, false, true);
+        }
+      });
+    },
+
+    /* Service Worker Registration for Installable Offline PWA (Audit Section 9) */
+    registerServiceWorker: function () {
+      var self = this;
+      if ('serviceWorker' in window.navigator && window.location && window.location.protocol.indexOf('http') === 0) {
+        window.navigator.serviceWorker.register('./sw.js').then(function (reg) {
+          reg.addEventListener('updatefound', function () {
+            var newWorker = reg.installing;
+            if (newWorker) {
+              newWorker.addEventListener('statechange', function () {
+                if (newWorker.state === 'installed' && window.navigator.serviceWorker.controller) {
+                  self.showToast('New ExamVerse update installed and ready!');
+                }
+              });
+            }
+          });
+        }).catch(function () {});
+      }
+    },
+
+    /* Accessible Modal Management with Focus Trap & Restoration (Audit 7.5 & Section 8) */
+    openModalById: function (modalId) {
+      var modal = document.getElementById(modalId);
+      if (!modal) return;
+      this.lastFocusedElement = document.activeElement;
+      this.activeModalId = modalId;
+      modal.classList.add('is-open');
+
+      var appShell = document.querySelector('.ev-app-shell');
+      if (appShell) appShell.setAttribute('aria-hidden', 'true');
+
+      window.setTimeout(function () {
+        var focusable = modal.querySelector('input, select, textarea, button:not([disabled])');
+        if (focusable && typeof focusable.focus === 'function') {
+          focusable.focus();
+        }
+      }, 20);
+    },
+
+    closeModalById: function (modalId) {
+      var modal = document.getElementById(modalId);
+      if (modal) modal.classList.remove('is-open');
+      if (this.activeModalId === modalId) {
+        this.activeModalId = null;
+      }
+      var appShell = document.querySelector('.ev-app-shell');
+      if (appShell) appShell.removeAttribute('aria-hidden');
+
+      if (this.lastFocusedElement && typeof this.lastFocusedElement.focus === 'function') {
+        try {
+          this.lastFocusedElement.focus();
+        } catch (e) {}
+      }
     },
 
     /* Haptic Vibration Feedback (Audit Section 6) */
@@ -56,10 +256,11 @@
       } catch (e) {}
     },
 
-    /* Synthesized Web Audio API Effects */
+    /* Synthesized Web Audio API Effects with Volume Control (Audit Section 6) */
     playSound: function (type) {
       var settings = window.ExamVerseStorage.state.settings;
       if (!settings || !settings.soundEnabled) return;
+      var vol = typeof settings.soundVolume === 'number' ? Math.max(0.05, Math.min(1, settings.soundVolume)) : 0.75;
       try {
         var AudioContextClass = window.AudioContext || window.webkitAudioContext;
         if (!AudioContextClass) return;
@@ -79,7 +280,7 @@
           osc.type = 'sine';
           osc.frequency.setValueAtTime(523.25, now);
           osc.frequency.exponentialRampToValueAtTime(659.25, now + 0.12);
-          gain.gain.setValueAtTime(0.08, now);
+          gain.gain.setValueAtTime(0.11 * vol, now);
           gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
           osc.start(now);
           osc.stop(now + 0.22);
@@ -87,7 +288,7 @@
           osc.type = 'triangle';
           osc.frequency.setValueAtTime(240, now);
           osc.frequency.exponentialRampToValueAtTime(180, now + 0.18);
-          gain.gain.setValueAtTime(0.08, now);
+          gain.gain.setValueAtTime(0.11 * vol, now);
           gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
           osc.start(now);
           osc.stop(now + 0.22);
@@ -95,14 +296,14 @@
           osc.type = 'sine';
           osc.frequency.setValueAtTime(440, now);
           osc.frequency.exponentialRampToValueAtTime(880, now + 0.25);
-          gain.gain.setValueAtTime(0.09, now);
+          gain.gain.setValueAtTime(0.12 * vol, now);
           gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
           osc.start(now);
           osc.stop(now + 0.3);
         } else {
           osc.type = 'sine';
           osc.frequency.setValueAtTime(600, now);
-          gain.gain.setValueAtTime(0.03, now);
+          gain.gain.setValueAtTime(0.045 * vol, now);
           gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
           osc.start(now);
           osc.stop(now + 0.05);
@@ -124,8 +325,8 @@
       }, 2600);
     },
 
-    /* Navigation with Active Exam Integrity Guard (Audit 2.4) */
-    navigate: function (viewName, bypassExamGuard) {
+    /* Navigation with Active Exam Guard & Hash Sync (Audit 2.4 & 7.1) */
+    navigate: function (viewName, bypassExamGuard, fromHashChange) {
       var s = window.ExamVerseQuiz.session;
       if (
         !bypassExamGuard &&
@@ -137,17 +338,18 @@
         s.mode === 'exam'
       ) {
         this.pendingNavigationTarget = viewName;
-        var leaveModal = document.getElementById('ev-leave-exam-modal');
-        if (leaveModal) {
-          leaveModal.classList.add('is-open');
-          return;
-        }
+        this.openModalById('ev-leave-exam-modal');
+        /* Restore hash to #/quiz until user confirms leaving */
+        this.updateUrlHash('quiz', true);
+        return;
       }
 
-      this.currentView = viewName;
+      this.currentView = VALID_VIEWS.indexOf(viewName) !== -1 ? viewName : 'home';
+      if (!fromHashChange) {
+        this.updateUrlHash(this.currentView, false);
+      }
 
-      /* If user navigates to Quiz tab when no active session exists, start a fresh practice set */
-      if (viewName === 'quiz' && (!window.ExamVerseQuiz.session || window.ExamVerseQuiz.session.isSubmitted)) {
+      if (this.currentView === 'quiz' && (!window.ExamVerseQuiz.session || window.ExamVerseQuiz.session.isSubmitted)) {
         var pack = window.EXAMVERSE_DATA.recommendedQuizzes[0];
         window.ExamVerseQuiz.startSession({
           title: pack.title,
@@ -160,7 +362,6 @@
         });
       }
 
-      /* Audit 2.4 Fix: Do NOT stop the deadline timer when leaving the page; ensure timer runs if active */
       if (
         window.ExamVerseQuiz.session &&
         !window.ExamVerseQuiz.session.isSubmitted &&
@@ -172,17 +373,22 @@
 
       this.syncHeaderAndThemeUI();
       this.renderCurrentView();
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+
+      var reduceMotion = false;
+      try {
+        reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      } catch (e) {}
+      window.scrollTo({ top: 0, behavior: reduceMotion ? 'auto' : 'smooth' });
     },
 
+    /* Localize UI Labels when Bangla is selected (Audit Section 6) */
     syncHeaderAndThemeUI: function () {
       var state = window.ExamVerseStorage.state;
       var isDark = state.theme === 'dark';
+      var isBn = state.settings.language === 'bn';
 
-      /* Update html lang attribute based on selected language (Audit Section 8) */
-      document.documentElement.setAttribute('lang', state.settings.language === 'bn' ? 'bn' : 'en');
+      document.documentElement.setAttribute('lang', isBn ? 'bn' : 'en');
 
-      /* Update Theme Icon in Topbar */
       var themeIconWrap = document.getElementById('ev-theme-icon-wrap');
       if (themeIconWrap) {
         themeIconWrap.innerHTML = isDark
@@ -190,7 +396,6 @@
           : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
       }
 
-      /* Update Streak Pill in Topbar */
       var streakPill = document.getElementById('ev-header-streak');
       var streakCountEl = document.getElementById('ev-header-streak-count');
       if (streakPill && streakCountEl) {
@@ -206,19 +411,25 @@
         }
       }
 
-      /* Update Unread Notification Dot (Audit Section 6) */
       var notifDot = document.getElementById('ev-notif-dot');
       if (notifDot) {
         var hasUnread = state.settings.notificationsEnabled && (state.notifications || []).some(function (n) { return n.unread; });
         notifDot.style.display = hasUnread ? 'block' : 'none';
       }
 
-      /* Update Greeting & Profile in Topbar */
       var firstName = (state.user.name || 'Student').split(' ')[0];
       var greetingTitle = document.getElementById('ev-greeting-title');
       if (greetingTitle) {
-        greetingTitle.textContent = (state.isDemoMode ? '[Demo] ' : '') + 'Welcome, ' + firstName;
+        greetingTitle.textContent = (state.isDemoMode ? '[Demo] ' : '') + (isBn ? ('স্বাগতম, ' + firstName) : ('Welcome, ' + firstName));
       }
+
+      /* Update Active Section Breadcrumb in Topbar (Audit 7.1) */
+      var breadcrumbEl = document.getElementById('ev-active-breadcrumb');
+      if (breadcrumbEl) {
+        var dict = isBn ? VIEW_TITLES.bn : VIEW_TITLES.en;
+        breadcrumbEl.textContent = dict[this.currentView] || dict.home;
+      }
+
       var avatarEl = document.getElementById('ev-header-avatar');
       if (avatarEl) {
         avatarEl.textContent = state.user.avatarInitials || 'SS';
@@ -228,22 +439,43 @@
         profileNameEl.textContent = firstName;
       }
 
-      /* Update Sidebar Badges */
       var bmCountEl = document.getElementById('ev-nav-count-bookmarks');
       if (bmCountEl) bmCountEl.textContent = state.bookmarks.length;
       var mkCountEl = document.getElementById('ev-nav-count-mistakes');
       if (mkCountEl) mkCountEl.textContent = state.mistakes.length;
 
-      /* Update Active Nav States (Sidebar + Mobile Bottom Nav) */
+      /* Localize Navigation Labels if Bangla is selected */
+      var navLabelMap = {
+        home: isBn ? 'হোম' : 'Home',
+        exams: isBn ? 'পরীক্ষাসমূহ' : 'Exams',
+        quiz: isBn ? 'কুইজ ও পরীক্ষা' : 'Quiz & Exam',
+        stats: isBn ? 'পরিসংখ্যান' : 'Stats',
+        leaderboard: isBn ? 'লিডারবোর্ড' : 'Leaderboard',
+        profile: isBn ? 'প্রোফাইল' : 'Profile',
+        daily: isBn ? 'ডেইলি চ্যালেঞ্জ' : 'Daily Challenge',
+        bookmarks: isBn ? 'বুকমার্ক' : 'Bookmarks',
+        mistakes: isBn ? 'মিসটেক ব্যাংক' : 'Mistake Bank',
+        history: isBn ? 'ইতিহাস' : 'Quiz History',
+        settings: isBn ? 'সেটিংস' : 'Settings',
+        more: isBn ? 'আরও' : 'More'
+      };
+
       var activeNavKey = this.currentView;
       if (activeNavKey === 'results' || activeNavKey === 'review') {
         activeNavKey = 'quiz';
       }
+      var moreViews = ['profile', 'daily', 'bookmarks', 'mistakes', 'history', 'leaderboard', 'settings', 'about', 'privacy'];
+
       var navBtns = document.querySelectorAll('[data-nav-target]');
       for (var i = 0; i < navBtns.length; i++) {
         var btn = navBtns[i];
         var target = btn.getAttribute('data-nav-target');
-        if (target === activeNavKey) {
+        var labelSpan = btn.querySelector('[data-nav-label]');
+        if (labelSpan && navLabelMap[target]) {
+          labelSpan.textContent = navLabelMap[target];
+        }
+        var isActive = (target === activeNavKey) || (target === 'more' && moreViews.indexOf(this.currentView) !== -1);
+        if (isActive) {
           btn.classList.add('is-active');
           btn.setAttribute('aria-current', 'page');
         } else {
@@ -293,8 +525,8 @@
 
     formatQuestionDisplay: function (q) {
       var lang = window.ExamVerseStorage.state.settings.language || 'bilingual';
-      var qEn = escapeHtml(q.question);
-      var qBn = escapeHtml(q.questionBn || q.question);
+      var qEn = renderAcademicMath(q.question);
+      var qBn = renderAcademicMath(q.questionBn || q.question);
       if (lang === 'en') {
         return '<div>' + qEn + '</div>';
       }
@@ -371,7 +603,7 @@
     },
 
     /* ======================================================================
-       VIEW 1: HOME PAGE (With Dynamic Counts & Real Session/Result Resume)
+       VIEW 1: HOME PAGE
        ====================================================================== */
     renderHomeView: function () {
       var state = window.ExamVerseStorage.state;
@@ -382,7 +614,6 @@
       var dailyPct = Math.min(100, Math.round((daily.completedQuestions / daily.totalQuestions) * 100));
       var self = this;
 
-      /* Explore Subjects Cards with Real Dynamic Question Counts (Audit 2.1 & 3.1) */
       var subjectsHtml = window.EXAMVERSE_DATA.subjects.map(function (subj) {
         var mastery = state.stats.subjectMastery[subj.id] || 0;
         var realCount = window.EXAMVERSE_DATA.getSubjectQuestionCount(subj.id);
@@ -411,7 +642,6 @@
         );
       }).join('');
 
-      /* Recommended Quizzes */
       var recommendedHtml = window.EXAMVERSE_DATA.recommendedQuizzes.slice(1).map(function (pack) {
         return (
           '<div class="ev-card ev-card-interactive" style="display:flex; flex-direction:column; justify-content:space-between; gap:0.9rem;">' +
@@ -432,7 +662,6 @@
         );
       }).join('');
 
-      /* Continue Learning Section (Audit 4.1 & 4.2 — Accurately distinguishes active vs completed vs fresh) */
       var continueHtml = '';
       if (state.activeSession && !state.activeSession.isSubmitted && !state.activeSession.isEmpty) {
         var act = state.activeSession;
@@ -498,7 +727,6 @@
         );
       }
 
-      /* Recent Activity */
       var recentItems = state.quizHistory.slice(0, 3);
       var recentHtml = recentItems.length === 0
         ? '<div class="ev-card" style="text-align:center; padding:1.75rem; color:var(--text-muted);">No quizzes completed yet. Complete your first practice or exam session to see your history here!</div>'
@@ -626,7 +854,7 @@
     },
 
     /* ======================================================================
-       VIEW 2: EXAMS PAGE (With Dynamic Real Question Counts & Cursor-Safe Search)
+       VIEW 2: EXAMS PAGE (Search across Chapters, Questions, Tags + <mark> Highlight)
        ====================================================================== */
     buildExamsFilteredChaptersHtml: function () {
       var self = this;
@@ -644,12 +872,24 @@
       catSubjects.forEach(function (subj) {
         var filteredChapters = subj.chapters.filter(function (ch) {
           var matchDiff = self.examDifficultyFilter === 'all' || ch.difficulty.toLowerCase() === self.examDifficultyFilter.toLowerCase();
-          var matchQuery = !query ||
+          if (!matchDiff) return false;
+          if (!query) return true;
+
+          var titleMatch =
             ch.title.toLowerCase().indexOf(query) !== -1 ||
             ch.titleBn.toLowerCase().indexOf(query) !== -1 ||
             subj.name.toLowerCase().indexOf(query) !== -1 ||
             subj.nameBn.toLowerCase().indexOf(query) !== -1;
-          return matchDiff && matchQuery;
+          if (titleMatch) return true;
+
+          /* Also search inside questions & examTags belonging to this chapter (Audit Section 6 & 7.6) */
+          return window.EXAMVERSE_DATA.questions.some(function (q) {
+            return q.chapterId === ch.id && (
+              (q.question && q.question.toLowerCase().indexOf(query) !== -1) ||
+              (q.questionBn && q.questionBn.toLowerCase().indexOf(query) !== -1) ||
+              (q.examTag && q.examTag.toLowerCase().indexOf(query) !== -1)
+            );
+          });
         });
 
         if (filteredChapters.length === 0) return;
@@ -660,8 +900,8 @@
           return (
             '<div style="display:flex; align-items:center; justify-content:space-between; gap:0.85rem; padding:0.85rem 1rem; border:1px solid var(--border-subtle); border-radius:var(--radius-sm); background-color:var(--bg-surface-hover); flex-wrap:wrap;">' +
               '<div>' +
-                '<div style="font-size:0.9rem; font-weight:700; color:var(--text-primary);">' + escapeHtml(ch.title) + '</div>' +
-                '<div class="font-bn" style="font-size:0.8rem; color:var(--text-muted);">' + escapeHtml(ch.titleBn) + ' • <strong>' + realChCount + ' Verified Question(s)</strong></div>' +
+                '<div style="font-size:0.9rem; font-weight:700; color:var(--text-primary);">' + highlightMatch(ch.title, self.examSearchQuery) + '</div>' +
+                '<div class="font-bn" style="font-size:0.8rem; color:var(--text-muted);">' + highlightMatch(ch.titleBn, self.examSearchQuery) + ' • <strong>' + realChCount + ' Verified Question(s)</strong></div>' +
               '</div>' +
               '<div style="display:flex; align-items:center; gap:0.5rem;">' +
                 '<span class="ev-badge-pill ' + diffClass + '">' + escapeHtml(ch.difficulty) + '</span>' +
@@ -679,7 +919,7 @@
               '<div style="display:flex; align-items:center; gap:0.75rem;">' +
                 '<div class="ev-subject-icon-box">' + self.getIconSvg(subj.icon) + '</div>' +
                 '<div>' +
-                  '<h4 style="font-size:1rem; font-weight:700; color:var(--text-primary);">' + escapeHtml(subj.name) + ' <span class="font-bn" style="font-weight:500; color:var(--text-muted);">(' + escapeHtml(subj.nameBn) + ')</span></h4>' +
+                  '<h4 style="font-size:1rem; font-weight:700; color:var(--text-primary);">' + highlightMatch(subj.name, self.examSearchQuery) + ' <span class="font-bn" style="font-weight:500; color:var(--text-muted);">(' + highlightMatch(subj.nameBn, self.examSearchQuery) + ')</span></h4>' +
                   '<div style="font-size:0.78rem; color:var(--text-secondary);">Track: ' + escapeHtml(activeCat.name) + ' • ' + filteredChapters.length + ' Chapters • ' + realSubjCount + ' Total Subject MCQs</div>' +
                 '</div>' +
               '</div>' +
@@ -698,9 +938,9 @@
       if (!chaptersHtml) {
         chaptersHtml = (
           '<div class="ev-card" style="text-align:center; padding:2.5rem 1.5rem;">' +
-            '<div style="font-size:1rem; font-weight:700; margin-bottom:0.35rem;">No matching chapters found</div>' +
+            '<div style="font-size:1rem; font-weight:700; margin-bottom:0.35rem;">No chapters or questions matched "' + escapeHtml(this.examSearchQuery) + '"</div>' +
             '<p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:1rem;">Try clearing your search keyword or switching the difficulty/subject filter.</p>' +
-            '<button type="button" class="ev-btn ev-btn-secondary ev-btn-sm" onclick="window.evResetExamFilters()">Reset All Filters</button>' +
+            '<button type="button" class="ev-btn ev-btn-secondary ev-btn-sm" onclick="window.evResetExamFilters()">Clear Search &amp; Filters</button>' +
           '</div>'
         );
       }
@@ -744,7 +984,7 @@
       return (
         '<div style="margin-bottom:1.25rem;">' +
           '<h1 style="font-size:1.35rem; font-weight:800; color:var(--text-primary); margin-bottom:0.25rem;">Examination Categories &amp; Verified Syllabus Bank</h1>' +
-          '<p style="font-size:0.86rem; color:var(--text-secondary);">Every subject and chapter count reflects the exact number of verified questions currently loaded in the bank.</p>' +
+          '<p style="font-size:0.86rem; color:var(--text-secondary);">Search by chapter name, subject, question text, or exam tag across all 9 national tracks.</p>' +
         '</div>' +
 
         '<div class="ev-category-grid">' +
@@ -769,10 +1009,8 @@
         '<div class="ev-filter-bar">' +
           '<div class="ev-search-wrap" style="display:flex; align-items:center; gap:0.4rem;">' +
             '<svg class="ev-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>' +
-            '<input type="text" id="ev-exam-search" class="ev-input" aria-label="Search chapters or topics" placeholder="Search chapter or topic (e.g., Calculus, Vector, সমাস, সংবিধান)..." value="' + escapeHtml(this.examSearchQuery) + '" oninput="window.evUpdateExamSearch(this.value)" />' +
-            (this.examSearchQuery
-              ? '<button type="button" class="ev-btn ev-btn-secondary ev-btn-sm" onclick="window.evResetExamFilters()">Clear</button>'
-              : '') +
+            '<input type="text" id="ev-exam-search" class="ev-input" aria-label="Search chapters, questions, or topics" placeholder="Search chapter, question text, or tag (e.g., Carnot, pH, সমাস, সংবিধান)..." value="' + escapeHtml(this.examSearchQuery) + '" oninput="window.evUpdateExamSearch(this.value)" />' +
+            '<button type="button" id="ev-clear-search-btn" class="ev-btn ev-btn-secondary ev-btn-sm" style="display:' + (this.examSearchQuery ? 'inline-flex' : 'none') + ';" onclick="window.evResetExamFilters()">Clear</button>' +
           '</div>' +
           '<div style="min-width:210px;">' +
             '<select id="ev-exam-subject-filter" class="ev-select" aria-label="Filter by subject" onchange="window.evUpdateExamSubject(this.value)">' +
@@ -796,7 +1034,7 @@
     },
 
     /* ======================================================================
-       VIEW 3: QUIZ & EXAMINATION INTERFACE (With Empty Chapter Guard & Honest XP)
+       VIEW 3: QUIZ & EXAMINATION INTERFACE
        ====================================================================== */
     renderQuizView: function () {
       var session = window.ExamVerseQuiz.session;
@@ -804,7 +1042,6 @@
         return '<div class="ev-card">Initializing Quiz Session...</div>';
       }
 
-      /* Audit 2.2 Fix: Proper Empty State when a selected chapter/filter has 0 questions */
       if (session.isEmpty || !session.questions || session.questions.length === 0) {
         return (
           '<div class="ev-card" style="text-align:center; padding:3rem 1.5rem; max-width:620px; margin:1.5rem auto;">' +
@@ -832,7 +1069,6 @@
       var progressPct = Math.round(((qIndex + 1) / total) * 100);
       var optionLetters = ['A', 'B', 'C', 'D'];
 
-      /* Build 4 Options */
       var optionsHtml = q.options.map(function (optText, idx) {
         var stateClass = '';
         if (isPractice && isRevealed) {
@@ -848,7 +1084,7 @@
         return (
           '<button type="button" class="ev-option-btn ' + stateClass + '" onclick="window.evSelectQuizOption(' + idx + ')">' +
             '<span class="ev-option-key">' + optionLetters[idx] + '</span>' +
-            '<span style="flex:1;" class="font-bn">' + escapeHtml(optText) + '</span>' +
+            '<span style="flex:1;" class="font-bn">' + renderAcademicMath(optText) + '</span>' +
             (stateClass === 'is-correct'
               ? '<span class="ev-badge-pill ev-badge-success">Correct</span>'
               : (stateClass === 'is-incorrect' ? '<span class="ev-badge-pill ev-badge-danger">Your Answer</span>' : '')) +
@@ -856,7 +1092,6 @@
         );
       }).join('');
 
-      /* Practice Mode Immediate Explanation Box (Audit 4.5 Fix: Honest XP wording) */
       var explanationHtml = '';
       if (isPractice && isRevealed) {
         var isRight = selectedOption === q.correctIndex;
@@ -868,12 +1103,11 @@
               '</strong>' +
               '<span class="ev-badge-pill ev-badge-neutral">Correct Option: ' + optionLetters[q.correctIndex] + '</span>' +
             '</div>' +
-            '<div><strong>Concept Explanation:</strong> ' + escapeHtml(q.explanation) + '</div>' +
+            '<div><strong>Concept Explanation:</strong> ' + renderAcademicMath(q.explanation) + '</div>' +
           '</div>'
         );
       }
 
-      /* Question Palette Dots */
       var paletteHtml = session.questions.map(function (item, idx) {
         var ans = session.answers[item.id];
         var rev = session.revealed[item.id];
@@ -994,7 +1228,7 @@
     },
 
     /* ======================================================================
-       VIEW 4: RESULTS PAGE (With Attempted vs Skipped, Net Score & XP Breakdown)
+       VIEW 4: RESULTS PAGE
        ====================================================================== */
     renderResultsView: function () {
       var res = window.ExamVerseQuiz.lastResult;
@@ -1154,7 +1388,7 @@
           return (
             '<div class="ev-option-btn ' + cls + '" style="cursor:default;">' +
               '<span class="ev-option-key">' + optionLetters[oIdx] + '</span>' +
-              '<span style="flex:1;" class="font-bn">' + escapeHtml(optText) + '</span>' +
+              '<span style="flex:1;" class="font-bn">' + renderAcademicMath(optText) + '</span>' +
             '</div>'
           );
         }).join('');
@@ -1170,7 +1404,7 @@
             '</div>' +
             '<div class="ev-options-list">' + opts + '</div>' +
             '<div class="ev-explanation-box">' +
-              '<strong>Explanation:</strong> ' + escapeHtml(q.explanation) +
+              '<strong>Explanation:</strong> ' + renderAcademicMath(q.explanation) +
             '</div>' +
           '</div>'
         );
@@ -1195,7 +1429,7 @@
     },
 
     /* ======================================================================
-       VIEW 6: STATS & LEARNING ANALYTICS PAGE (Honest Zero-Start & Rolling 7 Days)
+       VIEW 6: STATS & LEARNING ANALYTICS PAGE
        ====================================================================== */
     renderStatsView: function () {
       var state = window.ExamVerseStorage.state;
@@ -1219,7 +1453,6 @@
       var strongest = attemptedSubjects.length > 0 ? attemptedSubjects[0] : null;
       var weakest = attemptedSubjects.length > 0 ? attemptedSubjects[attemptedSubjects.length - 1] : null;
 
-      /* Rolling 7-Day Activity Chart with Dynamic Scale */
       var maxBarVal = 20;
       s.weeklyActivity.forEach(function (d) {
         if (d.attempted > maxBarVal) maxBarVal = d.attempted;
@@ -1332,14 +1565,13 @@
     },
 
     /* ======================================================================
-       VIEW 7: LEADERBOARD (Dynamic User Insertion & Sorted Ranking)
+       VIEW 7: LEADERBOARD
        ====================================================================== */
     renderLeaderboardView: function () {
       var self = this;
       var u = window.ExamVerseStorage.state.user;
       var basePeers = (window.EXAMVERSE_DATA.leaderboards.global[this.leaderboardPeriod] || window.EXAMVERSE_DATA.leaderboards.global.week).slice();
 
-      /* Insert the current user dynamically with their actual XP and sort by XP descending (Audit 2.9) */
       var combined = basePeers.map(function (p) { return Object.assign({}, p, { isCurrentUser: false }); });
       combined.push({
         name: u.name,
@@ -1442,7 +1674,7 @@
     },
 
     /* ======================================================================
-       VIEW 8: PROFILE PAGE (With Profile Edit Modal & Real Locked/Unlocked Badges)
+       VIEW 8: PROFILE PAGE
        ====================================================================== */
     renderProfileView: function () {
       var state = window.ExamVerseStorage.state;
@@ -1526,35 +1758,51 @@
     },
 
     /* ======================================================================
-       VIEW 9: BOOKMARKS PAGE
+       VIEW 9: BOOKMARKS PAGE (With Subject Filter & Personal Study Notes)
        ====================================================================== */
     renderBookmarksView: function () {
-      var bmIds = window.ExamVerseStorage.state.bookmarks;
-      var bookmarkedQuestions = window.EXAMVERSE_DATA.questions.filter(function (q) {
-        return bmIds.indexOf(q.id) !== -1;
-      });
+      var state = window.ExamVerseStorage.state;
+      var bmIds = state.bookmarks;
+      var notesMap = state.bookmarkNotes || {};
       var self = this;
       var optionLetters = ['A', 'B', 'C', 'D'];
 
+      var bookmarkedQuestions = window.EXAMVERSE_DATA.questions.filter(function (q) {
+        if (bmIds.indexOf(q.id) === -1) return false;
+        if (self.bookmarkSubjectFilter !== 'all' && q.subjectId !== self.bookmarkSubjectFilter) return false;
+        return true;
+      });
+
+      var subjFilterOptions = '<option value="all">All Subjects (' + bmIds.length + ')</option>' +
+        window.EXAMVERSE_DATA.subjects.map(function (s) {
+          var sel = self.bookmarkSubjectFilter === s.id ? 'selected' : '';
+          return '<option value="' + s.id + '" ' + sel + '>' + escapeHtml(s.name) + '</option>';
+        }).join('');
+
       var listHtml = bookmarkedQuestions.length === 0
         ? '<div class="ev-card" style="text-align:center; padding:2.5rem;">' +
-            '<h3 style="font-size:1.05rem; font-weight:700; margin-bottom:0.35rem;">No Bookmarked Questions Yet</h3>' +
-            '<p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:1rem;">Click the Bookmark button during any quiz to save important formulas and concepts here.</p>' +
+            '<h3 style="font-size:1.05rem; font-weight:700; margin-bottom:0.35rem;">No Bookmarked Questions Found</h3>' +
+            '<p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:1rem;">Click the Bookmark button during any quiz to save important formulas, concepts, and personal study notes here.</p>' +
             '<button type="button" class="ev-btn ev-btn-primary ev-btn-sm" onclick="window.evNavigate(\'quiz\')">Start Practicing</button>' +
           '</div>'
         : bookmarkedQuestions.map(function (q) {
+            var currentNote = notesMap[q.id] || '';
             return (
               '<div class="ev-card" style="margin-bottom:0.9rem;">' +
-                '<div style="display:flex; align-items:center; justify-content:space-between; gap:0.5rem; margin-bottom:0.5rem;">' +
+                '<div style="display:flex; align-items:center; justify-content:space-between; gap:0.5rem; margin-bottom:0.5rem; flex-wrap:wrap;">' +
                   '<span class="ev-badge-pill ev-badge-indigo">' + escapeHtml(q.examTag) + ' • ' + escapeHtml(q.difficulty) + '</span>' +
                   '<button type="button" class="ev-btn ev-btn-secondary ev-btn-sm" onclick="window.evToggleBookmark(\'' + q.id + '\')">Remove Bookmark</button>' +
                 '</div>' +
                 '<div style="font-size:1rem; font-weight:700; margin-bottom:0.65rem;">' + self.formatQuestionDisplay(q) + '</div>' +
                 '<div style="font-size:0.86rem; color:var(--status-success); font-weight:700; margin-bottom:0.4rem;">' +
-                  'Correct Answer (' + optionLetters[q.correctIndex] + '): ' + escapeHtml(q.options[q.correctIndex]) +
+                  'Correct Answer (' + optionLetters[q.correctIndex] + '): ' + renderAcademicMath(q.options[q.correctIndex]) +
                 '</div>' +
-                '<div class="ev-explanation-box" style="margin-top:0.5rem;">' +
-                  '<strong>Explanation:</strong> ' + escapeHtml(q.explanation) +
+                '<div class="ev-explanation-box" style="margin-top:0.5rem; margin-bottom:0.75rem;">' +
+                  '<strong>Explanation:</strong> ' + renderAcademicMath(q.explanation) +
+                '</div>' +
+                '<div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">' +
+                  '<input type="text" id="ev-bm-note-' + q.id + '" class="ev-input" style="flex:1; min-width:200px;" aria-label="Personal note for bookmark" placeholder="Add a personal study note or formula reminder..." value="' + escapeHtml(currentNote) + '" />' +
+                  '<button type="button" class="ev-btn ev-btn-soft ev-btn-sm" onclick="window.evSaveBookmarkNote(\'' + q.id + '\')">Save Note</button>' +
                 '</div>' +
               '</div>'
             );
@@ -1563,19 +1811,24 @@
       return (
         '<div style="display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap; margin-bottom:1.25rem;">' +
           '<div>' +
-            '<h1 style="font-size:1.35rem; font-weight:800;">Saved Bookmarks (' + bookmarkedQuestions.length + ')</h1>' +
-            '<p style="font-size:0.86rem; color:var(--text-secondary);">Quick-reference vault for high-yield questions and explanations.</p>' +
+            '<h1 style="font-size:1.35rem; font-weight:800;">Saved Bookmarks (' + bmIds.length + ')</h1>' +
+            '<p style="font-size:0.86rem; color:var(--text-secondary);">Filter by subject and attach personal revision notes to any bookmarked question.</p>' +
           '</div>' +
-          (bookmarkedQuestions.length > 0
-            ? '<button type="button" class="ev-btn ev-btn-primary" onclick="window.evPracticeBookmarks()">Practice Bookmarked Questions</button>'
-            : '') +
+          '<div style="display:flex; gap:0.6rem; align-items:center; flex-wrap:wrap;">' +
+            '<select class="ev-select" aria-label="Filter bookmarks by subject" style="width:auto; min-width:170px;" onchange="window.evSetBookmarkSubjectFilter(this.value)">' +
+              subjFilterOptions +
+            '</select>' +
+            (bmIds.length > 0
+              ? '<button type="button" class="ev-btn ev-btn-primary" onclick="window.evPracticeBookmarks()">Practice Bookmarked Questions</button>'
+              : '') +
+          '</div>' +
         '</div>' +
         listHtml
       );
     },
 
     /* ======================================================================
-       VIEW 10: MISTAKE BANK PAGE
+       VIEW 10: MISTAKE BANK PAGE (With Weak-Topic Diagnostic Insight)
        ====================================================================== */
     renderMistakesView: function () {
       var state = window.ExamVerseStorage.state;
@@ -1583,6 +1836,33 @@
       var resolvedCount = state.stats.totalMistakesResolved || 0;
       var self = this;
       var optionLetters = ['A', 'B', 'C', 'D'];
+
+      /* Compute Weak-Topic Insight from logged mistakes (Audit Section 6, page 17) */
+      var subjCounts = {};
+      var topWeakSubjId = null;
+      var topWeakCount = 0;
+      mistakes.forEach(function (m) {
+        var q = window.EXAMVERSE_DATA.questions.find(function (item) { return item.id === m.questionId; });
+        if (q) {
+          subjCounts[q.subjectId] = (subjCounts[q.subjectId] || 0) + 1;
+          if (subjCounts[q.subjectId] > topWeakCount) {
+            topWeakCount = subjCounts[q.subjectId];
+            topWeakSubjId = q.subjectId;
+          }
+        }
+      });
+      var weakSubjObj = topWeakSubjId ? window.EXAMVERSE_DATA.subjects.find(function (s) { return s.id === topWeakSubjId; }) : null;
+
+      var insightBanner = weakSubjObj
+        ? '<div class="ev-card" style="margin-bottom:1rem; border-left:4px solid var(--status-warning); display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap;">' +
+            '<div>' +
+              '<span class="ev-badge-pill ev-badge-warning" style="margin-bottom:0.25rem;">Weak-Topic Diagnostic Insight</span>' +
+              '<div style="font-size:0.96rem; font-weight:700;">Most Logged Mistakes: ' + escapeHtml(weakSubjObj.name) + ' (' + topWeakCount + ' question' + (topWeakCount > 1 ? 's' : '') + ')</div>' +
+              '<div style="font-size:0.8rem; color:var(--text-secondary);">Focusing on ' + escapeHtml(weakSubjObj.name) + ' concepts will yield the fastest accuracy improvement.</div>' +
+            '</div>' +
+            '<button type="button" class="ev-btn ev-btn-soft ev-btn-sm" onclick="window.evStartSubjectQuiz(\'' + weakSubjObj.id + '\', \'practice\')">Practice ' + escapeHtml(weakSubjObj.name) + '</button>' +
+          '</div>'
+        : '';
 
       var itemsHtml = mistakes.length === 0
         ? '<div class="ev-card" style="text-align:center; padding:2.5rem;">' +
@@ -1600,11 +1880,11 @@
                 '</div>' +
                 '<div style="font-size:1rem; font-weight:700; margin-bottom:0.65rem;">' + self.formatQuestionDisplay(q) + '</div>' +
                 '<div style="display:flex; gap:1rem; flex-wrap:wrap; font-size:0.84rem; margin-bottom:0.5rem;">' +
-                  '<span style="color:var(--status-danger); font-weight:600;">Your Choice: ' + escapeHtml(q.options[m.selectedIndex] || 'Skipped') + '</span>' +
-                  '<span style="color:var(--status-success); font-weight:700;">Correct Answer (' + optionLetters[q.correctIndex] + '): ' + escapeHtml(q.options[q.correctIndex]) + '</span>' +
+                  '<span style="color:var(--status-danger); font-weight:600;">Your Choice: ' + renderAcademicMath(q.options[m.selectedIndex] || 'Skipped') + '</span>' +
+                  '<span style="color:var(--status-success); font-weight:700;">Correct Answer (' + optionLetters[q.correctIndex] + '): ' + renderAcademicMath(q.options[q.correctIndex]) + '</span>' +
                 '</div>' +
                 '<div class="ev-explanation-box" style="margin-top:0.5rem;">' +
-                  '<strong>Diagnostic Explanation:</strong> ' + escapeHtml(q.explanation) +
+                  '<strong>Diagnostic Explanation:</strong> ' + renderAcademicMath(q.explanation) +
                 '</div>' +
               '</div>'
             );
@@ -1620,12 +1900,13 @@
             ? '<button type="button" class="ev-btn ev-btn-primary" onclick="window.evPracticeMistakes()">Start Mistake Recovery Quiz</button>'
             : '') +
         '</div>' +
+        insightBanner +
         itemsHtml
       );
     },
 
     /* ======================================================================
-       VIEW 11: QUIZ HISTORY PAGE (With Exact Historical Snapshot Review & Retry)
+       VIEW 11: QUIZ HISTORY PAGE
        ====================================================================== */
     renderHistoryView: function () {
       var history = window.ExamVerseStorage.state.quizHistory;
@@ -1729,22 +2010,23 @@
     },
 
     /* ======================================================================
-       VIEW 13: SETTINGS, ABOUT & PRIVACY POLICY
+       VIEW 13: SETTINGS, ABOUT & PRIVACY POLICY (With Volume Control & Sound Test)
        ====================================================================== */
     renderSettingsView: function () {
       var state = window.ExamVerseStorage.state;
       var cfg = state.settings;
       var isDark = state.theme === 'dark';
+      var volPct = Math.round((typeof cfg.soundVolume === 'number' ? cfg.soundVolume : 0.75) * 100);
 
       return (
         '<div style="margin-bottom:1.25rem;">' +
           '<h1 style="font-size:1.35rem; font-weight:800;">Platform Settings &amp; Preferences</h1>' +
-          '<p style="font-size:0.86rem; color:var(--text-secondary);">Customize your visual theme, examination timer, negative marking, bilingual display, and local data storage.</p>' +
+          '<p style="font-size:0.86rem; color:var(--text-secondary);">Customize your visual theme, examination timer, negative marking, audio volume, bilingual localization, and local data storage.</p>' +
         '</div>' +
 
         '<div class="ev-grid-2">' +
           '<div class="ev-card" style="display:flex; flex-direction:column; gap:1.1rem;">' +
-            '<h3 style="font-size:1rem; font-weight:700; border-bottom:1px solid var(--border-subtle); padding-bottom:0.55rem;">Appearance &amp; Study Experience</h3>' +
+            '<h3 style="font-size:1rem; font-weight:700; border-bottom:1px solid var(--border-subtle); padding-bottom:0.55rem;">Appearance, Language &amp; Audio</h3>' +
 
             '<div style="display:flex; align-items:center; justify-content:space-between; gap:1rem;">' +
               '<div>' +
@@ -1759,13 +2041,13 @@
 
             '<div style="display:flex; align-items:center; justify-content:space-between; gap:1rem;">' +
               '<div>' +
-                '<div style="font-size:0.9rem; font-weight:700;">Question Language Display</div>' +
-                '<div style="font-size:0.78rem; color:var(--text-muted);">Show English + বাংলা together or single language.</div>' +
+                '<div style="font-size:0.9rem; font-weight:700;">Language &amp; UI Localization</div>' +
+                '<div style="font-size:0.78rem; color:var(--text-muted);">Translates navigation labels and formats questions in EN, বাংলা, or Both.</div>' +
               '</div>' +
               '<select class="ev-select" aria-label="Question Language Display" style="width:auto; min-width:165px;" onchange="window.evUpdateSetting(\'language\', this.value)">' +
                 '<option value="bilingual" ' + (cfg.language === 'bilingual' ? 'selected' : '') + '>Bilingual (EN + বাংলা)</option>' +
                 '<option value="en" ' + (cfg.language === 'en' ? 'selected' : '') + '>English Only</option>' +
-                '<option value="bn" ' + (cfg.language === 'bn' ? 'selected' : '') + '>বাংলা (Bangla)</option>' +
+                '<option value="bn" ' + (cfg.language === 'bn' ? 'selected' : '') + '>বাংলা (Bangla UI)</option>' +
               '</select>' +
             '</div>' +
 
@@ -1778,6 +2060,17 @@
                 '<input type="checkbox" ' + (cfg.soundEnabled ? 'checked' : '') + ' onchange="window.evUpdateSetting(\'soundEnabled\', this.checked)" />' +
                 '<span class="ev-switch-slider"></span>' +
               '</label>' +
+            '</div>' +
+
+            '<div style="display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap;">' +
+              '<div>' +
+                '<div style="font-size:0.9rem; font-weight:700;">Sound Volume (' + volPct + '%)</div>' +
+                '<div style="font-size:0.78rem; color:var(--text-muted);">Adjust audio level and preview sound chime.</div>' +
+              '</div>' +
+              '<div style="display:flex; align-items:center; gap:0.6rem;">' +
+                '<input type="range" min="10" max="100" step="5" value="' + volPct + '" aria-label="Sound Volume Percentage" onchange="window.evUpdateSoundVolume(this.value)" />' +
+                '<button type="button" class="ev-btn ev-btn-secondary ev-btn-sm" onclick="window.evPreviewSound()">Test Sound</button>' +
+              '</div>' +
             '</div>' +
 
             '<div style="display:flex; align-items:center; justify-content:space-between; gap:1rem;">' +
@@ -1852,11 +2145,11 @@
           '<div class="ev-grid-2" style="margin-bottom:1.25rem;">' +
             '<div style="padding:1rem; border-radius:var(--radius-sm); background-color:var(--bg-surface-muted);">' +
               '<h3 style="font-size:0.95rem; font-weight:700; margin-bottom:0.3rem;">Verified Examination Engine</h3>' +
-              '<p style="font-size:0.82rem; color:var(--text-secondary);">Features deadline-timestamp timers, configurable negative marking (-0.25 / -0.50), randomized question and option ordering, and automatic Mistake Bank logging.</p>' +
+              '<p style="font-size:0.82rem; color:var(--text-secondary);">Features deadline-timestamp timers, configurable negative marking (-0.25 / -0.50), randomized question and option ordering, KaTeX scientific formula rendering, and automatic Mistake Bank logging.</p>' +
             '</div>' +
             '<div style="padding:1rem; border-radius:var(--radius-sm); background-color:var(--bg-surface-muted);">' +
               '<h3 style="font-size:0.95rem; font-weight:700; margin-bottom:0.3rem;">Current Storage Architecture</h3>' +
-              '<p style="font-size:0.82rem; color:var(--text-secondary);">Operates in Local-First mode using browser LocalStorage, with a modular PostgreSQL schema (supabase/schema.sql) ready for cloud deployment.</p>' +
+              '<p style="font-size:0.82rem; color:var(--text-secondary);">Operates as an offline-capable PWA in Local-First mode using browser LocalStorage, with a modular PostgreSQL schema (supabase/schema.sql) ready for cloud deployment.</p>' +
             '</div>' +
           '</div>' +
           '<button type="button" class="ev-btn ev-btn-secondary" onclick="window.evNavigate(\'settings\')">← Back to Settings</button>' +
@@ -1870,36 +2163,63 @@
           '<span class="ev-badge-pill ev-badge-neutral" style="margin-bottom:0.5rem;">Student Privacy &amp; Data Protection</span>' +
           '<h1 style="font-size:1.45rem; font-weight:800; margin-bottom:0.65rem;">Privacy Policy</h1>' +
           '<p style="font-size:0.9rem; color:var(--text-secondary); margin-bottom:0.85rem;">' +
-            '1. <strong>Data Controller &amp; Local Storage:</strong> ExamVerse stores your profile name, XP, streak, bookmarks, mistake bank, and quiz history locally inside your browser’s <code>localStorage</code> (`examverse_state_v2`). No personal data is transmitted to external servers in local mode.' +
+            '1. <strong>Data Controller &amp; Local Storage:</strong> ExamVerse stores your profile name, XP, streak, bookmarks, personal notes, mistake bank, and quiz history locally inside your browser’s <code>localStorage</code> (`examverse_state_v2`). No personal data is transmitted to external servers in local mode.' +
           '</p>' +
           '<p style="font-size:0.9rem; color:var(--text-secondary); margin-bottom:0.85rem;">' +
-            '2. <strong>Third-Party Font Delivery:</strong> This web application loads typography (`Plus Jakarta Sans`, `Hind Siliguri`, and `JetBrains Mono`) from Google Fonts (`fonts.googleapis.com` / `fonts.gstatic.com`), with automatic fallback to system fonts when offline.' +
+            '2. <strong>Third-Party Font &amp; Math Delivery:</strong> This web application loads typography (`Plus Jakarta Sans`, `Hind Siliguri`, `JetBrains Mono`) from Google Fonts and mathematical formula styles from jsDelivr (`KaTeX`), with automatic fallback to system fonts and HTML sub/superscripts when offline.' +
+          '</p>' +
+          '<p style="font-size:0.9rem; color:var(--text-secondary); margin-bottom:0.85rem;">' +
+            '3. <strong>Data Retention &amp; Account Deletion:</strong> Clicking "Reset All Progress" in Settings permanently deletes all local quiz records, XP, streaks, mastery scores, bookmarks, notes, mistakes, and active sessions while retaining only your visual theme and preference toggles.' +
           '</p>' +
           '<p style="font-size:0.9rem; color:var(--text-secondary); margin-bottom:1.25rem;">' +
-            '3. <strong>Data Retention &amp; Complete Deletion:</strong> Clicking "Reset All Progress" in Settings permanently clears all local quiz records, XP, streaks, mastery scores, bookmarks, mistakes, and active sessions while retaining only your visual theme and preference toggles.' +
+            '4. <strong>Support &amp; Contact:</strong> For syllabus updates, question error reports, or privacy inquiries, please contact the ExamVerse Academic Maintainer via your GitHub repository issues page.' +
           '</p>' +
           '<button type="button" class="ev-btn ev-btn-secondary" onclick="window.evNavigate(\'settings\')">← Back to Settings</button>' +
         '</div>'
       );
     },
 
-    /* Fixed Keyboard Shortcut Precedence & Escape Key Handling (Audit Section 6 & 7.5) */
+    /* Focus Trap, Escape Key & Keyboard Shortcut Handler (Audit Section 6, 7.5, Section 8) */
     bindGlobalKeyboardShortcuts: function () {
       var self = this;
       window.addEventListener('keydown', function (e) {
         if (e.key === 'Escape') {
-          window.evCloseNotifModal();
-          window.evCloseResetModal();
-          window.evCloseSubmitConfirmModal();
-          window.evCloseLeaveExamModal();
-          window.evCloseModeSwitchModal();
-          window.evCloseProfileEditModal();
+          if (self.activeModalId) {
+            self.closeModalById(self.activeModalId);
+          } else {
+            window.evCloseNotifModal();
+            window.evCloseResetModal();
+            window.evCloseSubmitConfirmModal();
+            window.evCloseLeaveExamModal();
+            window.evCloseModeSwitchModal();
+            window.evCloseProfileEditModal();
+            window.evCloseMobileMoreModal();
+          }
           return;
         }
 
-        /* Never intercept modified browser shortcuts (Ctrl, Alt, Meta) */
+        /* Focus trap inside open modal when Tab is pressed */
+        if (e.key === 'Tab' && self.activeModalId) {
+          var activeModal = document.getElementById(self.activeModalId);
+          if (activeModal && activeModal.classList.contains('is-open')) {
+            var focusables = activeModal.querySelectorAll('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])');
+            if (focusables.length > 0) {
+              var first = focusables[0];
+              var last = focusables[focusables.length - 1];
+              if (e.shiftKey && document.activeElement === first) {
+                e.preventDefault();
+                last.focus();
+              } else if (!e.shiftKey && document.activeElement === last) {
+                e.preventDefault();
+                first.focus();
+              }
+            }
+          }
+          return;
+        }
+
         if (e.ctrlKey || e.altKey || e.metaKey) return;
-        if (self.currentView !== 'quiz') return;
+        if (self.currentView !== 'quiz' || self.activeModalId) return;
 
         var tag = (e.target && e.target.tagName) ? e.target.tagName.toLowerCase() : '';
         if (tag === 'input' || tag === 'textarea' || tag === 'select' || tag === 'button') return;
@@ -1926,6 +2246,7 @@
   window.ExamVerseApp = App;
 
   window.evNavigate = function (viewName, bypassGuard) {
+    window.evCloseMobileMoreModal();
     App.playSound('click');
     App.navigate(viewName, bypassGuard);
   };
@@ -1943,15 +2264,24 @@
     App.renderCurrentView();
   };
 
-  /* Audit 7.6 Fix: Update only the chapters container so typing never loses input focus/cursor */
+  /* Debounced Search with Cursor Preservation & Clear Button Toggle (Audit 7.6) */
   window.evUpdateExamSearch = function (val) {
     App.examSearchQuery = val;
-    var chaptersContainer = document.getElementById('ev-exams-chapters-container');
-    if (chaptersContainer) {
-      chaptersContainer.innerHTML = App.buildExamsFilteredChaptersHtml();
-    } else {
-      App.renderCurrentView();
+    var clearBtn = document.getElementById('ev-clear-search-btn');
+    if (clearBtn) {
+      clearBtn.style.display = val ? 'inline-flex' : 'none';
     }
+    if (App.searchDebounceTimer) {
+      window.clearTimeout(App.searchDebounceTimer);
+    }
+    App.searchDebounceTimer = window.setTimeout(function () {
+      var chaptersContainer = document.getElementById('ev-exams-chapters-container');
+      if (chaptersContainer) {
+        chaptersContainer.innerHTML = App.buildExamsFilteredChaptersHtml();
+      } else {
+        App.renderCurrentView();
+      }
+    }, 120);
   };
 
   window.evUpdateExamSubject = function (val) {
@@ -2060,14 +2390,10 @@
     window.ExamVerseQuiz.goToQuestion(idx);
   };
 
-  /* Audit 4.3 Fix: Safe Mode Switch with Confirmation & Clean Session Restart */
   window.evRequestSwitchQuizMode = function (newMode) {
     if (!window.ExamVerseQuiz.session) return;
     App.pendingModeSwitchTarget = newMode === 'exam' ? 'exam' : 'practice';
-    var modal = document.getElementById('ev-mode-switch-modal');
-    if (modal) {
-      modal.classList.add('is-open');
-    }
+    App.openModalById('ev-mode-switch-modal');
   };
 
   window.evConfirmSwitchQuizMode = function () {
@@ -2091,11 +2417,9 @@
   };
 
   window.evCloseModeSwitchModal = function () {
-    var modal = document.getElementById('ev-mode-switch-modal');
-    if (modal) modal.classList.remove('is-open');
+    App.closeModalById('ev-mode-switch-modal');
   };
 
-  /* Audit 4.7 Fix: Unanswered Questions Confirmation Modal Before Submit */
   window.evRequestSubmitQuiz = function () {
     var unanswered = window.ExamVerseQuiz.getUnansweredCount();
     if (unanswered > 0) {
@@ -2103,11 +2427,8 @@
       if (msgEl) {
         msgEl.textContent = 'You have ' + unanswered + ' unanswered question' + (unanswered > 1 ? 's' : '') + '. Unanswered questions will be marked as Skipped (0 marks). Submit your quiz anyway?';
       }
-      var modal = document.getElementById('ev-submit-confirm-modal');
-      if (modal) {
-        modal.classList.add('is-open');
-        return;
-      }
+      App.openModalById('ev-submit-confirm-modal');
+      return;
     }
     window.ExamVerseQuiz.submitQuiz();
   };
@@ -2118,11 +2439,9 @@
   };
 
   window.evCloseSubmitConfirmModal = function () {
-    var modal = document.getElementById('ev-submit-confirm-modal');
-    if (modal) modal.classList.remove('is-open');
+    App.closeModalById('ev-submit-confirm-modal');
   };
 
-  /* Leave Active Exam Confirmation Handlers */
   window.evConfirmLeaveExam = function () {
     var target = App.pendingNavigationTarget || 'home';
     window.evCloseLeaveExamModal();
@@ -2130,8 +2449,7 @@
   };
 
   window.evCloseLeaveExamModal = function () {
-    var modal = document.getElementById('ev-leave-exam-modal');
-    if (modal) modal.classList.remove('is-open');
+    App.closeModalById('ev-leave-exam-modal');
     App.pendingNavigationTarget = null;
   };
 
@@ -2153,7 +2471,6 @@
     App.navigate('quiz', true);
   };
 
-  /* Audit 4.8 Fix: Review & Retry Exact Historical Attempt Snapshot */
   window.evReviewHistoryItem = function (historyId) {
     var h = window.ExamVerseStorage.state.quizHistory.find(function (item) { return item.id === historyId; });
     if (!h) return;
@@ -2217,6 +2534,18 @@
     App.showToast(added ? 'Saved to Bookmarks' : 'Removed from Bookmarks');
   };
 
+  window.evSaveBookmarkNote = function (questionId) {
+    var inputEl = document.getElementById('ev-bm-note-' + questionId);
+    if (!inputEl) return;
+    window.ExamVerseStorage.saveBookmarkNote(questionId, inputEl.value);
+    App.showToast('Bookmark study note saved');
+  };
+
+  window.evSetBookmarkSubjectFilter = function (subjId) {
+    App.bookmarkSubjectFilter = subjId || 'all';
+    App.renderCurrentView();
+  };
+
   window.evPracticeBookmarks = function () {
     var bmIds = window.ExamVerseStorage.state.bookmarks;
     if (!bmIds || bmIds.length === 0) return;
@@ -2266,15 +2595,42 @@
     App.showToast('Preference saved');
   };
 
-  /* Notifications Modal with Mark All Read & Clear All (Audit Section 6) */
+  window.evUpdateSoundVolume = function (valPct) {
+    var num = Math.max(10, Math.min(100, Number(valPct) || 75));
+    window.ExamVerseStorage.state.settings.soundVolume = num / 100;
+    window.ExamVerseStorage.save();
+    App.renderCurrentView();
+    App.playSound('correct');
+  };
+
+  window.evPreviewSound = function () {
+    window.ExamVerseStorage.state.settings.soundEnabled = true;
+    window.ExamVerseStorage.save();
+    App.playSound('complete');
+    App.showToast('Played sound preview chime');
+  };
+
+  /* Mobile "More" Drawer Handlers (Audit 7.1) */
+  window.evOpenMobileMoreModal = function () {
+    var state = window.ExamVerseStorage.state;
+    var bmBadge = document.getElementById('ev-more-bm-count');
+    var mkBadge = document.getElementById('ev-more-mk-count');
+    if (bmBadge) bmBadge.textContent = state.bookmarks.length;
+    if (mkBadge) mkBadge.textContent = state.mistakes.length;
+    App.openModalById('ev-mobile-more-modal');
+  };
+
+  window.evCloseMobileMoreModal = function () {
+    App.closeModalById('ev-mobile-more-modal');
+  };
+
   window.evOpenNotifModal = function () {
     if (!window.ExamVerseStorage.state.settings.notificationsEnabled) {
       App.showToast('Notifications are disabled in Settings');
       return;
     }
-    var modal = document.getElementById('ev-notif-modal');
     var listEl = document.getElementById('ev-notif-list');
-    if (!modal || !listEl) return;
+    if (!listEl) return;
 
     window.ExamVerseStorage.markAllNotificationsRead();
     App.syncHeaderAndThemeUI();
@@ -2295,21 +2651,22 @@
         );
       }).join('');
     }
-    modal.classList.add('is-open');
+    App.openModalById('ev-notif-modal');
   };
 
   window.evClearNotifications = function () {
     window.ExamVerseStorage.clearNotifications();
-    window.evOpenNotifModal();
+    var listEl = document.getElementById('ev-notif-list');
+    if (listEl) {
+      listEl.innerHTML = '<div style="text-align:center; padding:1.5rem; color:var(--text-muted);">No notifications.</div>';
+    }
     App.syncHeaderAndThemeUI();
   };
 
   window.evCloseNotifModal = function () {
-    var modal = document.getElementById('ev-notif-modal');
-    if (modal) modal.classList.remove('is-open');
+    App.closeModalById('ev-notif-modal');
   };
 
-  /* Profile Edit Modal Handlers (Audit Section 6) */
   window.evOpenProfileEditModal = function () {
     var u = window.ExamVerseStorage.state.user;
     var nameInput = document.getElementById('ev-profile-name-input');
@@ -2318,8 +2675,7 @@
     if (nameInput) nameInput.value = u.name || '';
     if (handleInput) handleInput.value = u.username || '';
     if (trackSelect) trackSelect.value = u.targetTrack || 'University & Engineering Admission';
-    var modal = document.getElementById('ev-profile-edit-modal');
-    if (modal) modal.classList.add('is-open');
+    App.openModalById('ev-profile-edit-modal');
   };
 
   window.evSaveProfileEdit = function () {
@@ -2346,11 +2702,9 @@
   };
 
   window.evCloseProfileEditModal = function () {
-    var modal = document.getElementById('ev-profile-edit-modal');
-    if (modal) modal.classList.remove('is-open');
+    App.closeModalById('ev-profile-edit-modal');
   };
 
-  /* Demo Mode Loader & Complete Reset Handlers */
   window.evLoadDemoProfile = function () {
     window.ExamVerseStorage.loadSampleDemoProfile();
     App.syncHeaderAndThemeUI();
@@ -2359,13 +2713,11 @@
   };
 
   window.evOpenResetModal = function () {
-    var modal = document.getElementById('ev-reset-modal');
-    if (modal) modal.classList.add('is-open');
+    App.openModalById('ev-reset-modal');
   };
 
   window.evCloseResetModal = function () {
-    var modal = document.getElementById('ev-reset-modal');
-    if (modal) modal.classList.remove('is-open');
+    App.closeModalById('ev-reset-modal');
   };
 
   window.evConfirmResetProgress = function () {
