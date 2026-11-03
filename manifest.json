@@ -2,9 +2,24 @@
   "name": "ExamVerse — Academic Examination & MCQ Mastery Platform",
   "short_name": "ExamVerse",
   "description": "Premium educational examination and MCQ practice platform for SSC, HSC, University, Medical, Engineering, BCS & Bank Job preparation.",
-  "start_url": "./index.html",
+  "start_url": "./index.html#/home",
+  "scope": "./",
   "display": "standalone",
   "background_color": "#F7F9FC",
   "theme_color": "#4338CA",
-  "orientation": "portrait-primary"
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' rx='42' fill='%234338CA'/%3E%3Cpath d='M96 36L28 70l68 34 68-34-68-34zm-68 68l68 34 68-34M28 136l68 34 68-34' fill='none' stroke='%23FFFFFF' stroke-width='12' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='112' fill='%234338CA'/%3E%3Cpath d='M256 96L76 186l180 90 180-90-180-90zM76 276l180 90 180-90M76 362l180 90 180-90' fill='none' stroke='%23FFFFFF' stroke-width='30' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
 }
