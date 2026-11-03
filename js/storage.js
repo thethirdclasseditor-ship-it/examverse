@@ -1,9 +1,5 @@
 /* ==========================================================================
-   ExamVerse — LocalStorage Persistence & Honest Progress Engine (js/storage.js)
-   Step 1 + Step 2 + Step 3 Updates:
-   - Supports all 10 Core Subjects (Science, Business Studies, Humanities, Common)
-   - Tracks Creative Question (CQ) self-evaluated scores & completion count
-   - Fresh Zero Default State, Asia/Dhaka date-based streak, rolling 7-day chart
+   ExamVerse — LocalStorage Persistence & Cloud Sync Bridge (js/storage.js)
    ========================================================================== */
 
 (function () {
@@ -138,6 +134,7 @@
       bookmarks: [],
       bookmarkNotes: {},
       cqScores: {},
+      questionReports: [],
       mistakes: [],
       quizHistory: [],
       unlockedBadges: [],
@@ -145,7 +142,7 @@
         {
           id: 'notif-welcome',
           title: 'Welcome to ExamVerse!',
-          body: 'Explore all 10 subjects, Multi-Statement (i, ii, iii) MCQs, Creative Questions (CQ), or build a Custom Exam.',
+          body: 'Explore all 10 subjects, Multi-Statement (i, ii, iii) MCQs, Creative Questions (CQ), or connect Supabase Cloud Sync.',
           time: 'Today',
           unread: true
         }
@@ -247,6 +244,27 @@
       } catch (e) {}
     },
 
+    exportBackupJson: function () {
+      return JSON.stringify({
+        schema: 'examverse_backup_v2',
+        exportedAt: new Date().toISOString(),
+        state: this.state
+      }, null, 2);
+    },
+
+    importBackupJson: function (jsonStr) {
+      var parsed = JSON.parse(jsonStr);
+      var targetState = parsed && parsed.state ? parsed.state : parsed;
+      if (!targetState || !targetState.user || !targetState.stats) {
+        throw new Error('Invalid ExamVerse backup JSON format.');
+      }
+      var fresh = createFreshDefaultState();
+      this.state = Object.assign({}, fresh, targetState);
+      this.syncCalendarState();
+      this.applyTheme(this.state.theme);
+      return true;
+    },
+
     saveActiveSession: function (sessionData) {
       this.state.activeSession = sessionData ? JSON.parse(JSON.stringify(sessionData)) : null;
       if (sessionData && !sessionData.isSubmitted && !sessionData.isEmpty) {
@@ -316,7 +334,6 @@
       this.save();
     },
 
-    /* Save Creative Question (CQ) 10-Mark Self-Evaluation Score */
     saveCqSelfScore: function (cqId, marksOutOf10) {
       if (!this.state.cqScores) {
         this.state.cqScores = {};
@@ -549,6 +566,10 @@
       });
 
       this.save();
+
+      if (window.ExamVerseCloud && window.ExamVerseCloud.isAuthenticated()) {
+        window.ExamVerseCloud.submitServerValidatedAttempt(resultPayload);
+      }
     },
 
     resetProgress: function () {
