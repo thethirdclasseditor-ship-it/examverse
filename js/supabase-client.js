@@ -13,8 +13,8 @@
   var CLOUD_SESSION_KEY = 'examverse_supabase_session_v1';
 
   var DEFAULT_CONFIG = {
-    url: '',
-    anonKey: '',
+    url: 'https://muxgoubiqmussyydhekq.supabase.co/rest/v1/',
+    anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im11eGdvdWJpcW11c3N5eWRoZWtxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTM2Njg0OTMsImV4cCI6MjEwOTI0NDQ5M30.BesDfzId-3Pewr5EfNXvKwm4--LkpnBIGGqDQS7kDkc',
     enabled: false
   };
 
