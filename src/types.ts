@@ -3,6 +3,9 @@ export type AcademicGroup = 'Science' | 'Commerce' | 'Arts' | 'Common';
 export type ViewName =
   | 'home'
   | 'exams'
+  | 'archive'
+  | 'battle'
+  | 'rapid'
   | 'quiz'
   | 'cq'
   | 'results'
@@ -14,7 +17,8 @@ export type ViewName =
   | 'mistakes'
   | 'history'
   | 'daily'
-  | 'settings';
+  | 'settings'
+  | 'admin';
 
 export interface Chapter {
   id: string;
@@ -44,6 +48,10 @@ export interface QuestionMCQ {
   difficulty: 'Easy' | 'Medium' | 'Hard';
   questionType: 'standard' | 'multi';
   examTag: string;
+  paperId?: string;
+  institution?: string;
+  year?: string;
+  unit?: string;
   question: string;
   questionBn: string;
   statements?: string[];
@@ -65,6 +73,8 @@ export interface QuestionCQ {
   chapterId: string;
   categories: string[];
   boardTag: string;
+  board?: string;
+  year?: string;
   title: string;
   stemBn: string;
   stemEn: string;
@@ -118,10 +128,12 @@ export interface LeaderboardEntry {
   level: number;
   xp: number;
   badge: string;
+  subjectXp?: Record<string, number>;
   isCurrentUser?: boolean;
 }
 
 export interface UserProfile {
+  id?: string;
   name: string;
   username: string;
   avatarInitials: string;
@@ -133,6 +145,8 @@ export interface UserProfile {
   streakDays: number;
   streakActive: boolean;
   lastStudyDate: string | null;
+  joinedDate?: string;
+  isAdmin?: boolean;
 }
 
 export interface WeeklyDayActivity {
@@ -143,11 +157,14 @@ export interface WeeklyDayActivity {
   xp: number;
 }
 
+export type MistakeStatus = 'New' | 'Practicing' | 'Resolved';
+
 export interface MistakeEntry {
   questionId: string;
   selectedIndex: number;
   timestamp: string;
   retryCount: number;
+  status?: MistakeStatus;
   note: string;
 }
 
@@ -170,6 +187,7 @@ export interface QuizHistoryItem {
   timeTakenSec: number;
   xpEarned: number;
   date: string;
+  subjectBreakdown?: Record<string, { attempted: number; correct: number; total: number }>;
   questionsSnapshot: QuestionMCQ[];
   answersSnapshot: Record<string, number>;
 }
@@ -187,6 +205,7 @@ export interface QuizSession {
   currentIndex: number;
   answers: Record<string, number>;
   revealed: Record<string, boolean>;
+  markedForReview?: Record<string, boolean>;
   startedAtMs: number;
   deadlineMs: number;
   durationSec: number;
@@ -201,6 +220,8 @@ export interface AppSettings {
   timerEnabled: boolean;
   defaultDurationPerQuestionSec: number;
   negativeMarkingEnabled: boolean;
+  notificationsEnabled?: boolean;
+  dailyReminderTime?: string;
   language: 'bilingual' | 'en' | 'bn';
 }
 
@@ -230,9 +251,10 @@ export interface AppState {
     completedDate: string | null;
     rewardXp: number;
   };
+  activeSession?: QuizSession | null;
   bookmarks: string[];
   bookmarkNotes: Record<string, string>;
-  cqScores: Record<string, { marks: number; date: string }>;
+  cqScores: Record<string, { marks: number; date: string; userAnswer?: string }>;
   mistakes: MistakeEntry[];
   quizHistory: QuizHistoryItem[];
   unlockedBadges: string[];
