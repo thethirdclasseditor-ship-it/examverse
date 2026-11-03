@@ -1,20 +1,16 @@
 /* ==========================================================================
    ExamVerse — Main Application Controller & View Renderer (js/app.js)
-   Step 1 + Step 2 Audit Fixes Applied:
-   - URL Hash Routing (#/home, #/exams, etc.) with Back/Forward/Refresh support
-   - Mobile Bottom Nav "More" Drawer (#ev-mobile-more-modal) for all 15 views
-   - KaTeX Math & Scientific Formula Rendering (renderAcademicMath)
-   - Debounced Search across Chapter Titles, Questions & Tags + <mark> Highlighting
-   - Full UI Localization (English, বাংলা, Bilingual)
-   - Sound Volume Slider + Test Sound Preview Button
-   - Bookmark Custom Notes & Subject Filter + Mistake Bank Weak-Topic Insights
-   - Modal Focus Trap, Focus Restoration & Escape Key Accessibility
-   - PWA Service Worker Registration with Update Notification
+   Step 1 + Step 2 + Step 3 Complete Implementation:
+   - Full 10-Subject Syllabus (Science, Business Studies, Humanities, Common) with Group & Paper Filters
+   - Multi-Statement (বহুপদী সমাপ্তিসূচক i, ii, iii) MCQ Callout Renderer
+   - Dedicated Creative Question (সৃজনশীল CQ Mode: উদ্দীপক + ক, খ, গ, ঘ + 10-Mark Self-Rubric) View (#/cq)
+   - Interactive Custom Exam Builder Modal (#ev-custom-builder-modal)
+   - URL Hash Routing, Mobile More Drawer, KaTeX Math Rendering, Deep Search & Accessibility
    ========================================================================== */
 
 (function () {
   var VALID_VIEWS = [
-    'home', 'exams', 'quiz', 'results', 'review', 'stats',
+    'home', 'exams', 'quiz', 'cq', 'results', 'review', 'stats',
     'leaderboard', 'profile', 'bookmarks', 'mistakes',
     'history', 'daily', 'settings', 'about', 'privacy'
   ];
@@ -24,6 +20,7 @@
       home: 'Home Dashboard',
       exams: 'Exams & Syllabus',
       quiz: 'Quiz & Examination',
+      cq: 'Creative Questions (CQ)',
       results: 'Diagnostic Results',
       review: 'Answer Review',
       stats: 'Analytics & Stats',
@@ -41,6 +38,7 @@
       home: 'হোম ড্যাশবোর্ড',
       exams: 'পরীক্ষা ও সিলেবাস',
       quiz: 'কুইজ ও পরীক্ষা',
+      cq: 'সৃজনশীল প্রশ্ন (CQ)',
       results: 'ফলাফল বিশ্লেষণ',
       review: 'উত্তর পর্যালোচনা',
       stats: 'পরিসংখ্যান',
@@ -56,7 +54,6 @@
     }
   };
 
-  /* XSS Protection Helper (Audit 10.1) */
   function escapeHtml(str) {
     if (str === null || typeof str === 'undefined') return '';
     return String(str)
@@ -67,7 +64,6 @@
       .replace(/'/g, '&#39;');
   }
 
-  /* Highlight matched search substring safely */
   function highlightMatch(text, query) {
     var safeText = escapeHtml(text);
     var q = String(query || '').trim();
@@ -81,12 +77,10 @@
     }
   }
 
-  /* Render Scientific & Mathematical Notation via KaTeX (if loaded) or Semantic HTML (Audit 7.4) */
   function renderAcademicMath(rawText) {
     if (!rawText) return '';
     var text = String(rawText);
 
-    /* If text contains explicit $...$ LaTeX delimiters and KaTeX is loaded */
     if (window.katex && text.indexOf('$') !== -1) {
       return escapeHtml(text).replace(/\$([^$]+)\$/g, function (_, tex) {
         try {
@@ -103,9 +97,9 @@
       });
     }
 
-    /* Also format common scientific formulas & exponents cleanly */
     var escaped = escapeHtml(text);
     return escaped
+      .replace(/\$([^$]+)\$/g, '<code>$1</code>')
       .replace(/\^\{([^}]+)\}/g, '<sup>$1</sup>')
       .replace(/\^\(([^)]+)\)/g, '<sup>($1)</sup>')
       .replace(/_\{([^}]+)\}/g, '<sub>$1</sub>')
@@ -115,9 +109,12 @@
   var App = {
     currentView: 'home',
     selectedExamCategory: 'uni',
+    examGroupFilter: 'all', /* 'all', 'Science', 'Business Studies', 'Humanities', 'Common' */
     examSearchQuery: '',
     examSubjectFilter: 'all',
     examDifficultyFilter: 'all',
+    cqSubjectFilter: 'all',
+    cqRevealedParts: {}, /* cqId_partKey -> boolean */
     bookmarkSubjectFilter: 'all',
     leaderboardScope: 'global',
     leaderboardPeriod: 'week',
@@ -132,7 +129,6 @@
       window.ExamVerseStorage.init();
       window.ExamVerseQuiz.restoreFromStorage();
 
-      /* Determine initial view from URL hash if present (Audit 7.1) */
       var initialHashView = this.getViewFromHash();
       if (initialHashView) {
         this.currentView = initialHashView;
@@ -160,7 +156,6 @@
       this.registerServiceWorker();
     },
 
-    /* URL Hash Routing (Audit 7.1) */
     getViewFromHash: function () {
       var h = (window.location.hash || '').replace(/^#\/?/, '').trim().toLowerCase();
       if (VALID_VIEWS.indexOf(h) !== -1) {
@@ -191,7 +186,6 @@
       });
     },
 
-    /* Service Worker Registration for Installable Offline PWA (Audit Section 9) */
     registerServiceWorker: function () {
       var self = this;
       if ('serviceWorker' in window.navigator && window.location && window.location.protocol.indexOf('http') === 0) {
@@ -210,7 +204,6 @@
       }
     },
 
-    /* Accessible Modal Management with Focus Trap & Restoration (Audit 7.5 & Section 8) */
     openModalById: function (modalId) {
       var modal = document.getElementById(modalId);
       if (!modal) return;
@@ -245,7 +238,6 @@
       }
     },
 
-    /* Haptic Vibration Feedback (Audit Section 6) */
     triggerHaptic: function (pattern) {
       var settings = window.ExamVerseStorage.state.settings;
       if (!settings || !settings.vibrationEnabled) return;
@@ -256,7 +248,6 @@
       } catch (e) {}
     },
 
-    /* Synthesized Web Audio API Effects with Volume Control (Audit Section 6) */
     playSound: function (type) {
       var settings = window.ExamVerseStorage.state.settings;
       if (!settings || !settings.soundEnabled) return;
@@ -325,7 +316,6 @@
       }, 2600);
     },
 
-    /* Navigation with Active Exam Guard & Hash Sync (Audit 2.4 & 7.1) */
     navigate: function (viewName, bypassExamGuard, fromHashChange) {
       var s = window.ExamVerseQuiz.session;
       if (
@@ -339,7 +329,6 @@
       ) {
         this.pendingNavigationTarget = viewName;
         this.openModalById('ev-leave-exam-modal');
-        /* Restore hash to #/quiz until user confirms leaving */
         this.updateUrlHash('quiz', true);
         return;
       }
@@ -381,7 +370,6 @@
       window.scrollTo({ top: 0, behavior: reduceMotion ? 'auto' : 'smooth' });
     },
 
-    /* Localize UI Labels when Bangla is selected (Audit Section 6) */
     syncHeaderAndThemeUI: function () {
       var state = window.ExamVerseStorage.state;
       var isDark = state.theme === 'dark';
@@ -423,7 +411,6 @@
         greetingTitle.textContent = (state.isDemoMode ? '[Demo] ' : '') + (isBn ? ('স্বাগতম, ' + firstName) : ('Welcome, ' + firstName));
       }
 
-      /* Update Active Section Breadcrumb in Topbar (Audit 7.1) */
       var breadcrumbEl = document.getElementById('ev-active-breadcrumb');
       if (breadcrumbEl) {
         var dict = isBn ? VIEW_TITLES.bn : VIEW_TITLES.en;
@@ -444,11 +431,11 @@
       var mkCountEl = document.getElementById('ev-nav-count-mistakes');
       if (mkCountEl) mkCountEl.textContent = state.mistakes.length;
 
-      /* Localize Navigation Labels if Bangla is selected */
       var navLabelMap = {
         home: isBn ? 'হোম' : 'Home',
         exams: isBn ? 'পরীক্ষাসমূহ' : 'Exams',
-        quiz: isBn ? 'কুইজ ও পরীক্ষা' : 'Quiz & Exam',
+        quiz: isBn ? 'কুইজ (MCQ)' : 'Quiz (MCQ)',
+        cq: isBn ? 'সৃজনশীল (CQ)' : 'Creative (CQ)',
         stats: isBn ? 'পরিসংখ্যান' : 'Stats',
         leaderboard: isBn ? 'লিডারবোর্ড' : 'Leaderboard',
         profile: isBn ? 'প্রোফাইল' : 'Profile',
@@ -464,7 +451,7 @@
       if (activeNavKey === 'results' || activeNavKey === 'review') {
         activeNavKey = 'quiz';
       }
-      var moreViews = ['profile', 'daily', 'bookmarks', 'mistakes', 'history', 'leaderboard', 'settings', 'about', 'privacy'];
+      var moreViews = ['profile', 'daily', 'cq', 'bookmarks', 'mistakes', 'history', 'leaderboard', 'settings', 'about', 'privacy'];
 
       var navBtns = document.querySelectorAll('[data-nav-target]');
       for (var i = 0; i < navBtns.length; i++) {
@@ -523,25 +510,44 @@
       );
     },
 
+    /* Renders Standard MCQs + Multi-Statement (বহুপদী সমাপ্তিসূচক i, ii, iii) MCQs */
     formatQuestionDisplay: function (q) {
       var lang = window.ExamVerseStorage.state.settings.language || 'bilingual';
       var qEn = renderAcademicMath(q.question);
       var qBn = renderAcademicMath(q.questionBn || q.question);
+      var baseTextHtml = '';
+
       if (lang === 'en') {
-        return '<div>' + qEn + '</div>';
-      }
-      if (lang === 'bn') {
-        return '<div class="font-bn">' + qBn + '</div>';
-      }
-      if (q.questionBn && q.questionBn !== q.question) {
-        return (
+        baseTextHtml = '<div>' + qEn + '</div>';
+      } else if (lang === 'bn') {
+        baseTextHtml = '<div class="font-bn">' + qBn + '</div>';
+      } else if (q.questionBn && q.questionBn !== q.question) {
+        baseTextHtml = (
           '<div>' + qEn + '</div>' +
           '<div class="font-bn" style="font-size:0.95rem; font-weight:500; color:var(--text-secondary); margin-top:0.4rem;">' +
           qBn +
           '</div>'
         );
+      } else {
+        baseTextHtml = '<div>' + qEn + '</div>';
       }
-      return '<div>' + qEn + '</div>';
+
+      /* Render Multi-Statement (i, ii, iii) Box if present */
+      if (Array.isArray(q.statements) && q.statements.length > 0) {
+        var stLines = q.statements.map(function (st) {
+          return '<div class="font-bn" style="padding:0.35rem 0; font-size:0.95rem; font-weight:500; color:var(--text-primary);">' + renderAcademicMath(st) + '</div>';
+        }).join('');
+        baseTextHtml += (
+          '<div style="margin-top:0.75rem; padding:0.75rem 1rem; border-radius:var(--radius-sm); background-color:var(--bg-surface-muted); border:1px solid var(--border-subtle);">' +
+            stLines +
+            '<div class="font-bn" style="margin-top:0.45rem; padding-top:0.45rem; border-top:1px dashed var(--border-default); font-size:0.88rem; font-weight:700; color:var(--brand-primary);">' +
+              'নিচের কোনটি সঠিক? (Which of the following is correct?)' +
+            '</div>' +
+          '</div>'
+        );
+      }
+
+      return baseTextHtml;
     },
 
     renderCurrentView: function () {
@@ -558,6 +564,9 @@
           break;
         case 'quiz':
           html = this.renderQuizView();
+          break;
+        case 'cq':
+          html = this.renderCqView();
           break;
         case 'results':
           html = this.renderResultsView();
@@ -621,17 +630,17 @@
         var masteryLabel = subjStat.attempted > 0 ? (mastery + '%') : 'Not Started (0%)';
         return (
           '<button type="button" class="ev-card ev-card-interactive ev-subject-card" style="text-align:left; width:100%; font-family:inherit;" onclick="window.evStartSubjectQuiz(\'' + subj.id + '\', \'practice\')">' +
-            '<div style="display:flex; align-items:center; justify-content:space-between; gap:0.75rem; width:100%;">' +
+            '<div style="display:flex; align-items:center; justify-content:space-between; gap:0.5rem; width:100%;">' +
               '<div class="ev-subject-icon-box">' + self.getIconSvg(subj.icon) + '</div>' +
-              '<span class="ev-badge-pill ev-badge-neutral">' + realCount + ' Verified MCQs</span>' +
+              '<span class="ev-badge-pill ev-badge-neutral">' + realCount + ' MCQs</span>' +
             '</div>' +
             '<div>' +
-              '<div style="font-size:0.96rem; font-weight:700; color:var(--text-primary);">' + escapeHtml(subj.name) + '</div>' +
-              '<div class="font-bn" style="font-size:0.8rem; color:var(--text-muted);">' + escapeHtml(subj.nameBn) + '</div>' +
+              '<div style="font-size:0.95rem; font-weight:700; color:var(--text-primary);">' + escapeHtml(subj.name) + '</div>' +
+              '<div class="font-bn" style="font-size:0.79rem; color:var(--text-muted);">' + escapeHtml(subj.nameBn) + '</div>' +
             '</div>' +
             '<div style="width:100%;">' +
-              '<div style="display:flex; justify-content:space-between; font-size:0.75rem; font-weight:600; color:var(--text-secondary); margin-bottom:0.35rem;">' +
-                '<span>Mastery</span>' +
+              '<div style="display:flex; justify-content:space-between; font-size:0.74rem; font-weight:600; color:var(--text-secondary); margin-bottom:0.35rem;">' +
+                '<span>' + escapeHtml(subj.group || 'Academic') + '</span>' +
                 '<span>' + masteryLabel + '</span>' +
               '</div>' +
               '<div class="ev-progress-track">' +
@@ -685,9 +694,9 @@
                 '</div>' +
               '</div>' +
             '</div>' +
-            '<div style="display:flex; align-items:center; gap:0.6rem;">' +
+            '<div style="display:flex; align-items:center; gap:0.6rem; flex-wrap:wrap;">' +
               '<button type="button" class="ev-btn ev-btn-primary" onclick="window.evNavigate(\'quiz\')">Resume Active Session</button>' +
-              '<button type="button" class="ev-btn ev-btn-secondary" onclick="window.evNavigate(\'mistakes\')">Mistake Bank (' + state.mistakes.length + ')</button>' +
+              '<button type="button" class="ev-btn ev-btn-secondary" onclick="window.evOpenCustomBuilderModal()">Custom Exam Builder</button>' +
             '</div>' +
           '</div>'
         );
@@ -708,7 +717,7 @@
             '</div>' +
             '<div style="display:flex; align-items:center; gap:0.6rem; flex-wrap:wrap;">' +
               '<button type="button" class="ev-btn ev-btn-primary" onclick="window.evNavigate(\'results\')">View Last Result &amp; Review</button>' +
-              '<button type="button" class="ev-btn ev-btn-secondary" onclick="window.evRetryLastQuiz()">Retry Session</button>' +
+              '<button type="button" class="ev-btn ev-btn-secondary" onclick="window.evOpenCustomBuilderModal()">Custom Exam Builder</button>' +
             '</div>' +
           '</div>'
         );
@@ -716,12 +725,12 @@
         continueHtml = (
           '<div class="ev-card" style="display:flex; align-items:center; justify-content:space-between; gap:1.25rem; flex-wrap:wrap; padding:1.1rem 1.25rem;">' +
             '<div>' +
-              '<div style="font-size:0.96rem; font-weight:700; color:var(--text-primary); margin-bottom:0.2rem;">No Active Session Yet</div>' +
-              '<div style="font-size:0.82rem; color:var(--text-secondary);">Start any subject practice or chapter exam below—your progress will autosave automatically.</div>' +
+              '<div style="font-size:0.96rem; font-weight:700; color:var(--text-primary); margin-bottom:0.2rem;">Build Your Own Exam or Practice Creative Questions (CQ)</div>' +
+              '<div style="font-size:0.82rem; color:var(--text-secondary);">Choose custom subjects, Multi-Statement (i, ii, iii) MCQs, negative marking, or practice 10-mark Board Creative Questions.</div>' +
             '</div>' +
-            '<div style="display:flex; gap:0.6rem;">' +
-              '<button type="button" class="ev-btn ev-btn-primary" onclick="window.evStartSubjectQuiz(\'physics\', \'practice\')">Start Physics Practice</button>' +
-              '<button type="button" class="ev-btn ev-btn-secondary" onclick="window.evNavigate(\'exams\')">Browse Chapters</button>' +
+            '<div style="display:flex; gap:0.6rem; flex-wrap:wrap;">' +
+              '<button type="button" class="ev-btn ev-btn-primary" onclick="window.evOpenCustomBuilderModal()">Open Custom Exam Builder</button>' +
+              '<button type="button" class="ev-btn ev-btn-secondary" onclick="window.evNavigate(\'cq\')">Creative Questions (সৃজনশীল CQ)</button>' +
             '</div>' +
           '</div>'
         );
@@ -765,7 +774,7 @@
                 'Consistent deliberate practice builds exam mastery.' +
               '</h1>' +
               '<p style="font-size:0.86rem; color:var(--text-secondary);">' +
-                'Every question count, streak day, and mastery metric is calculated directly from your real attempts.' +
+                'Master Standard MCQs, Multi-Statement (বহুপদী i, ii, iii) questions, and 10-Mark Creative Questions (CQ) across all 10 subjects.' +
               '</p>' +
             '</div>' +
             '<div class="ev-xp-strip">' +
@@ -792,7 +801,7 @@
                 'ExamVerse Daily Merit Sprint' +
               '</h2>' +
               '<p style="font-size:0.83rem; color:var(--text-secondary);">' +
-                '8 curated interdisciplinary MCQs across all 8 subjects. Complete all 8 questions in the Daily Challenge to claim your daily bonus.' +
+                '8 curated interdisciplinary MCQs. Complete all 8 questions in the Daily Challenge to claim your daily bonus.' +
               '</p>' +
             '</div>' +
             '<div>' +
@@ -815,16 +824,16 @@
 
         '<div style="margin-bottom:1.65rem;">' +
           '<div class="ev-section-header">' +
-            '<h3 class="ev-section-title">Continue Learning</h3>' +
-            '<button type="button" class="ev-section-link" onclick="window.evNavigate(\'exams\')">Browse All Exam Tracks →</button>' +
+            '<h3 class="ev-section-title">Continue Learning &amp; Exam Tools</h3>' +
+            '<button type="button" class="ev-section-link" onclick="window.evOpenCustomBuilderModal()">+ Build Custom Exam →</button>' +
           '</div>' +
           continueHtml +
         '</div>' +
 
         '<div style="margin-bottom:1.65rem;">' +
           '<div class="ev-section-header">' +
-            '<h3 class="ev-section-title">Explore Subjects (' + window.EXAMVERSE_DATA.questions.length + ' Verified MCQs in Bank)</h3>' +
-            '<button type="button" class="ev-section-link" onclick="window.evNavigate(\'exams\')">View All 32 Chapters →</button>' +
+            '<h3 class="ev-section-title">Explore All 10 Subjects (' + window.EXAMVERSE_DATA.questions.length + ' MCQs &amp; ' + window.EXAMVERSE_DATA.creativeQuestions.length + ' CQs)</h3>' +
+            '<button type="button" class="ev-section-link" onclick="window.evNavigate(\'exams\')">View All 40 Chapters →</button>' +
           '</div>' +
           '<div class="ev-grid-4">' +
             subjectsHtml +
@@ -834,7 +843,7 @@
         '<div style="margin-bottom:1.65rem;">' +
           '<div class="ev-section-header">' +
             '<h3 class="ev-section-title">Recommended Model Sets</h3>' +
-            '<button type="button" class="ev-section-link" onclick="window.evNavigate(\'leaderboard\')">View Leaderboard →</button>' +
+            '<button type="button" class="ev-section-link" onclick="window.evNavigate(\'cq\')">Practice Creative Questions (CQ) →</button>' +
           '</div>' +
           '<div class="ev-grid-3">' +
             recommendedHtml +
@@ -854,7 +863,7 @@
     },
 
     /* ======================================================================
-       VIEW 2: EXAMS PAGE (Search across Chapters, Questions, Tags + <mark> Highlight)
+       VIEW 2: EXAMS PAGE (With Group Filter, Paper Badges, CQ Link & Builder)
        ====================================================================== */
     buildExamsFilteredChaptersHtml: function () {
       var self = this;
@@ -863,6 +872,7 @@
 
       var catSubjects = window.EXAMVERSE_DATA.subjects.filter(function (s) {
         if (self.examSubjectFilter !== 'all' && s.id !== self.examSubjectFilter) return false;
+        if (self.examGroupFilter !== 'all' && (s.group || '').indexOf(self.examGroupFilter) === -1) return false;
         return activeCat.subjects.indexOf(s.id) !== -1;
       });
 
@@ -882,7 +892,6 @@
             subj.nameBn.toLowerCase().indexOf(query) !== -1;
           if (titleMatch) return true;
 
-          /* Also search inside questions & examTags belonging to this chapter (Audit Section 6 & 7.6) */
           return window.EXAMVERSE_DATA.questions.some(function (q) {
             return q.chapterId === ch.id && (
               (q.question && q.question.toLowerCase().indexOf(query) !== -1) ||
@@ -900,8 +909,11 @@
           return (
             '<div style="display:flex; align-items:center; justify-content:space-between; gap:0.85rem; padding:0.85rem 1rem; border:1px solid var(--border-subtle); border-radius:var(--radius-sm); background-color:var(--bg-surface-hover); flex-wrap:wrap;">' +
               '<div>' +
-                '<div style="font-size:0.9rem; font-weight:700; color:var(--text-primary);">' + highlightMatch(ch.title, self.examSearchQuery) + '</div>' +
-                '<div class="font-bn" style="font-size:0.8rem; color:var(--text-muted);">' + highlightMatch(ch.titleBn, self.examSearchQuery) + ' • <strong>' + realChCount + ' Verified Question(s)</strong></div>' +
+                '<div style="display:flex; align-items:center; gap:0.45rem; flex-wrap:wrap;">' +
+                  '<span class="ev-badge-pill ev-badge-neutral">' + escapeHtml(ch.paper || 'Core') + '</span>' +
+                  '<span style="font-size:0.9rem; font-weight:700; color:var(--text-primary);">' + highlightMatch(ch.title, self.examSearchQuery) + '</span>' +
+                '</div>' +
+                '<div class="font-bn" style="font-size:0.8rem; color:var(--text-muted); margin-top:0.15rem;">' + highlightMatch(ch.titleBn, self.examSearchQuery) + ' • <strong>' + realChCount + ' Verified Question(s)</strong></div>' +
               '</div>' +
               '<div style="display:flex; align-items:center; gap:0.5rem;">' +
                 '<span class="ev-badge-pill ' + diffClass + '">' + escapeHtml(ch.difficulty) + '</span>' +
@@ -919,11 +931,14 @@
               '<div style="display:flex; align-items:center; gap:0.75rem;">' +
                 '<div class="ev-subject-icon-box">' + self.getIconSvg(subj.icon) + '</div>' +
                 '<div>' +
-                  '<h4 style="font-size:1rem; font-weight:700; color:var(--text-primary);">' + highlightMatch(subj.name, self.examSearchQuery) + ' <span class="font-bn" style="font-weight:500; color:var(--text-muted);">(' + highlightMatch(subj.nameBn, self.examSearchQuery) + ')</span></h4>' +
-                  '<div style="font-size:0.78rem; color:var(--text-secondary);">Track: ' + escapeHtml(activeCat.name) + ' • ' + filteredChapters.length + ' Chapters • ' + realSubjCount + ' Total Subject MCQs</div>' +
+                  '<div style="display:flex; align-items:center; gap:0.45rem; flex-wrap:wrap;">' +
+                    '<h4 style="font-size:1rem; font-weight:700; color:var(--text-primary);">' + highlightMatch(subj.name, self.examSearchQuery) + '</h4>' +
+                    '<span class="ev-badge-pill ev-badge-violet">' + escapeHtml(subj.group || 'General') + '</span>' +
+                  '</div>' +
+                  '<div class="font-bn" style="font-size:0.8rem; color:var(--text-secondary);">' + highlightMatch(subj.nameBn, self.examSearchQuery) + ' • ' + filteredChapters.length + ' Chapters • ' + realSubjCount + ' MCQs</div>' +
                 '</div>' +
               '</div>' +
-              '<div style="display:flex; gap:0.5rem;">' +
+              '<div style="display:flex; gap:0.5rem; flex-wrap:wrap;">' +
                 '<button type="button" class="ev-btn ev-btn-secondary ev-btn-sm" onclick="window.evStartSubjectQuiz(\'' + subj.id + '\', \'practice\')">Subject Practice (' + realSubjCount + ')</button>' +
                 '<button type="button" class="ev-btn ev-btn-primary ev-btn-sm" onclick="window.evStartSubjectQuiz(\'' + subj.id + '\', \'exam\')">Subject Exam</button>' +
               '</div>' +
@@ -938,9 +953,9 @@
       if (!chaptersHtml) {
         chaptersHtml = (
           '<div class="ev-card" style="text-align:center; padding:2.5rem 1.5rem;">' +
-            '<div style="font-size:1rem; font-weight:700; margin-bottom:0.35rem;">No chapters or questions matched "' + escapeHtml(this.examSearchQuery) + '"</div>' +
-            '<p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:1rem;">Try clearing your search keyword or switching the difficulty/subject filter.</p>' +
-            '<button type="button" class="ev-btn ev-btn-secondary ev-btn-sm" onclick="window.evResetExamFilters()">Clear Search &amp; Filters</button>' +
+            '<div style="font-size:1rem; font-weight:700; margin-bottom:0.35rem;">No chapters or questions matched your current filter</div>' +
+            '<p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:1rem;">Try resetting the department/group filter or search keyword.</p>' +
+            '<button type="button" class="ev-btn ev-btn-secondary ev-btn-sm" onclick="window.evResetExamFilters()">Reset All Filters</button>' +
           '</div>'
         );
       }
@@ -980,18 +995,40 @@
           }).join('');
 
       var activeCatCount = window.EXAMVERSE_DATA.getCategoryQuestionCount(activeCat.id);
+      var groups = [
+        { id: 'all', label: 'All Groups (সকল বিভাগ)' },
+        { id: 'Science', label: 'Science (বিজ্ঞান)' },
+        { id: 'Business Studies', label: 'Business (ব্যবসায় শিক্ষা)' },
+        { id: 'Humanities', label: 'Humanities (মানবিক)' },
+        { id: 'Common', label: 'Common & ICT (আবশ্যিক)' }
+      ];
+
+      var groupPillsHtml = groups.map(function (g) {
+        var active = self.examGroupFilter === g.id;
+        return (
+          '<button type="button" class="ev-btn ' + (active ? 'ev-btn-primary' : 'ev-btn-secondary') + ' ev-btn-sm" onclick="window.evSetExamGroupFilter(\'' + g.id + '\')">' +
+            escapeHtml(g.label) +
+          '</button>'
+        );
+      }).join('');
 
       return (
-        '<div style="margin-bottom:1.25rem;">' +
-          '<h1 style="font-size:1.35rem; font-weight:800; color:var(--text-primary); margin-bottom:0.25rem;">Examination Categories &amp; Verified Syllabus Bank</h1>' +
-          '<p style="font-size:0.86rem; color:var(--text-secondary);">Search by chapter name, subject, question text, or exam tag across all 9 national tracks.</p>' +
+        '<div style="display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap; margin-bottom:1.25rem;">' +
+          '<div>' +
+            '<h1 style="font-size:1.35rem; font-weight:800; color:var(--text-primary); margin-bottom:0.25rem;">Examination Categories &amp; Complete Syllabus Tree</h1>' +
+            '<p style="font-size:0.86rem; color:var(--text-secondary);">Browse all 9 national tracks, filter by Academic Group (Science, Business, Humanities), or build a Custom Exam.</p>' +
+          '</div>' +
+          '<div style="display:flex; gap:0.5rem; flex-wrap:wrap;">' +
+            '<button type="button" class="ev-btn ev-btn-soft" onclick="window.evNavigate(\'cq\')">Creative Questions (সৃজনশীল CQ)</button>' +
+            '<button type="button" class="ev-btn ev-btn-primary" onclick="window.evOpenCustomBuilderModal()">+ Custom Exam Builder</button>' +
+          '</div>' +
         '</div>' +
 
         '<div class="ev-category-grid">' +
           categoryCardsHtml +
         '</div>' +
 
-        '<div class="ev-card" style="margin-bottom:1.25rem; background:linear-gradient(135deg, var(--bg-surface) 0%, var(--brand-primary-soft) 100%); border-color:var(--brand-primary-border); display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap;">' +
+        '<div class="ev-card" style="margin-bottom:1.15rem; background:linear-gradient(135deg, var(--bg-surface) 0%, var(--brand-primary-soft) 100%); border-color:var(--brand-primary-border); display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap;">' +
           '<div>' +
             '<div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.25rem;">' +
               '<span class="ev-badge-pill ev-badge-indigo">' + escapeHtml(activeCat.badge) + '</span>' +
@@ -1006,10 +1043,15 @@
           '</div>' +
         '</div>' +
 
+        /* Department / Group Filter Pills */
+        '<div style="display:flex; gap:0.45rem; flex-wrap:wrap; margin-bottom:1rem;">' +
+          groupPillsHtml +
+        '</div>' +
+
         '<div class="ev-filter-bar">' +
           '<div class="ev-search-wrap" style="display:flex; align-items:center; gap:0.4rem;">' +
             '<svg class="ev-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>' +
-            '<input type="text" id="ev-exam-search" class="ev-input" aria-label="Search chapters, questions, or topics" placeholder="Search chapter, question text, or tag (e.g., Carnot, pH, সমাস, সংবিধান)..." value="' + escapeHtml(this.examSearchQuery) + '" oninput="window.evUpdateExamSearch(this.value)" />' +
+            '<input type="text" id="ev-exam-search" class="ev-input" aria-label="Search chapters, questions, or topics" placeholder="Search chapter, question text, or tag (e.g., Carnot, pH, সমাস, সংবিধান, রেওয়ামিল)..." value="' + escapeHtml(this.examSearchQuery) + '" oninput="window.evUpdateExamSearch(this.value)" />' +
             '<button type="button" id="ev-clear-search-btn" class="ev-btn ev-btn-secondary ev-btn-sm" style="display:' + (this.examSearchQuery ? 'inline-flex' : 'none') + ';" onclick="window.evResetExamFilters()">Clear</button>' +
           '</div>' +
           '<div style="min-width:210px;">' +
@@ -1046,13 +1088,13 @@
         return (
           '<div class="ev-card" style="text-align:center; padding:3rem 1.5rem; max-width:620px; margin:1.5rem auto;">' +
             '<div class="ev-subject-icon-box" style="margin:0 auto 1rem;">' + this.getIconSvg('book') + '</div>' +
-            '<h2 style="font-size:1.25rem; font-weight:800; margin-bottom:0.4rem;">No questions available in this chapter yet.</h2>' +
+            '<h2 style="font-size:1.25rem; font-weight:800; margin-bottom:0.4rem;">No questions available in this filter yet.</h2>' +
             '<p style="font-size:0.88rem; color:var(--text-secondary); margin-bottom:1.25rem;">' +
-              'We never substitute unrelated questions from other subjects. Please return to the chapter list or choose another topic.' +
+              'We never substitute unrelated questions from other subjects. Please return to the chapter list or open the Custom Exam Builder.' +
             '</p>' +
             '<div style="display:flex; justify-content:center; gap:0.65rem; flex-wrap:wrap;">' +
               '<button type="button" class="ev-btn ev-btn-primary" onclick="window.evNavigate(\'exams\', true)">← Back to Chapters</button>' +
-              '<button type="button" class="ev-btn ev-btn-secondary" onclick="window.evNavigate(\'home\', true)">Go to Home</button>' +
+              '<button type="button" class="ev-btn ev-btn-secondary" onclick="window.evOpenCustomBuilderModal()">Custom Exam Builder</button>' +
             '</div>' +
           '</div>'
         );
@@ -1131,6 +1173,9 @@
       var negBadge = (!isPractice && session.negativeMark > 0)
         ? '<span class="ev-badge-pill ev-badge-danger">Negative Marking: -' + session.negativeMark + ' / wrong</span>'
         : '';
+      var typeBadge = q.questionType === 'multi'
+        ? '<span class="ev-badge-pill ev-badge-violet">বহুপদী (Multi-Statement i, ii, iii)</span>'
+        : '';
 
       return (
         '<div class="ev-card ev-quiz-header-bar">' +
@@ -1140,6 +1185,7 @@
                 (isPractice ? 'Practice Mode • Instant Feedback' : 'Exam Mode • Timed Simulation') +
               '</span>' +
               negBadge +
+              typeBadge +
               '<span class="ev-badge-pill ev-badge-neutral">' + escapeHtml(q.examTag) + '</span>' +
             '</div>' +
             '<h2 style="font-size:1.05rem; font-weight:800; color:var(--text-primary);">' + escapeHtml(session.title) + '</h2>' +
@@ -1151,6 +1197,7 @@
                   '<span id="ev-live-timer">' + window.ExamVerseQuiz.formatTime(session.remainingSec) + '</span>' +
                 '</div>'
               : '<span class="ev-badge-pill ev-badge-neutral">Untimed Session</span>') +
+            '<button type="button" class="ev-btn ev-btn-secondary ev-btn-sm" onclick="window.evOpenCustomBuilderModal()">Custom Exam</button>' +
             '<button type="button" class="ev-btn ev-btn-secondary ev-btn-sm" onclick="window.evRequestSwitchQuizMode(\'' + (isPractice ? 'exam' : 'practice') + '\')">' +
               'Restart in ' + (isPractice ? 'Exam Mode' : 'Practice Mode') +
             '</button>' +
@@ -1224,6 +1271,116 @@
             '</div>' +
           '</div>' +
         '</div>'
+      );
+    },
+
+    /* ======================================================================
+       VIEW 3B: CREATIVE QUESTION (সৃজনশীল প্রশ্ন — CQ) BANK & SELF-RUBRIC
+       ====================================================================== */
+    renderCqView: function () {
+      var self = this;
+      var cqList = window.EXAMVERSE_DATA.creativeQuestions || [];
+      var cqScores = window.ExamVerseStorage.state.cqScores || {};
+
+      var filteredCqs = cqList.filter(function (cq) {
+        return self.cqSubjectFilter === 'all' || cq.subjectId === self.cqSubjectFilter;
+      });
+
+      var subjFilterHtml = '<option value="all">All CQ Subjects (' + cqList.length + ' Sets)</option>' +
+        window.EXAMVERSE_DATA.subjects.map(function (s) {
+          var count = cqList.filter(function (c) { return c.subjectId === s.id; }).length;
+          if (count === 0) return '';
+          var sel = self.cqSubjectFilter === s.id ? 'selected' : '';
+          return '<option value="' + s.id + '" ' + sel + '>' + escapeHtml(s.name) + ' (' + count + ' CQ)</option>';
+        }).join('');
+
+      var cardsHtml = filteredCqs.map(function (cq, idx) {
+        var savedScore = cqScores[cq.id];
+        var partKeys = ['ka', 'kha', 'ga', 'gha'];
+
+        var partsHtml = partKeys.map(function (pk) {
+          var part = cq.parts[pk];
+          var revealKey = cq.id + '_' + pk;
+          var isShown = Boolean(self.cqRevealedParts[revealKey]);
+          return (
+            '<div style="padding:0.9rem 1rem; border-radius:var(--radius-sm); border:1px solid var(--border-subtle); background-color:var(--bg-surface-hover);">' +
+              '<div style="display:flex; align-items:center; justify-content:space-between; gap:0.75rem; flex-wrap:wrap; margin-bottom:0.4rem;">' +
+                '<span class="ev-badge-pill ev-badge-indigo">' + escapeHtml(part.label) + '</span>' +
+                '<button type="button" class="ev-btn ev-btn-secondary ev-btn-sm" onclick="window.evToggleCqPartAnswer(\'' + cq.id + '\', \'' + pk + '\')">' +
+                  (isShown ? 'Hide Model Answer' : 'Show Model Answer (উত্তর দেখুন)') +
+                '</button>' +
+              '</div>' +
+              '<div class="font-bn" style="font-size:0.98rem; font-weight:700; color:var(--text-primary);">' +
+                renderAcademicMath(part.question) +
+              '</div>' +
+              (isShown
+                ? '<div class="ev-explanation-box font-bn" style="margin-top:0.65rem; white-space:pre-line;">' +
+                    '<strong>নমুনা উত্তর (Model Solution):</strong>\n' + renderAcademicMath(part.answer) +
+                  '</div>'
+                : '') +
+            '</div>'
+          );
+        }).join('');
+
+        return (
+          '<div class="ev-card" style="margin-bottom:1.25rem; padding:1.4rem;">' +
+            '<div style="display:flex; align-items:center; justify-content:space-between; gap:0.75rem; flex-wrap:wrap; margin-bottom:0.65rem;">' +
+              '<div style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">' +
+                '<span class="ev-badge-pill ev-badge-violet">সৃজনশীল প্রশ্ন #' + (idx + 1) + ' (10 Marks)</span>' +
+                '<span class="ev-badge-pill ev-badge-neutral">' + escapeHtml(cq.boardTag) + '</span>' +
+              '</div>' +
+              (savedScore
+                ? '<span class="ev-badge-pill ev-badge-success">Self-Evaluated: ' + savedScore.marks + ' / 10 Marks ✓</span>'
+                : '<span class="ev-badge-pill ev-badge-warning">Not Self-Graded Yet</span>') +
+            '</div>' +
+
+            '<h3 class="font-bn" style="font-size:1.15rem; font-weight:800; margin-bottom:0.65rem; color:var(--text-primary);">' + escapeHtml(cq.title) + '</h3>' +
+
+            /* উদ্দীপক (Stem Box) */
+            '<div style="padding:1.1rem; border-radius:var(--radius-sm); background-color:var(--bg-surface-muted); border-left:4px solid var(--brand-primary); margin-bottom:1.15rem;">' +
+              '<div style="font-size:0.76rem; font-weight:800; text-transform:uppercase; color:var(--brand-primary); margin-bottom:0.3rem;">উদ্দীপক (Creative Stem / Scenario)</div>' +
+              '<div class="font-bn" style="font-size:0.98rem; font-weight:600; color:var(--text-primary); line-height:1.65;">' + renderAcademicMath(cq.stemBn) + '</div>' +
+              '<div style="font-size:0.86rem; color:var(--text-secondary); margin-top:0.4rem;">' + renderAcademicMath(cq.stemEn) + '</div>' +
+            '</div>' +
+
+            /* ক, খ, গ, ঘ Questions */
+            '<div style="display:flex; flex-direction:column; gap:0.75rem; margin-bottom:1.15rem;">' +
+              partsHtml +
+            '</div>' +
+
+            /* Self-Evaluation Rubric Bar */
+            '<div style="padding-top:0.9rem; border-top:1px solid var(--border-subtle); display:flex; align-items:center; justify-content:space-between; gap:0.75rem; flex-wrap:wrap;">' +
+              '<div style="font-size:0.84rem; font-weight:600; color:var(--text-secondary);">' +
+                'Self-Evaluation Rubric (ক:1 + খ:2 + গ:3 + ঘ:4 = 10 Marks): Record your self-graded score:' +
+              '</div>' +
+              '<div style="display:flex; align-items:center; gap:0.5rem;">' +
+                '<select id="ev-cq-score-' + cq.id + '" class="ev-select" aria-label="Self score out of 10" style="width:auto; min-width:130px;">' +
+                  [10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0].map(function (m) {
+                    var sel = (savedScore && savedScore.marks === m) ? 'selected' : (m === 8 && !savedScore ? 'selected' : '');
+                    return '<option value="' + m + '" ' + sel + '>' + m + ' / 10 Marks</option>';
+                  }).join('') +
+                '</select>' +
+                '<button type="button" class="ev-btn ev-btn-primary ev-btn-sm" onclick="window.evSaveCqScore(\'' + cq.id + '\')">Save CQ Score</button>' +
+              '</div>' +
+            '</div>' +
+          '</div>'
+        );
+      }).join('');
+
+      return (
+        '<div style="display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap; margin-bottom:1.25rem;">' +
+          '<div>' +
+            '<h1 style="font-size:1.35rem; font-weight:800;">Creative Questions — সৃজনশীল প্রশ্নব্যাংক (CQ Mode)</h1>' +
+            '<p style="font-size:0.86rem; color:var(--text-secondary);">Practice full 10-mark board-style Creative Questions (উদ্দীপক + ক, খ, গ, ঘ), inspect step-by-step model solutions, and log your self-evaluation score.</p>' +
+          '</div>' +
+          '<div style="display:flex; gap:0.6rem; align-items:center; flex-wrap:wrap;">' +
+            '<select class="ev-select" aria-label="Filter CQ by subject" style="width:auto; min-width:190px;" onchange="window.evSetCqSubjectFilter(this.value)">' +
+              subjFilterHtml +
+            '</select>' +
+            '<button type="button" class="ev-btn ev-btn-secondary ev-btn-sm" onclick="window.evRevealAllCqAnswers()">Reveal All Answers</button>' +
+          '</div>' +
+        '</div>' +
+        cardsHtml
       );
     },
 
@@ -1493,7 +1650,7 @@
       return (
         '<div style="margin-bottom:1.25rem;">' +
           '<h1 style="font-size:1.35rem; font-weight:800;">Learning Analytics &amp; Performance</h1>' +
-          '<p style="font-size:0.86rem; color:var(--text-secondary);">Real-time analytics tracking your attempted vs. skipped questions, rolling 7-day velocity, and subject mastery.</p>' +
+          '<p style="font-size:0.86rem; color:var(--text-secondary);">Real-time analytics tracking your attempted vs. skipped questions, rolling 7-day velocity, and mastery across all 10 subjects.</p>' +
         '</div>' +
 
         '<div class="ev-grid-3" style="margin-bottom:1.25rem;">' +
@@ -1505,7 +1662,7 @@
           '<div class="ev-card">' +
             '<div style="font-size:0.75rem; font-weight:700; text-transform:uppercase; color:var(--text-muted);">Overall Accuracy &amp; Quizzes</div>' +
             '<div style="font-size:1.55rem; font-weight:800; color:var(--brand-primary); margin-top:0.2rem;">' + accuracy + '% Accuracy</div>' +
-            '<div style="font-size:0.8rem; color:var(--text-secondary); font-weight:600;">' + s.completedQuizzes + ' Completed Quizzes • Avg ' + avgScore + '%</div>' +
+            '<div style="font-size:0.8rem; color:var(--text-secondary); font-weight:600;">' + s.completedQuizzes + ' MCQ Quizzes • ' + (s.cqCompletedCount || 0) + ' CQs • Avg ' + avgScore + '%</div>' +
           '</div>' +
           '<div class="ev-card">' +
             '<div style="font-size:0.75rem; font-weight:700; text-transform:uppercase; color:var(--text-muted);">Current Standing</div>' +
@@ -1557,7 +1714,7 @@
           '</div>' +
 
           '<div class="ev-card">' +
-            '<h3 style="font-size:1rem; font-weight:700; margin-bottom:0.85rem;">Learning Progress by Subject</h3>' +
+            '<h3 style="font-size:1rem; font-weight:700; margin-bottom:0.85rem;">Learning Progress across All 10 Subjects</h3>' +
             subjectProgressHtml +
           '</div>' +
         '</div>'
@@ -1758,7 +1915,7 @@
     },
 
     /* ======================================================================
-       VIEW 9: BOOKMARKS PAGE (With Subject Filter & Personal Study Notes)
+       VIEW 9: BOOKMARKS PAGE
        ====================================================================== */
     renderBookmarksView: function () {
       var state = window.ExamVerseStorage.state;
@@ -1828,7 +1985,7 @@
     },
 
     /* ======================================================================
-       VIEW 10: MISTAKE BANK PAGE (With Weak-Topic Diagnostic Insight)
+       VIEW 10: MISTAKE BANK PAGE
        ====================================================================== */
     renderMistakesView: function () {
       var state = window.ExamVerseStorage.state;
@@ -1837,7 +1994,6 @@
       var self = this;
       var optionLetters = ['A', 'B', 'C', 'D'];
 
-      /* Compute Weak-Topic Insight from logged mistakes (Audit Section 6, page 17) */
       var subjCounts = {};
       var topWeakSubjId = null;
       var topWeakCount = 0;
@@ -1939,7 +2095,7 @@
             '<h1 style="font-size:1.35rem; font-weight:800;">Complete Quiz History</h1>' +
             '<p style="font-size:0.86rem; color:var(--text-secondary);">Every completed session preserves its exact question and answer snapshot for historical review and retry.</p>' +
           '</div>' +
-          '<button type="button" class="ev-btn ev-btn-primary ev-btn-sm" onclick="window.evNavigate(\'exams\')">New Examination</button>' +
+          '<button type="button" class="ev-btn ev-btn-primary ev-btn-sm" onclick="window.evOpenCustomBuilderModal()">+ Build Custom Exam</button>' +
         '</div>' +
         '<div class="ev-card" style="padding:0;">' +
           '<div class="ev-table-wrap">' +
@@ -2010,7 +2166,7 @@
     },
 
     /* ======================================================================
-       VIEW 13: SETTINGS, ABOUT & PRIVACY POLICY (With Volume Control & Sound Test)
+       VIEW 13: SETTINGS, ABOUT & PRIVACY POLICY
        ====================================================================== */
     renderSettingsView: function () {
       var state = window.ExamVerseStorage.state;
@@ -2145,7 +2301,7 @@
           '<div class="ev-grid-2" style="margin-bottom:1.25rem;">' +
             '<div style="padding:1rem; border-radius:var(--radius-sm); background-color:var(--bg-surface-muted);">' +
               '<h3 style="font-size:0.95rem; font-weight:700; margin-bottom:0.3rem;">Verified Examination Engine</h3>' +
-              '<p style="font-size:0.82rem; color:var(--text-secondary);">Features deadline-timestamp timers, configurable negative marking (-0.25 / -0.50), randomized question and option ordering, KaTeX scientific formula rendering, and automatic Mistake Bank logging.</p>' +
+              '<p style="font-size:0.82rem; color:var(--text-secondary);">Features deadline-timestamp timers, configurable negative marking (-0.25 / -0.50), Multi-Statement (i, ii, iii) MCQs, 10-Mark Creative Questions (CQ), and KaTeX formula rendering.</p>' +
             '</div>' +
             '<div style="padding:1rem; border-radius:var(--radius-sm); background-color:var(--bg-surface-muted);">' +
               '<h3 style="font-size:0.95rem; font-weight:700; margin-bottom:0.3rem;">Current Storage Architecture</h3>' +
@@ -2163,7 +2319,7 @@
           '<span class="ev-badge-pill ev-badge-neutral" style="margin-bottom:0.5rem;">Student Privacy &amp; Data Protection</span>' +
           '<h1 style="font-size:1.45rem; font-weight:800; margin-bottom:0.65rem;">Privacy Policy</h1>' +
           '<p style="font-size:0.9rem; color:var(--text-secondary); margin-bottom:0.85rem;">' +
-            '1. <strong>Data Controller &amp; Local Storage:</strong> ExamVerse stores your profile name, XP, streak, bookmarks, personal notes, mistake bank, and quiz history locally inside your browser’s <code>localStorage</code> (`examverse_state_v2`). No personal data is transmitted to external servers in local mode.' +
+            '1. <strong>Data Controller &amp; Local Storage:</strong> ExamVerse stores your profile name, XP, streak, bookmarks, personal notes, CQ scores, mistake bank, and quiz history locally inside your browser’s <code>localStorage</code> (`examverse_state_v2`). No personal data is transmitted to external servers in local mode.' +
           '</p>' +
           '<p style="font-size:0.9rem; color:var(--text-secondary); margin-bottom:0.85rem;">' +
             '2. <strong>Third-Party Font &amp; Math Delivery:</strong> This web application loads typography (`Plus Jakarta Sans`, `Hind Siliguri`, `JetBrains Mono`) from Google Fonts and mathematical formula styles from jsDelivr (`KaTeX`), with automatic fallback to system fonts and HTML sub/superscripts when offline.' +
@@ -2179,7 +2335,6 @@
       );
     },
 
-    /* Focus Trap, Escape Key & Keyboard Shortcut Handler (Audit Section 6, 7.5, Section 8) */
     bindGlobalKeyboardShortcuts: function () {
       var self = this;
       window.addEventListener('keydown', function (e) {
@@ -2194,11 +2349,11 @@
             window.evCloseModeSwitchModal();
             window.evCloseProfileEditModal();
             window.evCloseMobileMoreModal();
+            window.evCloseCustomBuilderModal();
           }
           return;
         }
 
-        /* Focus trap inside open modal when Tab is pressed */
         if (e.key === 'Tab' && self.activeModalId) {
           var activeModal = document.getElementById(self.activeModalId);
           if (activeModal && activeModal.classList.contains('is-open')) {
@@ -2264,7 +2419,11 @@
     App.renderCurrentView();
   };
 
-  /* Debounced Search with Cursor Preservation & Clear Button Toggle (Audit 7.6) */
+  window.evSetExamGroupFilter = function (groupVal) {
+    App.examGroupFilter = groupVal || 'all';
+    App.renderCurrentView();
+  };
+
   window.evUpdateExamSearch = function (val) {
     App.examSearchQuery = val;
     var clearBtn = document.getElementById('ev-clear-search-btn');
@@ -2298,7 +2457,95 @@
     App.examSearchQuery = '';
     App.examSubjectFilter = 'all';
     App.examDifficultyFilter = 'all';
+    App.examGroupFilter = 'all';
     App.renderCurrentView();
+  };
+
+  /* Creative Question (CQ) Handlers */
+  window.evSetCqSubjectFilter = function (subjId) {
+    App.cqSubjectFilter = subjId || 'all';
+    App.renderCurrentView();
+  };
+
+  window.evToggleCqPartAnswer = function (cqId, partKey) {
+    var key = cqId + '_' + partKey;
+    App.cqRevealedParts[key] = !App.cqRevealedParts[key];
+    App.playSound('click');
+    App.renderCurrentView();
+  };
+
+  window.evRevealAllCqAnswers = function () {
+    (window.EXAMVERSE_DATA.creativeQuestions || []).forEach(function (cq) {
+      ['ka', 'kha', 'ga', 'gha'].forEach(function (pk) {
+        App.cqRevealedParts[cq.id + '_' + pk] = true;
+      });
+    });
+    App.renderCurrentView();
+    App.showToast('All CQ Model Solutions revealed');
+  };
+
+  window.evSaveCqScore = function (cqId) {
+    var selectEl = document.getElementById('ev-cq-score-' + cqId);
+    if (!selectEl) return;
+    var marks = Number(selectEl.value);
+    window.ExamVerseStorage.saveCqSelfScore(cqId, marks);
+    App.playSound('complete');
+    App.syncHeaderAndThemeUI();
+    App.renderCurrentView();
+    App.showToast('Saved CQ Self-Evaluation: ' + marks + '/10 Marks');
+  };
+
+  /* Custom Exam Builder Modal Handlers */
+  window.evOpenCustomBuilderModal = function () {
+    App.openModalById('ev-custom-builder-modal');
+  };
+
+  window.evCloseCustomBuilderModal = function () {
+    App.closeModalById('ev-custom-builder-modal');
+  };
+
+  window.evLaunchCustomExam = function () {
+    var catEl = document.getElementById('ev-cb-category');
+    var subjEl = document.getElementById('ev-cb-subject');
+    var typeEl = document.getElementById('ev-cb-type');
+    var diffEl = document.getElementById('ev-cb-difficulty');
+    var countEl = document.getElementById('ev-cb-count');
+    var timeEl = document.getElementById('ev-cb-time');
+    var negEl = document.getElementById('ev-cb-negative');
+    var modeEl = document.getElementById('ev-cb-mode');
+
+    var catVal = catEl ? catEl.value : 'all';
+    var subjVal = subjEl ? subjEl.value : 'all';
+    var typeVal = typeEl ? typeEl.value : 'all';
+    var diffVal = diffEl ? diffEl.value : 'all';
+    var countVal = countEl ? Number(countEl.value) : 10;
+    var perQSec = timeEl ? Number(timeEl.value) : 45;
+    var negVal = negEl ? Number(negEl.value) : 0.25;
+    var modeVal = modeEl ? modeEl.value : 'exam';
+
+    var subjObj = window.EXAMVERSE_DATA.subjects.find(function (s) { return s.id === subjVal; });
+    var titleParts = ['Custom'];
+    if (subjObj) titleParts.push(subjObj.name.split(' ')[0]);
+    if (typeVal === 'multi') titleParts.push('Multi-Statement (i,ii,iii)');
+    titleParts.push(modeVal === 'exam' ? 'Exam' : 'Practice');
+
+    window.evCloseCustomBuilderModal();
+
+    window.ExamVerseQuiz.startSession({
+      title: titleParts.join(' '),
+      categoryLabel: catVal === 'all' ? 'Custom Configuration' : catVal.toUpperCase(),
+      categoryId: catVal,
+      subjectId: subjVal,
+      questionType: typeVal,
+      difficulty: diffVal,
+      count: countVal,
+      perQuestionSec: perQSec,
+      negativeMark: modeVal === 'exam' ? negVal : 0,
+      mode: modeVal
+    });
+
+    App.navigate('quiz', true);
+    App.showToast('Custom Session launched!');
   };
 
   window.evStartDailyChallenge = function () {
@@ -2610,7 +2857,6 @@
     App.showToast('Played sound preview chime');
   };
 
-  /* Mobile "More" Drawer Handlers (Audit 7.1) */
   window.evOpenMobileMoreModal = function () {
     var state = window.ExamVerseStorage.state;
     var bmBadge = document.getElementById('ev-more-bm-count');
