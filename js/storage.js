@@ -1,13 +1,9 @@
 /* ==========================================================================
    ExamVerse — LocalStorage Persistence & Honest Progress Engine (js/storage.js)
-   Step 1 + Step 2 Audit Fixes Applied:
-   - Fresh Zero Default State for new users (0 XP, Level 1, 0% Mastery, 0 Streak)
-   - Real calendar-date Streak calculation in Asia/Dhaka timezone
-   - Rolling 7-Day Weekly Activity chart synchronized with real calendar dates
-   - Separate Total Questions, Attempted (Correct + Incorrect), and Skipped counts
-   - Daily Challenge strictly tied to today's date & Daily Challenge sessions only
-   - Bookmark notes storage (bookmarkNotes) & Sound Volume setting (soundVolume)
-   - Complete 100% Reset All Progress implementation
+   Step 1 + Step 2 + Step 3 Updates:
+   - Supports all 10 Core Subjects (Science, Business Studies, Humanities, Common)
+   - Tracks Creative Question (CQ) self-evaluated scores & completion count
+   - Fresh Zero Default State, Asia/Dhaka date-based streak, rolling 7-day chart
    ========================================================================== */
 
 (function () {
@@ -101,6 +97,7 @@
         totalScorePctSum: 0,
         totalMistakesResolved: 0,
         stemQuestionsSolved: 0,
+        cqCompletedCount: 0,
         weeklyActivity: buildRolling7Days([]),
         subjectMastery: {
           physics: 0,
@@ -110,7 +107,9 @@
           english: 0,
           bangla: 0,
           gk: 0,
-          ict: 0
+          ict: 0,
+          accounting: 0,
+          economics: 0
         },
         subjectStats: {
           physics: { attempted: 0, correct: 0 },
@@ -120,7 +119,9 @@
           english: { attempted: 0, correct: 0 },
           bangla: { attempted: 0, correct: 0 },
           gk: { attempted: 0, correct: 0 },
-          ict: { attempted: 0, correct: 0 }
+          ict: { attempted: 0, correct: 0 },
+          accounting: { attempted: 0, correct: 0 },
+          economics: { attempted: 0, correct: 0 }
         }
       },
       dailyChallenge: {
@@ -136,6 +137,7 @@
       lastResult: null,
       bookmarks: [],
       bookmarkNotes: {},
+      cqScores: {},
       mistakes: [],
       quizHistory: [],
       unlockedBadges: [],
@@ -143,7 +145,7 @@
         {
           id: 'notif-welcome',
           title: 'Welcome to ExamVerse!',
-          body: 'Start your first chapter practice or Daily Merit Sprint to track your real accuracy, XP, and subject mastery.',
+          body: 'Explore all 10 subjects, Multi-Statement (i, ii, iii) MCQs, Creative Questions (CQ), or build a Custom Exam.',
           time: 'Today',
           unread: true
         }
@@ -182,6 +184,7 @@
           this.state.settings = Object.assign({}, fresh.settings, parsed.settings || {});
           this.state.dailyChallenge = Object.assign({}, fresh.dailyChallenge, parsed.dailyChallenge || {});
           this.state.bookmarkNotes = Object.assign({}, fresh.bookmarkNotes, parsed.bookmarkNotes || {});
+          this.state.cqScores = Object.assign({}, fresh.cqScores, parsed.cqScores || {});
         }
         var savedTheme = window.localStorage.getItem(THEME_KEY);
         if (savedTheme === 'dark' || savedTheme === 'light') {
@@ -309,6 +312,25 @@
         this.state.bookmarkNotes[questionId] = clean;
       } else {
         delete this.state.bookmarkNotes[questionId];
+      }
+      this.save();
+    },
+
+    /* Save Creative Question (CQ) 10-Mark Self-Evaluation Score */
+    saveCqSelfScore: function (cqId, marksOutOf10) {
+      if (!this.state.cqScores) {
+        this.state.cqScores = {};
+      }
+      var isFirstTime = typeof this.state.cqScores[cqId] === 'undefined';
+      var validMarks = Math.max(0, Math.min(10, Number(marksOutOf10) || 0));
+      this.state.cqScores[cqId] = {
+        marks: validMarks,
+        date: getDhakaDateStr()
+      };
+      if (isFirstTime && validMarks > 0) {
+        this.state.stats.cqCompletedCount = (this.state.stats.cqCompletedCount || 0) + 1;
+        this.state.user.xp += validMarks * 3;
+        this.recalculateLevelProgress();
       }
       this.save();
     },
@@ -581,7 +603,9 @@
         english: 80,
         bangla: 82,
         gk: 70,
-        ict: 86
+        ict: 86,
+        accounting: 80,
+        economics: 76
       };
       fresh.bookmarks = ['q-phy-101', 'q-chem-203'];
       fresh.bookmarkNotes = {
