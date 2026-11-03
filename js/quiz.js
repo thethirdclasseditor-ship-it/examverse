@@ -1,18 +1,12 @@
 /* ==========================================================================
    ExamVerse — Production Quiz & Examination Engine (js/quiz.js)
-   Audit Fixes Applied:
-   - Removed empty chapter fallback bug (shows proper empty state)
-   - Added Fisher-Yates question & option randomization with snapshot persistence
-   - Implemented Date.now() deadline timestamp timer (no pause exploit on tab/nav change)
-   - Fixed Practice Mode timer 00:00 auto-completion & real elapsedSec (no 4s floor)
-   - Blocked 0-attempt XP farming (0 XP when correct === 0 or attempted === 0)
-   - Separated Total, Attempted (Correct + Incorrect), Skipped, Accuracy & Score %
-   - Added Negative Marking (-0.25 / -0.50) calculation for Exam Mode
-   - Added Full Session Autosave & Restore across page reloads
+   Step 1 + Step 2 + Step 3 Updates:
+   - Supports Question Type Filtering ('all', 'multi' বহুপদী i,ii,iii, 'standard')
+   - Preserves standard board option order (i ও ii, i ও iii, ii ও iii, i, ii ও iii) on multi-statement questions while shuffling standard MCQ options
+   - Supports Custom Exam Builder parameters (custom count, per-question timer, custom negative mark)
    ========================================================================== */
 
 (function () {
-  /* Helper: Fisher-Yates Shuffle (Returns a new shuffled array) */
   function shuffleArray(arr) {
     var copy = arr.slice();
     for (var i = copy.length - 1; i > 0; i--) {
@@ -24,10 +18,10 @@
     return copy;
   }
 
-  /* Helper: Clone and shuffle options of a question while updating correctIndex */
   function prepareQuestionWithShuffledOptions(q, shouldShuffleOptions) {
     var copy = JSON.parse(JSON.stringify(q));
-    if (!shouldShuffleOptions || !Array.isArray(copy.options)) {
+    /* Do not shuffle options for Multi-Statement (i, ii, iii) questions so board option order stays intact */
+    if (!shouldShuffleOptions || copy.questionType === 'multi' || !Array.isArray(copy.options)) {
       return copy;
     }
     var indexedOptions = copy.options.map(function (optText, idx) {
@@ -50,7 +44,6 @@
     lastResult: null,
     reviewFilter: 'all',
 
-    /* Restore autosaved active session or lastResult from Storage on startup (Audit 4.1) */
     restoreFromStorage: function () {
       var st = window.ExamVerseStorage.state;
       if (st.lastResult) {
@@ -73,7 +66,6 @@
       return false;
     },
 
-    /* Start a Quiz Session with Strict Validation & No Cross-Subject Fallback (Audit 2.2, 4.6, 4.10) */
     startSession: function (config) {
       this.stopTimer();
       var cfg = config || {};
@@ -81,7 +73,6 @@
       var pool = [];
 
       if (Array.isArray(cfg.questionsSnapshot) && cfg.questionsSnapshot.length > 0) {
-        /* Exact historical retry with preserved snapshot */
         pool = JSON.parse(JSON.stringify(cfg.questionsSnapshot));
       } else if (Array.isArray(cfg.questionIds)) {
         if (cfg.questionIds.length === 0) {
@@ -97,11 +88,11 @@
           var matchChapter = !cfg.chapterId || cfg.chapterId === 'all' || q.chapterId === cfg.chapterId;
           var matchCategory = !cfg.categoryId || cfg.categoryId === 'all' || (q.categories && q.categories.indexOf(cfg.categoryId) !== -1);
           var matchDifficulty = !cfg.difficulty || cfg.difficulty === 'all' || q.difficulty.toLowerCase() === cfg.difficulty.toLowerCase();
-          return matchSubject && matchChapter && matchCategory && matchDifficulty;
+          var matchType = !cfg.questionType || cfg.questionType === 'all' || (q.questionType || 'standard') === cfg.questionType;
+          return matchSubject && matchChapter && matchCategory && matchDifficulty && matchType;
         });
       }
 
-      /* Audit 2.2 Fix: NEVER fall back to Physics/global questions when a chapter/filter has 0 questions */
       if (pool.length === 0) {
         this.session = {
           id: 'quiz-empty-' + Date.now(),
@@ -121,10 +112,8 @@
         return this.session;
       }
 
-      /* Audit 4.6 Fix: Randomize question order and option order unless preserveOrder is true */
       var orderedPool = cfg.preserveOrder ? pool.slice() : shuffleArray(pool);
 
-      /* Audit 4.10 Fix: Validate requested question count */
       var requestedCount = Number(cfg.count);
       var validCount = (!isNaN(requestedCount) && requestedCount > 0)
         ? Math.min(orderedPool.length, Math.floor(requestedCount))
@@ -135,19 +124,20 @@
       });
 
       var settings = window.ExamVerseStorage.state.settings;
-      var perQuestionSec = Math.max(10, Number(settings.defaultDurationPerQuestionSec) || 45);
+      var perQuestionSec = (cfg.perQuestionSec && Number(cfg.perQuestionSec) > 0)
+        ? Number(cfg.perQuestionSec)
+        : Math.max(10, Number(settings.defaultDurationPerQuestionSec) || 45);
       var totalSec = (cfg.durationSec && Number(cfg.durationSec) > 0)
         ? Number(cfg.durationSec)
         : (selectedQuestions.length * perQuestionSec);
 
       var mode = cfg.mode === 'exam' ? 'exam' : 'practice';
 
-      /* Determine Negative Marking per wrong answer (Audit 3.3 & 3.4) */
       var negativeMark = 0;
-      if (mode === 'exam' && settings.negativeMarkingEnabled) {
-        if (typeof cfg.negativeMark === 'number') {
-          negativeMark = cfg.negativeMark;
-        } else if (cfg.categoryId) {
+      if (typeof cfg.negativeMark === 'number') {
+        negativeMark = cfg.negativeMark;
+      } else if (mode === 'exam' && settings.negativeMarkingEnabled) {
+        if (cfg.categoryId) {
           var catObj = window.EXAMVERSE_DATA.examCategories.find(function (c) { return c.id === cfg.categoryId; });
           negativeMark = catObj && typeof catObj.defaultNegativeMark === 'number' ? catObj.defaultNegativeMark : 0.25;
         } else {
@@ -188,13 +178,11 @@
       return this.session;
     },
 
-    /* Deadline-Timestamp Driven Timer (Audit 2.3, 2.4, 4.9) */
     startTimer: function () {
       var self = this;
       this.stopTimer();
       if (!this.session || this.session.isSubmitted || this.session.isEmpty) return;
 
-      /* Ensure deadlineMs is initialized */
       if (!this.session.deadlineMs) {
         this.session.deadlineMs = Date.now() + (this.session.remainingSec * 1000);
       }
@@ -221,7 +209,6 @@
           }
         }
 
-        /* Audit 2.3 Fix: Auto-submit when timer hits 00:00 in both Exam Mode and Timed Practice Mode */
         if (self.session.remainingSec <= 0 && window.ExamVerseStorage.state.settings.timerEnabled) {
           self.stopTimer();
           if (window.ExamVerseApp && window.ExamVerseApp.showToast) {
@@ -251,7 +238,6 @@
       var q = this.session.questions[this.session.currentIndex];
       if (!q) return;
 
-      /* In Practice Mode, once revealed, lock changes to preserve honest accuracy */
       if (this.session.mode === 'practice' && this.session.revealed[q.id]) {
         return;
       }
@@ -322,7 +308,6 @@
       return Math.max(0, total - answered);
     },
 
-    /* Submit & Score Quiz with Strict Anti-Farming & Negative Marking Rules (Audit 2.5, 4.4, 4.9) */
     submitQuiz: function () {
       if (!this.session || this.session.isSubmitted || this.session.isEmpty) return;
       this.stopTimer();
@@ -361,16 +346,13 @@
       });
 
       var attempted = correct + incorrect;
-      /* Accuracy among attempted questions vs Overall Score Percentage */
       var accuracy = attempted > 0 ? Math.round((correct / attempted) * 100) : 0;
       var scorePct = total > 0 ? Math.round((correct / total) * 100) : 0;
 
-      /* Negative Marking Calculation */
       var negPerWrong = Number(this.session.negativeMark) || 0;
       var penalty = Number((incorrect * negPerWrong).toFixed(2));
       var netScore = Number(Math.max(0, correct - penalty).toFixed(2));
 
-      /* Audit 2.5 Fix: Zero XP if no questions attempted or 0 correct answers (Blocks Blank Quiz XP Farming) */
       var answerXp = 0;
       var accuracyBonusXp = 0;
       var dailyBonusXp = 0;
