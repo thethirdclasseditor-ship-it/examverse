@@ -1,6 +1,11 @@
 /* ==========================================================================
    ExamVerse — Core Layout, Typography & Component Styles (css/main.css)
-   Supports 360px - 1920px+ Responsive Screens, Bangla & English Typography
+   Step 2 Audit Fixes Applied:
+   - Universal :focus-visible keyboard accessibility outlines on all interactive controls
+   - Enlarged header icon buttons to 40x40px minimum touch targets
+   - Added Mobile "More" Drawer bottom sheet & Search keyword highlight (<mark>)
+   - Added Breadcrumb badge & KaTeX math formula styling
+   - Removed body overflow-x masking in favor of proper container sizing
    ========================================================================== */
 
 *,
@@ -17,20 +22,54 @@ html {
   scroll-behavior: smooth;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}
+
 body {
   font-family: 'Plus Jakarta Sans', 'Inter', 'Hind Siliguri', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  line-height: 1.55;
+  line-height: 1.58;
   min-height: 100vh;
-  overflow-x: hidden;
+  width: 100%;
   -webkit-font-smoothing: antialiased;
 }
 
 .font-bn {
-  font-family: 'Hind Siliguri', 'Plus Jakarta Sans', sans-serif;
+  font-family: 'Hind Siliguri', 'Plus Jakarta Sans', -apple-system, sans-serif;
+  line-height: 1.65;
 }
 
 .font-mono {
   font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+/* Universal Keyboard Accessibility Focus Ring (Audit Section 8) */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2.5px solid var(--border-focus);
+  outline-offset: 2px;
+  box-shadow: var(--shadow-focus);
+}
+
+/* Search Keyword Highlight (Audit 7.6) */
+mark.ev-search-highlight {
+  background-color: var(--status-warning-bg);
+  color: var(--status-warning-text);
+  border: 1px solid var(--status-warning-border);
+  padding: 0 0.2rem;
+  border-radius: 4px;
+  font-weight: 700;
+}
+
+/* KaTeX Formula Readability */
+.katex {
+  font-size: 1.04em !important;
 }
 
 /* App Shell Layout */
@@ -38,7 +77,6 @@ body {
   display: flex;
   min-height: 100vh;
   width: 100%;
-  max-width: 100vw;
 }
 
 /* Desktop Sidebar */
@@ -55,6 +93,7 @@ body {
   bottom: 0;
   z-index: 40;
   padding: 1.25rem 0.875rem;
+  overflow-y: auto;
 }
 
 .ev-brand {
@@ -192,7 +231,7 @@ body {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
-  max-width: calc(100vw - 256px);
+  min-width: 0;
 }
 
 /* Top Header Bar */
@@ -208,13 +247,13 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
+  gap: 0.75rem;
 }
 
 .ev-topbar-left {
   display: flex;
   align-items: center;
-  gap: 0.875rem;
+  gap: 0.75rem;
   min-width: 0;
 }
 
@@ -232,7 +271,7 @@ body {
 }
 
 .ev-greeting-title {
-  font-size: 1.02rem;
+  font-size: 1rem;
   font-weight: 700;
   color: var(--text-primary);
   white-space: nowrap;
@@ -241,26 +280,41 @@ body {
 }
 
 .ev-greeting-sub {
-  font-size: 0.78rem;
+  font-size: 0.76rem;
   color: var(--text-muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.ev-breadcrumb-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.08rem 0.45rem;
+  border-radius: 4px;
+  background-color: var(--brand-primary-soft);
+  color: var(--brand-primary);
+  font-weight: 700;
+  font-size: 0.7rem;
 }
 
 .ev-topbar-right {
   display: flex;
   align-items: center;
-  gap: 0.625rem;
+  gap: 0.5rem;
   flex-shrink: 0;
 }
 
-/* Compact Streak Indicator (Small & Elegant per Specification) */
+/* Compact Streak Indicator (40px height touch target per Audit 7.3) */
 .ev-streak-pill {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  padding: 0.35rem 0.65rem;
+  min-height: 40px;
+  padding: 0.35rem 0.7rem;
   border-radius: var(--radius-full);
   background-color: var(--bg-surface);
   border: 1px solid var(--border-subtle);
@@ -269,6 +323,7 @@ body {
   color: var(--text-primary);
   cursor: pointer;
   box-shadow: var(--shadow-xs);
+  font-family: inherit;
 }
 
 .ev-streak-pill.is-active {
@@ -278,16 +333,18 @@ body {
 }
 
 .ev-flame-svg {
-  width: 15px;
-  height: 15px;
+  width: 16px;
+  height: 16px;
   flex-shrink: 0;
 }
 
-/* Header Icon Buttons (Theme, Lang, Notification) */
+/* Header Icon Buttons — Enlarged to 40x40px Touch Targets (Audit 7.3) */
 .ev-icon-btn {
   position: relative;
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  min-height: 40px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border-subtle);
   background-color: var(--bg-surface);
@@ -309,16 +366,16 @@ body {
 }
 
 .ev-icon-btn svg {
-  width: 18px;
-  height: 18px;
+  width: 19px;
+  height: 19px;
 }
 
 .ev-notif-dot {
   position: absolute;
-  top: 6px;
-  right: 6px;
-  width: 7px;
-  height: 7px;
+  top: 7px;
+  right: 7px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   background-color: var(--brand-primary);
   border: 1.5px solid var(--bg-surface);
@@ -329,7 +386,8 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.25rem 0.6rem 0.25rem 0.25rem;
+  min-height: 40px;
+  padding: 0.25rem 0.65rem 0.25rem 0.3rem;
   border-radius: var(--radius-full);
   border: 1px solid var(--border-subtle);
   background-color: var(--bg-surface);
@@ -344,8 +402,8 @@ body {
 }
 
 .ev-avatar-sm {
-  width: 28px;
-  height: 28px;
+  width: 30px;
+  height: 30px;
   border-radius: 50%;
   background: linear-gradient(135deg, var(--brand-primary), var(--brand-accent));
   color: #FFFFFF;
@@ -382,6 +440,7 @@ body {
   justify-content: space-between;
   gap: 0.75rem;
   margin-bottom: 0.9rem;
+  flex-wrap: wrap;
 }
 
 .ev-section-title {
@@ -405,6 +464,8 @@ body {
   align-items: center;
   gap: 0.25rem;
   font-family: inherit;
+  padding: 0.2rem 0.35rem;
+  border-radius: var(--radius-xs);
 }
 
 .ev-section-link:hover {
@@ -420,9 +481,10 @@ body {
   padding: 1.25rem;
   position: relative;
   overflow: hidden;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
 }
 
-/* Subtle Academic Watermark SVG inside Hero/Featured Cards */
 .ev-academic-watermark {
   position: absolute;
   right: -12px;
@@ -467,6 +529,7 @@ body {
   justify-content: center;
   gap: 0.5rem;
   padding: 0.58rem 1.05rem;
+  min-height: 38px;
   border-radius: var(--radius-sm);
   font-size: 0.875rem;
   font-weight: 600;
@@ -528,12 +591,14 @@ body {
 
 .ev-btn-sm {
   padding: 0.38rem 0.75rem;
+  min-height: 34px;
   font-size: 0.78rem;
 }
 
 .ev-btn:disabled {
-  opacity: 0.5;
+  opacity: 0.48;
   cursor: not-allowed;
+  filter: grayscale(0.25);
 }
 
 /* Badges & Pills */
@@ -562,19 +627,19 @@ body {
 
 .ev-badge-success {
   background-color: var(--status-success-bg);
-  color: var(--status-success);
+  color: var(--status-success-text);
   border: 1px solid var(--status-success-border);
 }
 
 .ev-badge-warning {
   background-color: var(--status-warning-bg);
-  color: var(--status-warning);
+  color: var(--status-warning-text);
   border: 1px solid var(--status-warning-border);
 }
 
 .ev-badge-danger {
   background-color: var(--status-danger-bg);
-  color: var(--status-danger);
+  color: var(--status-danger-text);
   border: 1px solid var(--status-danger-border);
 }
 
@@ -684,13 +749,13 @@ body {
 .ev-select {
   width: 100%;
   padding: 0.58rem 0.875rem;
+  min-height: 40px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border-default);
   background-color: var(--bg-input);
   color: var(--text-primary);
   font-size: 0.875rem;
   font-family: inherit;
-  outline: none;
 }
 
 .ev-search-wrap .ev-input {
@@ -764,7 +829,7 @@ body {
 .ev-timer-badge.is-urgent {
   background-color: var(--status-danger-bg);
   border-color: var(--status-danger-border);
-  color: var(--status-danger);
+  color: var(--status-danger-text);
 }
 
 .ev-question-card {
@@ -774,7 +839,7 @@ body {
 .ev-question-text {
   font-size: 1.12rem;
   font-weight: 700;
-  line-height: 1.6;
+  line-height: 1.65;
   color: var(--text-primary);
   margin: 0.85rem 0 1.35rem;
 }
@@ -798,7 +863,7 @@ body {
   text-align: left;
   font-size: 0.95rem;
   font-weight: 500;
-  line-height: 1.45;
+  line-height: 1.5;
   cursor: pointer;
   font-family: inherit;
 }
@@ -823,7 +888,6 @@ body {
   flex-shrink: 0;
 }
 
-/* Selected State (Exam Mode or Before Reveal) */
 .ev-option-btn.is-selected {
   border-color: var(--brand-primary);
   background-color: var(--brand-primary-soft);
@@ -835,7 +899,6 @@ body {
   color: #FFFFFF;
 }
 
-/* Correct Answer State */
 .ev-option-btn.is-correct {
   border-color: var(--status-success);
   background-color: var(--status-success-bg);
@@ -849,7 +912,6 @@ body {
   color: #FFFFFF;
 }
 
-/* Incorrect Answer State */
 .ev-option-btn.is-incorrect {
   border-color: var(--status-danger);
   background-color: var(--status-danger-bg);
@@ -862,19 +924,17 @@ body {
   color: #FFFFFF;
 }
 
-/* Explanation Callout Box */
 .ev-explanation-box {
   margin-top: 1.25rem;
   padding: 1rem 1.15rem;
   border-radius: var(--radius-sm);
   background-color: var(--bg-surface-muted);
   border-left: 4px solid var(--brand-primary);
-  font-size: 0.88rem;
+  font-size: 0.9rem;
   color: var(--text-secondary);
-  line-height: 1.6;
+  line-height: 1.65;
 }
 
-/* Question Navigator Palette */
 .ev-palette-grid {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
@@ -971,6 +1031,7 @@ body {
 .ev-table-wrap {
   width: 100%;
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .ev-table {
@@ -1073,6 +1134,11 @@ body {
   transform: translateX(20px);
 }
 
+.ev-switch input:focus-visible + .ev-switch-slider {
+  outline: 2.5px solid var(--border-focus);
+  outline-offset: 2px;
+}
+
 /* Modals & Notification Popover */
 .ev-modal-backdrop {
   position: fixed;
@@ -1100,6 +1166,35 @@ body {
   max-height: 88vh;
   overflow-y: auto;
   padding: 1.5rem;
+}
+
+/* Mobile "More" Menu Grid inside Modal (Audit 7.1) */
+.ev-more-menu-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+.ev-more-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.75rem 0.85rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
+  background-color: var(--bg-surface-hover);
+  color: var(--text-primary);
+  font-size: 0.86rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+}
+
+.ev-more-menu-item:hover {
+  border-color: var(--brand-primary-border);
+  background-color: var(--brand-primary-soft);
+  color: var(--brand-primary);
 }
 
 /* Toast Notification */
@@ -1138,7 +1233,7 @@ body {
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border-top: 1px solid var(--border-subtle);
-  padding: 0.35rem 0.5rem calc(0.35rem + env(safe-area-inset-bottom, 0px));
+  padding: 0.35rem 0.4rem calc(0.35rem + env(safe-area-inset-bottom, 0px));
   justify-content: space-around;
   align-items: center;
 }
@@ -1150,7 +1245,7 @@ body {
   align-items: center;
   justify-content: center;
   gap: 0.2rem;
-  padding: 0.35rem 0.25rem;
+  padding: 0.35rem 0.2rem;
   border: none;
   background: transparent;
   color: var(--text-muted);
@@ -1159,7 +1254,7 @@ body {
   cursor: pointer;
   border-radius: var(--radius-xs);
   font-family: inherit;
-  min-height: 46px;
+  min-height: 48px;
 }
 
 .ev-bottom-nav-btn svg {
@@ -1174,7 +1269,7 @@ body {
 }
 
 /* ==========================================================================
-   Responsive Breakpoints (Tablet & Mobile 360px - 1024px)
+   Responsive Breakpoints (320px, 360px, 390px, 430px, 768px, 1024px+)
    ========================================================================== */
 @media (max-width: 1024px) {
   .ev-quiz-layout {
@@ -1194,7 +1289,7 @@ body {
   }
   .ev-main-wrapper {
     margin-left: 0;
-    max-width: 100vw;
+    width: 100%;
   }
   .ev-mobile-logo {
     display: inline-flex;
@@ -1203,10 +1298,10 @@ body {
     display: flex;
   }
   .ev-topbar {
-    padding: 0.65rem 1rem;
+    padding: 0.6rem 0.9rem;
   }
   .ev-content-area {
-    padding: 1rem 1rem 5.75rem;
+    padding: 1rem 0.95rem 6rem;
   }
   .ev-home-top-grid,
   .ev-grid-3 {
@@ -1221,20 +1316,21 @@ body {
   .ev-grid-2,
   .ev-grid-4,
   .ev-category-grid,
-  .ev-podium-grid {
+  .ev-podium-grid,
+  .ev-more-menu-grid {
     grid-template-columns: 1fr;
   }
   .ev-greeting-sub {
     display: none;
   }
   .ev-greeting-title {
-    font-size: 0.92rem;
+    font-size: 0.88rem;
   }
   .ev-card {
-    padding: 1rem;
+    padding: 0.95rem;
   }
   .ev-question-card {
-    padding: 1.1rem;
+    padding: 1.05rem;
   }
   .ev-question-text {
     font-size: 1rem;
@@ -1242,5 +1338,19 @@ body {
   .ev-option-btn {
     padding: 0.75rem 0.85rem;
     font-size: 0.88rem;
+  }
+}
+
+@media (max-width: 360px) {
+  .ev-topbar {
+    padding: 0.5rem 0.65rem;
+    gap: 0.4rem;
+  }
+  .ev-topbar-right {
+    gap: 0.35rem;
+  }
+  .ev-streak-pill {
+    padding: 0.3rem 0.5rem;
+    font-size: 0.75rem;
   }
 }
