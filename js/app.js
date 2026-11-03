@@ -2974,6 +2974,224 @@
     App.showToast('All progress, sessions, mastery, and history reset to 0');
   };
 
+  /* ======================================================================
+     STEP 4 ADDON: Supabase Cloud Auth, JSON Backup & Question Error Report
+     ====================================================================== */
+  var _origSyncHeader = App.syncHeaderAndThemeUI;
+  App.syncHeaderAndThemeUI = function () {
+    _origSyncHeader.call(this);
+    var cloudBadge = document.getElementById('ev-cloud-status-badge');
+    var sidebarCloudLabel = document.getElementById('ev-sidebar-cloud-label');
+    var isCloudAuth = window.ExamVerseCloud && window.ExamVerseCloud.isAuthenticated();
+    var isCloudCfg = window.ExamVerseCloud && window.ExamVerseCloud.isConfigured();
+    if (cloudBadge) {
+      if (isCloudAuth) {
+        cloudBadge.textContent = 'Cloud Synced ✓';
+        cloudBadge.className = 'ev-badge-pill ev-badge-success';
+      } else if (isCloudCfg) {
+        cloudBadge.textContent = 'Cloud Ready';
+        cloudBadge.className = 'ev-badge-pill ev-badge-indigo';
+      } else {
+        cloudBadge.textContent = 'Local Mode';
+        cloudBadge.className = 'ev-badge-pill ev-badge-neutral';
+      }
+    }
+    if (sidebarCloudLabel) {
+      sidebarCloudLabel.textContent = isCloudAuth ? 'Cloud Account ✓' : 'Cloud Sync & Login';
+    }
+  };
+
+  App.renderAuthModalContent = function () {
+    var bodyEl = document.getElementById('ev-auth-modal-body');
+    if (!bodyEl) return;
+    var cloud = window.ExamVerseCloud;
+    var isCfg = cloud && cloud.isConfigured();
+    var isAuth = cloud && cloud.isAuthenticated();
+    var savedUrl = (cloud && cloud.config && cloud.config.url) ? cloud.config.url : '';
+    var savedKey = (cloud && cloud.config && cloud.config.anonKey) ? cloud.config.anonKey : '';
+
+    var authStatusHtml = '';
+    if (isAuth) {
+      var email = (cloud.authSession && cloud.authSession.user && cloud.authSession.user.email) || 'Authenticated User';
+      authStatusHtml = (
+        '<div style="padding:1rem; border-radius:var(--radius-sm); background-color:var(--status-success-bg); border:1px solid var(--status-success-border); margin-bottom:1rem;">' +
+          '<div style="font-size:0.9rem; font-weight:700; color:var(--status-success-text);">✓ Signed In to Supabase Cloud</div>' +
+          '<div style="font-size:0.8rem; color:var(--text-secondary); margin-top:0.2rem;">Account: <strong>' + escapeHtml(email) + '</strong></div>' +
+          '<div style="display:flex; gap:0.5rem; margin-top:0.75rem;">' +
+            '<button type="button" class="ev-btn ev-btn-primary ev-btn-sm" onclick="window.evSyncCloudNow()">Sync Profile Now</button>' +
+            '<button type="button" class="ev-btn ev-btn-danger ev-btn-sm" onclick="window.evSignOutCloud()">Sign Out</button>' +
+          '</div>' +
+        '</div>'
+      );
+    } else if (isCfg) {
+      authStatusHtml = (
+        '<div style="padding:1rem; border-radius:var(--radius-sm); background-color:var(--bg-surface-muted); border:1px solid var(--border-subtle); margin-bottom:1rem;">' +
+          '<div style="font-size:0.92rem; font-weight:700; margin-bottom:0.65rem;">Student Sign In / Sign Up</div>' +
+          '<div style="display:flex; flex-direction:column; gap:0.65rem; margin-bottom:0.85rem;">' +
+            '<input type="text" id="ev-auth-fullname" class="ev-input" placeholder="Full Name (for new Sign Up)" />' +
+            '<input type="email" id="ev-auth-email" class="ev-input" placeholder="Email Address (e.g., student@example.com)" />' +
+            '<input type="password" id="ev-auth-password" class="ev-input" placeholder="Password (min 6 characters)" />' +
+          '</div>' +
+          '<div style="display:flex; gap:0.5rem; flex-wrap:wrap;">' +
+            '<button type="button" class="ev-btn ev-btn-primary ev-btn-sm" onclick="window.evSignInCloud()">Sign In</button>' +
+            '<button type="button" class="ev-btn ev-btn-soft ev-btn-sm" onclick="window.evSignUpCloud()">Create Account (Sign Up)</button>' +
+            '<button type="button" class="ev-btn ev-btn-secondary ev-btn-sm" onclick="window.evSignInGoogleCloud()">Sign In with Google</button>' +
+          '</div>' +
+        '</div>'
+      );
+    }
+
+    bodyEl.innerHTML = (
+      authStatusHtml +
+      '<div style="padding:1rem; border-radius:var(--radius-sm); border:1px solid var(--border-subtle); background-color:var(--bg-surface-hover);">' +
+        '<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.4rem;">' +
+          '<span style="font-size:0.88rem; font-weight:700;">Supabase Project Connection</span>' +
+          '<span class="ev-badge-pill ' + (isCfg ? 'ev-badge-success' : 'ev-badge-neutral') + '">' + (isCfg ? 'Connected' : 'Not Connected') + '</span>' +
+        '</div>' +
+        '<div style="display:flex; flex-direction:column; gap:0.65rem; margin-bottom:0.85rem;">' +
+          '<div>' +
+            '<label for="ev-supa-url" style="font-size:0.75rem; font-weight:700; display:block; margin-bottom:0.2rem;">Supabase Project URL</label>' +
+            '<input type="url" id="ev-supa-url" class="ev-input font-mono" style="font-size:0.78rem;" value="' + escapeHtml(savedUrl) + '" />' +
+          '</div>' +
+          '<div>' +
+            '<label for="ev-supa-key" style="font-size:0.75rem; font-weight:700; display:block; margin-bottom:0.2rem;">Supabase Anon Public Key</label>' +
+            '<input type="text" id="ev-supa-key" class="ev-input font-mono" style="font-size:0.78rem;" value="' + escapeHtml(savedKey) + '" />' +
+          '</div>' +
+        '</div>' +
+        '<div style="display:flex; justify-content:space-between; gap:0.5rem; flex-wrap:wrap;">' +
+          (isCfg ? '<button type="button" class="ev-btn ev-btn-danger ev-btn-sm" onclick="window.evDisconnectSupabaseConfig()">Disconnect Cloud</button>' : '<span></span>') +
+          '<button type="button" class="ev-btn ev-btn-primary ev-btn-sm" onclick="window.evSaveSupabaseConfig()">Save &amp; Connect Supabase</button>' +
+        '</div>' +
+      '</div>'
+    );
+  };
+
+  window.evOpenAuthModal = function () {
+    App.renderAuthModalContent();
+    App.openModalById('ev-auth-modal');
+  };
+  window.evCloseAuthModal = function () {
+    App.closeModalById('ev-auth-modal');
+  };
+  window.evSaveSupabaseConfig = function () {
+    var urlEl = document.getElementById('ev-supa-url');
+    var keyEl = document.getElementById('ev-supa-key');
+    var ok = window.ExamVerseCloud.saveConfig(urlEl ? urlEl.value.trim() : '', keyEl ? keyEl.value.trim() : '');
+    App.syncHeaderAndThemeUI();
+    App.renderAuthModalContent();
+    App.renderCurrentView();
+    App.showToast(ok ? 'Supabase Cloud connected!' : 'Enter valid https:// URL and Key.');
+  };
+  window.evDisconnectSupabaseConfig = function () {
+    window.ExamVerseCloud.disconnectConfig();
+    App.syncHeaderAndThemeUI();
+    App.renderAuthModalContent();
+    App.renderCurrentView();
+    App.showToast('Disconnected from Supabase Cloud');
+  };
+  window.evSignInCloud = async function () {
+    var emailEl = document.getElementById('ev-auth-email');
+    var passEl = document.getElementById('ev-auth-password');
+    try {
+      await window.ExamVerseCloud.signInWithEmail(emailEl ? emailEl.value.trim() : '', passEl ? passEl.value : '');
+      App.syncHeaderAndThemeUI();
+      App.renderAuthModalContent();
+      App.renderCurrentView();
+      App.showToast('Signed in & synced with Supabase Cloud!');
+    } catch (err) {
+      App.showToast(err.message || 'Sign in failed');
+    }
+  };
+  window.evSignUpCloud = async function () {
+    var nameEl = document.getElementById('ev-auth-fullname');
+    var emailEl = document.getElementById('ev-auth-email');
+    var passEl = document.getElementById('ev-auth-password');
+    try {
+      await window.ExamVerseCloud.signUpWithEmail(emailEl ? emailEl.value.trim() : '', passEl ? passEl.value : '', nameEl ? nameEl.value.trim() : 'Student Scholar');
+      App.syncHeaderAndThemeUI();
+      App.renderAuthModalContent();
+      App.renderCurrentView();
+      App.showToast('Account created in Supabase Cloud!');
+    } catch (err) {
+      App.showToast(err.message || 'Sign up failed');
+    }
+  };
+  window.evSignInGoogleCloud = function () {
+    var oauthUrl = window.ExamVerseCloud.getGoogleOAuthUrl();
+    if (oauthUrl) window.location.href = oauthUrl;
+  };
+  window.evSyncCloudNow = async function () {
+    await window.ExamVerseCloud.pullCloudProfile();
+    App.syncHeaderAndThemeUI();
+    App.renderCurrentView();
+    App.showToast('Profile synced from Supabase Cloud');
+  };
+  window.evSignOutCloud = function () {
+    window.ExamVerseCloud.signOut();
+    App.syncHeaderAndThemeUI();
+    App.renderAuthModalContent();
+    App.renderCurrentView();
+    App.showToast('Signed out of Supabase Cloud');
+  };
+  window.evOpenBackupModal = function () {
+    var ta = document.getElementById('ev-backup-json-textarea');
+    if (ta) ta.value = window.ExamVerseStorage.exportBackupJson();
+    App.openModalById('ev-backup-modal');
+  };
+  window.evCloseBackupModal = function () {
+    App.closeModalById('ev-backup-modal');
+  };
+  window.evCopyBackupJson = function () {
+    var ta = document.getElementById('ev-backup-json-textarea');
+    if (!ta) return;
+    ta.select();
+    document.execCommand('copy');
+    App.showToast('Backup JSON copied');
+  };
+  window.evDownloadBackupFile = function () {
+    var jsonStr = window.ExamVerseStorage.exportBackupJson();
+    var blob = new Blob([jsonStr], { type: 'application/json' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'examverse-backup-' + window.ExamVerseStorage.getTodayDateStr() + '.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    App.showToast('Downloaded backup .json file');
+  };
+  window.evRestoreFromBackupJson = function () {
+    var ta = document.getElementById('ev-backup-json-textarea');
+    try {
+      window.ExamVerseStorage.importBackupJson(ta ? ta.value.trim() : '');
+      window.evCloseBackupModal();
+      App.syncHeaderAndThemeUI();
+      App.renderCurrentView();
+      App.showToast('Progress restored from backup!');
+    } catch (err) {
+      App.showToast(err.message || 'Invalid backup JSON');
+    }
+  };
+  window.evOpenReportQuestionModal = function (questionId) {
+    App.reportingQuestionId = questionId;
+    App.openModalById('ev-report-q-modal');
+  };
+  window.evCloseReportQuestionModal = function () {
+    App.closeModalById('ev-report-q-modal');
+    App.reportingQuestionId = null;
+  };
+  window.evSubmitQuestionReport = async function () {
+    var typeEl = document.getElementById('ev-report-issue-type');
+    var detailsEl = document.getElementById('ev-report-details');
+    var qId = App.reportingQuestionId || 'unknown';
+    if (window.ExamVerseCloud) {
+      await window.ExamVerseCloud.submitQuestionReport(qId, typeEl ? typeEl.value : 'Typo', detailsEl ? detailsEl.value.trim() : '');
+    }
+    window.evCloseReportQuestionModal();
+    App.showToast('Question report submitted!');
+  };
+
   document.addEventListener('DOMContentLoaded', function () {
     App.init();
   });
