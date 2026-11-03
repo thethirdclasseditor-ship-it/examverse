@@ -4,7 +4,9 @@ import { SUBJECTS, CREATIVE_QUESTIONS, getSubjectQuestionCount } from '../data/s
 import {
   signInWithOAuthProvider,
   signInWithVerifiedEmail,
-  signUpWithVerifiedEmail
+  signUpWithVerifiedEmail,
+  sendPasswordResetEmail,
+  updateAccountCredentials
 } from '../lib/supabase';
 
 /* 17 Distinct Subject Icons + Subject-Specific Card Background Sketch Watermarks */
@@ -95,7 +97,6 @@ export const SubjectVisual: React.FC<{ subjectId: string; mode: 'icon' | 'art' }
     }
   }
 
-  /* Distinct Subject Icons */
   switch (subjectId) {
     case 'physics':
       return <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="1.9"><circle cx="12" cy="12" r="2.2" fill="currentColor"/><ellipse cx="12" cy="12" rx="10" ry="4.2" transform="rotate(30 12 12)"/><ellipse cx="12" cy="12" rx="10" ry="4.2" transform="rotate(-30 12 12)"/></svg>;
@@ -118,13 +119,13 @@ export const SubjectVisual: React.FC<{ subjectId: string; mode: 'icon' | 'art' }
   }
 };
 
-/* Subject Card Component with Subject-Specific Colors & Background Watermark Art */
 export const SubjectCard: React.FC<{
   subject: Subject;
   mastery: number;
+  customCount?: number;
   onStart: (subjectId: string) => void;
-}> = ({ subject, mastery, onStart }) => {
-  const count = getSubjectQuestionCount(subject.id);
+}> = ({ subject, mastery, customCount, onStart }) => {
+  const count = typeof customCount === 'number' ? customCount : getSubjectQuestionCount(subject.id);
   return (
     <button
       type="button"
@@ -171,7 +172,7 @@ export const SubjectCard: React.FC<{
   );
 };
 
-/* Google, Facebook & Verified Email Auth Modal */
+/* Section 3.1 FIX: Complete Auth Modal with Sign In, Sign Up, Password Reset & Account Security */
 export const AuthModal: React.FC<{
   isOpen: boolean;
   onClose: () => void;
@@ -179,26 +180,31 @@ export const AuthModal: React.FC<{
   onSignOut: () => void;
   showToast: (msg: string) => void;
 }> = ({ isOpen, onClose, authEmail, onSignOut, showToast }) => {
-  const [tab, setTab] = useState<'signin' | 'signup'>('signin');
+  const [tab, setTab] = useState<'signin' | 'signup' | 'reset'>('signin');
   const [fullName, setFullName] = useState('');
   const [group, setGroup] = useState('Science (বিজ্ঞান বিভাগ)');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
   const [busy, setBusy] = useState(false);
 
   if (!isOpen) return null;
 
-  const handleEmailAuth = async (e: React.FormEvent) => {
+  const handleAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setBusy(true);
     try {
-      if (tab === 'signup') {
+      if (tab === 'reset') {
+        await sendPasswordResetEmail(email);
+        showToast('পাসওয়ার্ড রিসেট লিংক আপনার ইমেইলে পাঠানো হয়েছে!');
+        setTab('signin');
+      } else if (tab === 'signup') {
         const res = await signUpWithVerifiedEmail(email, password, fullName, group);
         if (res.session) {
-          showToast('একাউন্ট তৈরি ও ডাটাবেসে সেভ সম্পন্ন হয়েছে!');
+          showToast('একাউন্ট তৈরি ও ডাটাবেসে সিঙ্ক সম্পন্ন হয়েছে!');
           onClose();
         } else {
-          showToast('একাউন্ট তৈরি হয়েছে! আপনার ইমেইলের ইনবক্স থেকে ভেরিফিকেশন লিংকটি কনফার্ম করুন।');
+          showToast('একাউন্ট তৈরি হয়েছে! ইমেইলের ইনবক্স থেকে ভেরিফিকেশন লিংকটি কনফার্ম করুন।');
         }
       } else {
         await signInWithVerifiedEmail(email, password);
@@ -206,7 +212,21 @@ export const AuthModal: React.FC<{
         onClose();
       }
     } catch (err: any) {
-      showToast(err.message || 'Authentication failed');
+      showToast(err.message || 'Authentication error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handlePasswordUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      await updateAccountCredentials({ password: newPassword });
+      setNewPassword('');
+      showToast('পাসওয়ার্ড সফলভাবে আপডেট হয়েছে!');
+    } catch (err: any) {
+      showToast(err.message || 'Password update failed');
     } finally {
       setBusy(false);
     }
@@ -216,20 +236,37 @@ export const AuthModal: React.FC<{
     <div className="ev-modal-backdrop" onClick={onClose}>
       <div className="ev-modal-panel" onClick={(e) => e.stopPropagation()}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-          <h3 style={{ fontSize: '1.12rem', fontWeight: 800 }}>Account Sign In &amp; Cloud Sync</h3>
+          <h3 style={{ fontSize: '1.12rem', fontWeight: 800 }}>Account Authentication &amp; Security</h3>
           <button type="button" className="ev-btn ev-btn-secondary ev-btn-sm" onClick={onClose}>Close</button>
         </div>
 
         {authEmail ? (
-          <div style={{ padding: '1.15rem', borderRadius: 'var(--radius-sm)', background: 'var(--status-success-bg)', border: '1px solid var(--status-success-border)' }}>
-            <div style={{ fontWeight: 800, color: 'var(--status-success-text)', marginBottom: '0.35rem' }}>
-              ✓ Connected &amp; Verified ({authEmail})
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <div style={{ padding: '1rem', borderRadius: 'var(--radius-sm)', background: 'var(--status-success-bg)', border: '1px solid var(--status-success-border)' }}>
+              <div style={{ fontWeight: 800, color: 'var(--status-success-text)', marginBottom: '0.25rem' }}>
+                ✓ Signed In as {authEmail}
+              </div>
+              <p className="font-bn" style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
+                আপনার একাউন্টের প্রগ্রেস, বুকমার্ক, মিসটেক ব্যাংক এবং কুইজ হিস্ট্রি ক্লাউডে সংরক্ষিত আছে।
+              </p>
             </div>
-            <p className="font-bn" style={{ fontSize: '0.84rem', color: 'var(--text-secondary)', marginBottom: '0.9rem' }}>
-              আপনার সকল XP, Level, এবং পরীক্ষার ফলাফল রিয়েল-টাইমে Supabase ডাটাবেসে সংরক্ষিত হচ্ছে।
-            </p>
-            <button type="button" className="ev-btn ev-btn-danger ev-btn-sm" onClick={onSignOut}>
-              Sign Out
+
+            <form onSubmit={handlePasswordUpdate} style={{ display: 'flex', gap: '0.5rem' }}>
+              <input
+                type="password"
+                className="ev-input"
+                placeholder="নতুন পাসওয়ার্ড দিন (কমপক্ষে ৬ অক্ষর)"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                required
+              />
+              <button type="submit" className="ev-btn ev-btn-soft ev-btn-sm" disabled={busy}>
+                Update Password
+              </button>
+            </form>
+
+            <button type="button" className="ev-btn ev-btn-danger" onClick={onSignOut}>
+              Sign Out from This Device
             </button>
           </div>
         ) : (
@@ -253,24 +290,27 @@ export const AuthModal: React.FC<{
               </button>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.4rem', padding: '0.25rem', background: 'var(--bg-surface-muted)', borderRadius: 'var(--radius-sm)', marginBottom: '0.95rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.35rem', padding: '0.25rem', background: 'var(--bg-surface-muted)', borderRadius: 'var(--radius-sm)', marginBottom: '0.95rem' }}>
               <button type="button" className={`ev-btn ev-btn-sm ${tab === 'signin' ? 'ev-btn-primary' : 'ev-btn-secondary'}`} onClick={() => setTab('signin')}>
-                Sign In (লগইন)
+                Sign In
               </button>
               <button type="button" className={`ev-btn ev-btn-sm ${tab === 'signup' ? 'ev-btn-primary' : 'ev-btn-secondary'}`} onClick={() => setTab('signup')}>
-                Create Account (নতুন একাউন্ট)
+                Create Account
+              </button>
+              <button type="button" className={`ev-btn ev-btn-sm ${tab === 'reset' ? 'ev-btn-primary' : 'ev-btn-secondary'}`} onClick={() => setTab('reset')}>
+                Reset Password
               </button>
             </div>
 
-            <form onSubmit={handleEmailAuth} style={{ display: 'flex', flexDirection: 'column', gap: '0.7rem' }}>
+            <form onSubmit={handleAuthSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '0.7rem' }}>
               {tab === 'signup' && (
                 <>
                   <div>
-                    <label style={{ fontSize: '0.76rem', fontWeight: 700, display: 'block', marginBottom: '0.2rem' }}>আপনার পূর্ণ নাম (Full Name)</label>
+                    <label style={{ fontSize: '0.75rem', fontWeight: 700, display: 'block', marginBottom: '0.2rem' }}>আপনার পূর্ণ নাম (Full Name)</label>
                     <input type="text" className="ev-input" placeholder="e.g., Tahmid Hasan" value={fullName} onChange={(e) => setFullName(e.target.value)} required />
                   </div>
                   <div>
-                    <label style={{ fontSize: '0.76rem', fontWeight: 700, display: 'block', marginBottom: '0.2rem' }}>আপনার বিভাগ (Group)</label>
+                    <label style={{ fontSize: '0.75rem', fontWeight: 700, display: 'block', marginBottom: '0.2rem' }}>আপনার বিভাগ (Group)</label>
                     <select className="ev-select" value={group} onChange={(e) => setGroup(e.target.value)}>
                       <option value="Science (বিজ্ঞান বিভাগ)">বিজ্ঞান বিভাগ (Science)</option>
                       <option value="Commerce (ব্যবসায় শিক্ষা বিভাগ)">ব্যবসায় শিক্ষা বিভাগ (Commerce)</option>
@@ -281,15 +321,17 @@ export const AuthModal: React.FC<{
                 </>
               )}
               <div>
-                <label style={{ fontSize: '0.76rem', fontWeight: 700, display: 'block', marginBottom: '0.2rem' }}>আসল ইমেইল অ্যাড্রেস (Authentic Email)</label>
+                <label style={{ fontSize: '0.75rem', fontWeight: 700, display: 'block', marginBottom: '0.2rem' }}>আসল ইমেইল অ্যাড্রেস (Authentic Email)</label>
                 <input type="email" className="ev-input" placeholder="yourname@gmail.com" value={email} onChange={(e) => setEmail(e.target.value)} required />
               </div>
-              <div>
-                <label style={{ fontSize: '0.76rem', fontWeight: 700, display: 'block', marginBottom: '0.2rem' }}>পাসওয়ার্ড (কমপক্ষে ৬ অক্ষর)</label>
-                <input type="password" className="ev-input" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required />
-              </div>
+              {tab !== 'reset' && (
+                <div>
+                  <label style={{ fontSize: '0.75rem', fontWeight: 700, display: 'block', marginBottom: '0.2rem' }}>পাসওয়ার্ড (কমপক্ষে ৬ অক্ষর)</label>
+                  <input type="password" className="ev-input" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required />
+                </div>
+              )}
               <button type="submit" className="ev-btn ev-btn-primary" disabled={busy} style={{ marginTop: '0.35rem' }}>
-                {busy ? 'Processing...' : tab === 'signup' ? 'Create Verified Account' : 'Sign In'}
+                {busy ? 'Processing...' : tab === 'signup' ? 'Create Verified Account' : tab === 'reset' ? 'Send Password Reset Link' : 'Sign In'}
               </button>
             </form>
           </div>
@@ -299,13 +341,14 @@ export const AuthModal: React.FC<{
   );
 };
 
-/* Active Quiz & Results Component */
+/* Section 3.3 FIX: Complete MCQ Quiz Engine with 1–N Question Navigator Grid, Mark for Review & Pre-Submit Summary */
 export const QuizSection: React.FC<{
   session: QuizSession | null;
   lastResult: QuizHistoryItem | null;
   bookmarks: string[];
   onSelectOption: (idx: number) => void;
   onNavigateQuestion: (idx: number) => void;
+  onToggleMarkForReview: (qId: string) => void;
   onSubmitQuiz: () => void;
   onToggleBookmark: (qId: string) => void;
   onStartNewQuiz: () => void;
@@ -315,10 +358,14 @@ export const QuizSection: React.FC<{
   bookmarks,
   onSelectOption,
   onNavigateQuestion,
+  onToggleMarkForReview,
   onSubmitQuiz,
   onToggleBookmark,
   onStartNewQuiz
 }) => {
+  const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
+  const [showAnswerReview, setShowAnswerReview] = useState(false);
+
   if (!session || session.isSubmitted) {
     if (!lastResult) {
       return (
@@ -329,153 +376,388 @@ export const QuizSection: React.FC<{
       );
     }
     return (
-      <div className="ev-card" style={{ maxWidth: '780px', margin: '0 auto' }}>
-        <span className="ev-badge-pill ev-badge-success" style={{ marginBottom: '0.5rem' }}>Session Completed</span>
-        <h2 style={{ fontSize: '1.4rem', fontWeight: 800, marginBottom: '1rem' }}>{lastResult.title}</h2>
-        <div className="ev-grid-4" style={{ marginBottom: '1.25rem' }}>
-          <div className="ev-card" style={{ background: 'var(--bg-surface-muted)' }}>
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Correct Score</div>
-            <div style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--status-success)' }}>{lastResult.score}/{lastResult.total}</div>
+      <div style={{ maxWidth: '880px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+        <div className="ev-card">
+          <span className="ev-badge-pill ev-badge-success" style={{ marginBottom: '0.5rem' }}>Result Summary</span>
+          <h2 style={{ fontSize: '1.4rem', fontWeight: 800, marginBottom: '1rem' }}>{lastResult.title}</h2>
+          <div className="ev-grid-4" style={{ marginBottom: '1.25rem' }}>
+            <div className="ev-card" style={{ background: 'var(--bg-surface-muted)' }}>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Net Score</div>
+              <div style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--status-success)' }}>
+                {lastResult.netScore} / {lastResult.total}
+              </div>
+              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                Correct: {lastResult.score} (Neg: -{lastResult.negativeMark})
+              </div>
+            </div>
+            <div className="ev-card" style={{ background: 'var(--bg-surface-muted)' }}>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Accuracy</div>
+              <div style={{ fontSize: '1.35rem', fontWeight: 800 }}>{lastResult.accuracy}%</div>
+              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Attempted: {lastResult.attempted}</div>
+            </div>
+            <div className="ev-card" style={{ background: 'var(--bg-surface-muted)' }}>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Wrong / Skipped</div>
+              <div style={{ fontSize: '1.35rem', fontWeight: 800 }}>{lastResult.incorrect} / {lastResult.skipped}</div>
+              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Time: {lastResult.timeTakenSec}s</div>
+            </div>
+            <div className="ev-card" style={{ background: 'var(--bg-surface-muted)' }}>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>XP Earned</div>
+              <div style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--brand-primary)' }}>+{lastResult.xpEarned} XP</div>
+            </div>
           </div>
-          <div className="ev-card" style={{ background: 'var(--bg-surface-muted)' }}>
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Accuracy</div>
-            <div style={{ fontSize: '1.4rem', fontWeight: 800 }}>{lastResult.accuracy}%</div>
-          </div>
-          <div className="ev-card" style={{ background: 'var(--bg-surface-muted)' }}>
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Skipped / Wrong</div>
-            <div style={{ fontSize: '1.4rem', fontWeight: 800 }}>{lastResult.skipped} / {lastResult.incorrect}</div>
-          </div>
-          <div className="ev-card" style={{ background: 'var(--bg-surface-muted)' }}>
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>XP Earned</div>
-            <div style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--brand-primary)' }}>+{lastResult.xpEarned} XP</div>
+
+          <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
+            <button type="button" className="ev-btn ev-btn-primary" onClick={onStartNewQuiz}>Practice Another Set</button>
+            <button type="button" className="ev-btn ev-btn-secondary" onClick={() => setShowAnswerReview((r) => !r)}>
+              {showAnswerReview ? 'Hide Answer Sheet' : 'Review Answers & Explanations'}
+            </button>
           </div>
         </div>
-        <button type="button" className="ev-btn ev-btn-primary" onClick={onStartNewQuiz}>Practice Another Set</button>
+
+        {showAnswerReview && (
+          <div className="ev-card" style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+            <h3 style={{ fontSize: '1.08rem', fontWeight: 800 }}>Detailed Answer Review</h3>
+            {lastResult.questionsSnapshot.map((rq, idx) => {
+              const userAns = lastResult.answersSnapshot[rq.id];
+              const isOk = userAns === rq.correctIndex;
+              return (
+                <div key={rq.id} style={{ padding: '0.9rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)', background: 'var(--bg-surface-muted)' }}>
+                  <div className="font-bn" style={{ fontWeight: 700, marginBottom: '0.35rem' }}>
+                    {idx + 1}. {rq.questionBn}
+                  </div>
+                  <div style={{ fontSize: '0.84rem', marginBottom: '0.35rem' }}>
+                    Your Answer:{' '}
+                    <strong style={{ color: userAns === undefined ? 'var(--text-muted)' : isOk ? 'var(--status-success)' : 'var(--status-danger)' }}>
+                      {userAns === undefined ? 'Skipped' : rq.options[userAns]}
+                    </strong>{' '}
+                    | Correct Answer: <strong style={{ color: 'var(--status-success)' }}>{rq.options[rq.correctIndex]}</strong>
+                  </div>
+                  <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>💡 {rq.explanation}</div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     );
   }
 
+  const total = session.questions.length;
   const q: QuestionMCQ = session.questions[session.currentIndex];
   const chosen = session.answers[q.id];
   const isRevealed = session.mode === 'practice' && Boolean(session.revealed[q.id]);
   const isBookmarked = bookmarks.includes(q.id);
+  const isMarkedReview = Boolean(session.markedForReview?.[q.id]);
+
+  const answeredCount = Object.keys(session.answers).length;
+  const unansweredCount = total - answeredCount;
+  const markedCount = Object.values(session.markedForReview || {}).filter(Boolean).length;
+
   const mins = String(Math.floor(session.remainingSec / 60)).padStart(2, '0');
   const secs = String(session.remainingSec % 60).padStart(2, '0');
 
   return (
-    <div style={{ maxWidth: '860px', margin: '0 auto' }}>
+    <div style={{ maxWidth: '1080px', margin: '0 auto' }}>
+      {/* Top Quiz Status Header (Page 14 Layout) */}
       <div className="ev-card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.75rem' }}>
         <div>
-          <span className="ev-badge-pill ev-badge-indigo" style={{ marginRight: '0.5rem' }}>
-            {session.mode === 'exam' ? 'Exam Mode' : 'Practice Mode'}
-          </span>
-          <strong style={{ fontSize: '0.98rem' }}>{session.title}</strong>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+            <span className="ev-badge-pill ev-badge-indigo">
+              {session.mode === 'exam' ? `Exam Mode (Neg: -${session.negativeMark})` : 'Practice Mode'}
+            </span>
+            <strong style={{ fontSize: '1rem' }}>{session.title}</strong>
+          </div>
+          <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '0.2rem' }}>
+            Question {session.currentIndex + 1} / {total} • Answered {answeredCount} • Unanswered {unansweredCount}
+            {markedCount > 0 ? ` • Marked for Review ${markedCount}` : ''}
+          </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-          <span className="ev-badge-pill ev-badge-warning font-mono" style={{ fontSize: '0.85rem' }}>⏱ {mins}:{secs}</span>
-          <button type="button" className="ev-btn ev-btn-primary ev-btn-sm" onClick={onSubmitQuiz}>Submit</button>
+          <span className={`ev-badge-pill ${session.remainingSec <= 30 ? 'ev-badge-danger' : 'ev-badge-warning'} font-mono`} style={{ fontSize: '0.9rem' }}>
+            ⏱ {mins}:{secs}
+          </span>
+          <button type="button" className="ev-btn ev-btn-primary ev-btn-sm" onClick={() => setShowSubmitConfirm(true)}>
+            Submit Exam
+          </button>
         </div>
       </div>
 
-      <div className="ev-card">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-          <span style={{ fontSize: '0.84rem', fontWeight: 800, color: 'var(--brand-primary)' }}>
-            Question {session.currentIndex + 1} of {session.questions.length}
-          </span>
-          <button type="button" className={`ev-btn ev-btn-sm ${isBookmarked ? 'ev-btn-soft' : 'ev-btn-secondary'}`} onClick={() => onToggleBookmark(q.id)}>
-            {isBookmarked ? '★ Bookmarked' : '☆ Bookmark'}
-          </button>
-        </div>
-
-        <div className="font-bn" style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '0.35rem' }}>{q.questionBn}</div>
-        <div style={{ fontSize: '0.95rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>{q.question}</div>
-
-        {q.statements && q.statements.length > 0 && (
-          <div style={{ padding: '0.85rem 1rem', background: 'var(--bg-surface-muted)', borderRadius: 'var(--radius-sm)', borderLeft: '3.5px solid var(--brand-accent)', marginBottom: '1rem' }}>
-            {q.statements.map((st, i) => (
-              <div key={i} className="font-bn" style={{ fontSize: '0.92rem', padding: '0.2rem 0' }}>{st}</div>
-            ))}
+      {/* Pre-Submit Confirmation & Summary Banner */}
+      {showSubmitConfirm && (
+        <div className="ev-card" style={{ marginBottom: '1rem', border: '2px solid var(--brand-primary)', background: 'var(--brand-primary-soft)' }}>
+          <h3 style={{ fontSize: '1.05rem', fontWeight: 800, marginBottom: '0.4rem' }}>📋 Exam Summary Before Submit</h3>
+          <div style={{ display: 'flex', gap: '1.25rem', flexWrap: 'wrap', fontSize: '0.86rem', marginBottom: '0.85rem' }}>
+            <span>Total Questions: <strong>{total}</strong></span>
+            <span style={{ color: 'var(--status-success-text)' }}>Answered: <strong>{answeredCount}</strong></span>
+            <span style={{ color: 'var(--status-danger-text)' }}>Unanswered: <strong>{unansweredCount}</strong></span>
+            <span style={{ color: 'var(--status-warning-text)' }}>Marked for Review: <strong>{markedCount}</strong></span>
           </div>
-        )}
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
-          {q.options.map((opt, idx) => {
-            let cls = 'ev-option-btn';
-            if (isRevealed) {
-              if (idx === q.correctIndex) cls += ' is-correct';
-              else if (chosen === idx) cls += ' is-incorrect';
-            } else if (chosen === idx) {
-              cls += ' is-selected';
-            }
-            return (
-              <button key={idx} type="button" className={cls} onClick={() => onSelectOption(idx)}>
-                <span className="ev-badge-pill ev-badge-neutral">{String.fromCharCode(65 + idx)}</span>
-                <span className="font-bn">{opt}</span>
-              </button>
-            );
-          })}
-        </div>
-
-        {isRevealed && (
-          <div style={{ marginTop: '1.15rem', padding: '1rem', borderRadius: 'var(--radius-sm)', background: 'var(--bg-surface-muted)', borderLeft: '4px solid var(--brand-primary)' }}>
-            <div style={{ fontWeight: 800, fontSize: '0.85rem', marginBottom: '0.25rem', color: 'var(--brand-primary)' }}>Explanation (ব্যাখ্যা):</div>
-            <div style={{ fontSize: '0.88rem', color: 'var(--text-secondary)' }}>{q.explanation}</div>
-          </div>
-        )}
-
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '1.25rem', paddingTop: '1rem', borderTop: '1px solid var(--border-subtle)' }}>
-          <button type="button" className="ev-btn ev-btn-secondary" disabled={session.currentIndex === 0} onClick={() => onNavigateQuestion(session.currentIndex - 1)}>
-            ← Previous
-          </button>
-          {session.currentIndex < session.questions.length - 1 ? (
-            <button type="button" className="ev-btn ev-btn-primary" onClick={() => onNavigateQuestion(session.currentIndex + 1)}>
-              Next →
+          <div style={{ display: 'flex', gap: '0.6rem' }}>
+            <button
+              type="button"
+              className="ev-btn ev-btn-primary ev-btn-sm"
+              onClick={() => {
+                setShowSubmitConfirm(false);
+                onSubmitQuiz();
+              }}
+            >
+              ✓ Confirm &amp; Submit Final Answers
             </button>
-          ) : (
-            <button type="button" className="ev-btn ev-btn-primary" onClick={onSubmitQuiz}>Finish &amp; Submit</button>
+            <button type="button" className="ev-btn ev-btn-secondary ev-btn-sm" onClick={() => setShowSubmitConfirm(false)}>
+              Return to Quiz
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 270px', gap: '1rem', alignItems: 'start' }}>
+        {/* Left: Question & Options Card */}
+        <div className="ev-card">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+            <span style={{ fontSize: '0.84rem', fontWeight: 800, color: 'var(--brand-primary)' }}>
+              Question {session.currentIndex + 1} of {total} • {q.examTag}
+            </span>
+            <div style={{ display: 'flex', gap: '0.4rem' }}>
+              <button
+                type="button"
+                className={`ev-btn ev-btn-sm ${isMarkedReview ? 'ev-btn-primary' : 'ev-btn-secondary'}`}
+                onClick={() => onToggleMarkForReview(q.id)}
+              >
+                {isMarkedReview ? '⚑ Marked for Review' : '⚐ Mark for Review'}
+              </button>
+              <button
+                type="button"
+                className={`ev-btn ev-btn-sm ${isBookmarked ? 'ev-btn-soft' : 'ev-btn-secondary'}`}
+                onClick={() => onToggleBookmark(q.id)}
+              >
+                {isBookmarked ? '★ Saved' : '☆ Save'}
+              </button>
+            </div>
+          </div>
+
+          <div className="font-bn" style={{ fontSize: '1.12rem', fontWeight: 700, marginBottom: '0.35rem' }}>{q.questionBn}</div>
+          {q.question !== q.questionBn && (
+            <div style={{ fontSize: '0.94rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>{q.question}</div>
           )}
+
+          {q.statements && q.statements.length > 0 && (
+            <div style={{ padding: '0.85rem 1rem', background: 'var(--bg-surface-muted)', borderRadius: 'var(--radius-sm)', borderLeft: '3.5px solid var(--brand-accent)', marginBottom: '1rem' }}>
+              {q.statements.map((st, i) => (
+                <div key={i} className="font-bn" style={{ fontSize: '0.92rem', padding: '0.2rem 0' }}>{st}</div>
+              ))}
+            </div>
+          )}
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+            {q.options.map((opt, idx) => {
+              let cls = 'ev-option-btn';
+              if (isRevealed) {
+                if (idx === q.correctIndex) cls += ' is-correct';
+                else if (chosen === idx) cls += ' is-incorrect';
+              } else if (chosen === idx) {
+                cls += ' is-selected';
+              }
+              return (
+                <button key={idx} type="button" className={cls} onClick={() => onSelectOption(idx)}>
+                  <span className="ev-badge-pill ev-badge-neutral">{String.fromCharCode(65 + idx)}</span>
+                  <span className="font-bn">{opt}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {isRevealed && (
+            <div style={{ marginTop: '1.15rem', padding: '1rem', borderRadius: 'var(--radius-sm)', background: 'var(--bg-surface-muted)', borderLeft: '4px solid var(--brand-primary)' }}>
+              <div style={{ fontWeight: 800, fontSize: '0.85rem', marginBottom: '0.25rem', color: 'var(--brand-primary)' }}>Explanation (ব্যাখ্যা):</div>
+              <div style={{ fontSize: '0.88rem', color: 'var(--text-secondary)' }}>{q.explanation}</div>
+            </div>
+          )}
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '1.25rem', paddingTop: '1rem', borderTop: '1px solid var(--border-subtle)' }}>
+            <button type="button" className="ev-btn ev-btn-secondary" disabled={session.currentIndex === 0} onClick={() => onNavigateQuestion(session.currentIndex - 1)}>
+              ← Previous
+            </button>
+            {session.currentIndex < total - 1 ? (
+              <button type="button" className="ev-btn ev-btn-primary" onClick={() => onNavigateQuestion(session.currentIndex + 1)}>
+                Next →
+              </button>
+            ) : (
+              <button type="button" className="ev-btn ev-btn-primary" onClick={() => setShowSubmitConfirm(true)}>
+                Review &amp; Submit
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Right: 1–N Question Navigator Grid (Pages 14–15 Specification) */}
+        <div className="ev-card">
+          <div style={{ fontSize: '0.9rem', fontWeight: 800, marginBottom: '0.35rem' }}>
+            1–{total} Question Navigator
+          </div>
+          <div style={{ fontSize: '0.76rem', color: 'var(--text-secondary)', marginBottom: '0.75rem' }}>
+            {answeredCount} Answered • {unansweredCount} Unanswered
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '0.4rem', marginBottom: '0.9rem' }}>
+            {session.questions.map((item, idx) => {
+              const isCurr = idx === session.currentIndex;
+              const isAns = session.answers[item.id] !== undefined;
+              const isRev = Boolean(session.markedForReview?.[item.id]);
+              let bg = 'var(--bg-surface-muted)';
+              let col = 'var(--text-secondary)';
+              let border = '1px solid var(--border-subtle)';
+              if (isRev) {
+                bg = 'var(--status-warning-bg)';
+                col = 'var(--status-warning-text)';
+                border = '1.5px solid var(--status-warning)';
+              } else if (isAns) {
+                bg = 'var(--brand-primary)';
+                col = '#FFFFFF';
+                border = '1.5px solid var(--brand-primary)';
+              }
+              if (isCurr) {
+                border = '2.5px solid var(--brand-accent)';
+              }
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  style={{
+                    height: '36px',
+                    borderRadius: '6px',
+                    background: bg,
+                    color: col,
+                    border,
+                    fontWeight: 800,
+                    fontSize: '0.78rem',
+                    cursor: 'pointer'
+                  }}
+                  onClick={() => onNavigateQuestion(idx)}
+                >
+                  {idx + 1}
+                </button>
+              );
+            })}
+          </div>
+          <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+            <span>🟦 Answered ({answeredCount})</span>
+            <span>🟨 Marked for Review ({markedCount})</span>
+            <span>⬜ Unanswered ({unansweredCount})</span>
+          </div>
         </div>
       </div>
     </div>
   );
 };
 
-/* Creative Questions (সৃজনশীল CQ) View */
-export const CreativeQuestionsView: React.FC = () => {
+/* Section 3.4 FIX: Full Creative Question (CQ) Study Experience (Subject Filter, stemBn + stemEn, Self-Answer Box, Rubric & Progress Save) */
+export const CreativeQuestionsView: React.FC<{
+  cqScores: Record<string, { marks: number; date: string; userAnswer?: string }>;
+  onSaveCqProgress: (cqId: string, marks: number, userAnswer: string) => void;
+}> = ({ cqScores, onSaveCqProgress }) => {
+  const [subjectFilter, setSubjectFilter] = useState<string>('all');
   const [revealed, setRevealed] = useState<Record<string, boolean>>({});
+  const [draftAnswers, setDraftAnswers] = useState<Record<string, string>>({});
+  const [selectedMarks, setSelectedMarks] = useState<Record<string, number>>({});
+
+  const filteredCqs = CREATIVE_QUESTIONS.filter(
+    (cq) => subjectFilter === 'all' || cq.subjectId === subjectFilter
+  );
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.15rem' }}>
-      <h1 className="font-bn" style={{ fontSize: '1.35rem', fontWeight: 800 }}>সৃজনশীল প্রশ্ন ব্যাংক (Creative Questions — CQ)</h1>
-      {CREATIVE_QUESTIONS.map((cq) => (
-        <div key={cq.id} className="ev-card">
-          <span className="ev-badge-pill ev-badge-indigo" style={{ marginBottom: '0.4rem' }}>{cq.boardTag}</span>
-          <h3 className="font-bn" style={{ fontSize: '1.12rem', fontWeight: 800, marginBottom: '0.65rem' }}>{cq.title}</h3>
-          <div className="font-bn" style={{ padding: '1rem', background: 'var(--bg-surface-muted)', borderRadius: 'var(--radius-sm)', borderLeft: '4px solid var(--brand-primary)', marginBottom: '1rem' }}>
-            <strong>উদ্দীপক:</strong> {cq.stemBn}
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
-            {(['ka', 'kha', 'ga', 'gha'] as const).map((partKey) => {
-              const pt = cq.parts[partKey];
-              const key = `${cq.id}_${partKey}`;
-              return (
-                <div key={partKey} style={{ padding: '0.85rem', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem' }}>
-                    <div className="font-bn" style={{ fontWeight: 700 }}>{pt.label}: {pt.question}</div>
-                    <button type="button" className="ev-btn ev-btn-soft ev-btn-sm" onClick={() => setRevealed((r) => ({ ...r, [key]: !r[key] }))}>
-                      {revealed[key] ? 'Hide Answer' : 'উত্তর দেখুন'}
-                    </button>
-                  </div>
-                  {revealed[key] && (
-                    <div className="font-bn" style={{ marginTop: '0.6rem', paddingTop: '0.6rem', borderTop: '1px dashed var(--border-default)', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
-                      {pt.answer}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
+        <div>
+          <span className="ev-badge-pill ev-badge-indigo" style={{ marginBottom: '0.3rem' }}>Board Standard CQ Practice</span>
+          <h1 className="font-bn" style={{ fontSize: '1.35rem', fontWeight: 800 }}>✍️ সৃজনশীল প্রশ্ন ও অনুশীলন (Creative Questions — CQ)</h1>
         </div>
-      ))}
+        <select className="ev-select" style={{ maxWidth: '260px' }} value={subjectFilter} onChange={(e) => setSubjectFilter(e.target.value)}>
+          <option value="all">সকল বিষয় (All Subjects)</option>
+          {SUBJECTS.map((s) => (
+            <option key={s.id} value={s.id}>{s.nameBn} ({s.name})</option>
+          ))}
+        </select>
+      </div>
+
+      {filteredCqs.map((cq) => {
+        const saved = cqScores[cq.id];
+        return (
+          <div key={cq.id} className="ev-card">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+              <span className="ev-badge-pill ev-badge-indigo">{cq.boardTag}</span>
+              {saved && (
+                <span className="ev-badge-pill ev-badge-success">
+                  ✓ Completed ({saved.marks}/10 Marks on {saved.date})
+                </span>
+              )}
+            </div>
+
+            <h3 className="font-bn" style={{ fontSize: '1.14rem', fontWeight: 800, marginBottom: '0.65rem' }}>{cq.title}</h3>
+
+            {/* Stimulus Box showing both stemBn and stemEn (Audit 3.4 fix) */}
+            <div style={{ padding: '1rem', background: 'var(--bg-surface-muted)', borderRadius: 'var(--radius-sm)', borderLeft: '4px solid var(--brand-primary)', marginBottom: '1rem' }}>
+              <div className="font-bn" style={{ fontWeight: 700, marginBottom: '0.35rem' }}>উদ্দীপক: {cq.stemBn}</div>
+              {cq.stemEn && (
+                <div style={{ fontSize: '0.86rem', color: 'var(--text-secondary)' }}>Stimulus (EN): {cq.stemEn}</div>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '1rem' }}>
+              {(['ka', 'kha', 'ga', 'gha'] as const).map((partKey) => {
+                const pt = cq.parts[partKey];
+                const key = `${cq.id}_${partKey}`;
+                return (
+                  <div key={partKey} style={{ padding: '0.9rem', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                      <div className="font-bn" style={{ fontWeight: 700 }}>{pt.label}: {pt.question}</div>
+                      <button type="button" className="ev-btn ev-btn-soft ev-btn-sm" onClick={() => setRevealed((r) => ({ ...r, [key]: !r[key] }))}>
+                        {revealed[key] ? 'উত্তর লুকান' : 'আদর্শ উত্তর ও নির্দেশিকা'}
+                      </button>
+                    </div>
+                    <textarea
+                      className="ev-input font-bn"
+                      rows={2}
+                      placeholder="এখানে আপনার নিজের উত্তরটি অনুশীলন হিসেবে লিখুন..."
+                      value={draftAnswers[key] ?? ''}
+                      onChange={(e) => setDraftAnswers((d) => ({ ...d, [key]: e.target.value }))}
+                    />
+                    {revealed[key] && (
+                      <div className="font-bn" style={{ marginTop: '0.6rem', padding: '0.75rem', background: 'var(--status-success-bg)', borderRadius: '8px', color: 'var(--text-primary)', fontSize: '0.88rem' }}>
+                        <strong>বোর্ড আদর্শ উত্তর ও নম্বর বণ্টন ({pt.marks} নম্বর):</strong> {pt.answer}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* 10-Mark Self-Evaluation Progress Saver */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem', paddingTop: '0.85rem', borderTop: '1px solid var(--border-subtle)' }}>
+              <span className="font-bn" style={{ fontSize: '0.85rem', fontWeight: 700 }}>
+                আদর্শ উত্তরের সাথে মিলিয়ে ১০ নম্বরের মধ্যে আপনার প্রাপ্ত নম্বর সংরক্ষণ করুন:
+              </span>
+              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                <select
+                  className="ev-select"
+                  style={{ width: '130px' }}
+                  value={selectedMarks[cq.id] ?? saved?.marks ?? 8}
+                  onChange={(e) => setSelectedMarks((m) => ({ ...m, [cq.id]: Number(e.target.value) }))}
+                >
+                  {[10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0].map((mk) => (
+                    <option key={mk} value={mk}>{mk} / 10 Marks</option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  className="ev-btn ev-btn-primary ev-btn-sm"
+                  onClick={() => onSaveCqProgress(cq.id, selectedMarks[cq.id] ?? 8, draftAnswers[`${cq.id}_gha`] || '')}
+                >
+                  Save CQ Progress
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 };
