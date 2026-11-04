@@ -1,526 +1,548 @@
+import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 import {
-  AppState,
-  QuestionMCQ,
-  QuizHistoryItem,
-  QuizSession,
-  WeeklyDayActivity,
-  MistakeEntry
+  ActiveQuizConfig,
+  CommunityPost,
+  ExamHistoryItem,
+  FlashcardItem,
+  LanguageMode,
+  LocalizedText,
+  MistakeItem,
+  RankProgressInfo,
+  StudyTask,
 } from '../types';
-import { SUBJECTS, EXAM_CATEGORIES, ACHIEVEMENTS } from '../data/syllabusData';
 
-const GUEST_STORAGE_KEY = 'examverse_state_guest_v3';
-const USER_STORAGE_PREFIX = 'examverse_state_user_v3_';
-const THEME_KEY = 'examverse_theme';
-const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+export type NavTabId =
+  | 'dashboard'
+  | 'subjects'
+  | 'Analytics'
+  | 'mistakes'
+  | 'flashcards'
+  | 'formulas'
+  | 'planner'
+  | 'battle'
+  | 'community'
+  | 'leaderboard'
+  | 'achievements';
 
-export function getStorageKeyForUser(userId?: string | null): string {
-  return userId ? `${USER_STORAGE_PREFIX}${userId}` : GUEST_STORAGE_KEY;
-}
+/* =====================================================================
+   MULTI-FACTOR RANK PROGRESSION ENGINE (Bronze -> Silver -> Gold -> Platinum -> Elite)
+   Evaluates: XP (40%) + Accuracy % (25%) + Mastery % (20%) + Consistency (15%)
+   ===================================================================== */
+export function calculateUserRank(params: {
+  xp: number;
+  accuracyPct: number;
+  masteredChaptersCount: number;
+  totalChaptersCount?: number;
+  streakDays: number;
+  examsCompleted: number;
+}): RankProgressInfo {
+  const {
+    xp,
+    accuracyPct,
+    masteredChaptersCount,
+    totalChaptersCount = 24,
+    streakDays,
+    examsCompleted,
+  } = params;
 
-/* Asia/Dhaka Calendar Date Formatter (YYYY-MM-DD) */
-export function getDhakaDateStr(dateObj?: Date): string {
-  const d = dateObj || new Date();
-  try {
-    const parts = new Intl.DateTimeFormat('en-CA', {
-      timeZone: 'Asia/Dhaka',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit'
-    }).formatToParts(d);
-    const y = parts.find((p) => p.type === 'year')?.value;
-    const m = parts.find((p) => p.type === 'month')?.value;
-    const day = parts.find((p) => p.type === 'day')?.value;
-    if (y && m && day) return `${y}-${m}-${day}`;
-  } catch {}
-  const utcMs = d.getTime() + d.getTimezoneOffset() * 60000;
-  const dhaka = new Date(utcMs + 6 * 3600000);
-  return dhaka.toISOString().slice(0, 10);
-}
+  // Normalize components into a 0–1000 Composite Rank Score
+  const xpComponent = Math.min(400, Math.round((xp / 4000) * 400)); // Max 400 pts
+  const accWeight = examsCompleted > 0 ? Math.min(1, examsCompleted / 5) : 0;
+  const accuracyComponent = Math.round((Math.min(100, accuracyPct) / 100) * 250 * accWeight); // Max 250 pts
+  const masteryPct = Math.min(
+    100,
+    Math.round((masteredChaptersCount / Math.max(1, totalChaptersCount)) * 100)
+  );
+  const masteryComponent = Math.round((masteryPct / 100) * 200); // Max 200 pts
+  const consistencyPct = Math.min(100, Math.round((streakDays / 14) * 100));
+  const consistencyComponent = Math.round((consistencyPct / 100) * 150); // Max 150 pts
 
-export function getYesterdayDhakaDateStr(): string {
-  return getDhakaDateStr(new Date(Date.now() - 86400000));
-}
+  const rankScore = xpComponent + accuracyComponent + masteryComponent + consistencyComponent;
 
-export function buildRolling7Days(existing: WeeklyDayActivity[] = []): WeeklyDayActivity[] {
-  const map: Record<string, WeeklyDayActivity> = {};
-  existing.forEach((item) => {
-    if (item?.dateKey) map[item.dateKey] = item;
-  });
-  const res: WeeklyDayActivity[] = [];
-  const now = new Date();
-  for (let i = 6; i >= 0; i--) {
-    const target = new Date(now.getTime() - i * 86400000);
-    const key = getDhakaDateStr(target);
-    const [yr, mo, da] = key.split('-').map(Number);
-    const dayLabel = DAY_NAMES[new Date(yr, mo - 1, da).getDay()];
-    const prev = map[key];
-    res.push({
-      dateKey: key,
-      day: dayLabel,
-      attempted: prev?.attempted || 0,
-      correct: prev?.correct || 0,
-      xp: prev?.xp || 0
-    });
+  const tiers: {
+    id: RankProgressInfo['tierId'];
+    en: string;
+    bn: string;
+    min: number;
+    max: number;
+    colorHex: string;
+    bgSoft: string;
+  }[] = [
+    {
+      id: 'bronze',
+      en: 'Bronze',
+      bn: 'ব্রোঞ্জ',
+      min: 0,
+      max: 199,
+      colorHex: '#B45309',
+      bgSoft: 'rgba(180, 83, 9, 0.13)',
+    },
+    {
+      id: 'silver',
+      en: 'Silver',
+      bn: 'সিলভার',
+      min: 200,
+      max: 399,
+      colorHex: '#475569',
+      bgSoft: 'rgba(71, 85, 105, 0.14)',
+    },
+    {
+      id: 'gold',
+      en: 'Gold',
+      bn: 'গোল্ড',
+      min: 400,
+      max: 649,
+      colorHex: '#D97706',
+      bgSoft: 'rgba(217, 119, 6, 0.15)',
+    },
+    {
+      id: 'platinum',
+      en: 'Platinum',
+      bn: 'প্লাটিনাম',
+      min: 650,
+      max: 849,
+      colorHex: '#0284C7',
+      bgSoft: 'rgba(2, 132, 199, 0.14)',
+    },
+    {
+      id: 'elite',
+      en: 'Elite',
+      bn: 'এলিট',
+      min: 850,
+      max: 1000,
+      colorHex: '#7C3AED',
+      bgSoft: 'rgba(124, 58, 237, 0.15)',
+    },
+  ];
+
+  const current =
+    tiers.find((t) => rankScore >= t.min && rankScore <= t.max) || tiers[tiers.length - 1];
+  const span = Math.max(1, current.max - current.min);
+  const within = Math.max(0, rankScore - current.min);
+  const progressPct = current.id === 'elite' && rankScore >= 1000 ? 100 : Math.min(99, Math.round((within / span) * 100));
+
+  let division: RankProgressInfo['division'] = 'I';
+  if (current.id === 'elite' && progressPct >= 95) {
+    division = 'MAX';
+  } else if (progressPct >= 67) {
+    division = 'III';
+  } else if (progressPct >= 34) {
+    division = 'II';
   }
-  return res;
-}
-
-/* BUG-09 FIX: Accurate Current-Level Progress Calculation (0% to 100% within current level bracket) */
-export function getLevelProgress(totalXp: number): {
-  level: number;
-  currentLevelXp: number;
-  neededForLevel: number;
-  xpForNextLevel: number;
-  progressPct: number;
-} {
-  const safeXp = Math.max(0, Math.floor(Number(totalXp) || 0));
-  const level = Math.floor(safeXp / 500) + 1;
-  const levelFloor = (level - 1) * 500;
-  const xpForNextLevel = level * 500;
-  const currentLevelXp = safeXp - levelFloor;
-  const neededForLevel = 500;
-  const progressPct = Math.min(100, Math.round((currentLevelXp / neededForLevel) * 100));
-  return { level, currentLevelXp, neededForLevel, xpForNextLevel, progressPct };
-}
-
-/* BUG-02 FIX: Category-Aware Negative Marking Resolver */
-export function resolveNegativeMark(
-  mode: 'practice' | 'exam',
-  categoryId: string,
-  negativeMarkingEnabled: boolean,
-  explicitNegativeMark?: number
-): number {
-  if (mode !== 'exam' || !negativeMarkingEnabled) return 0;
-  if (typeof explicitNegativeMark === 'number' && !isNaN(explicitNegativeMark)) {
-    return explicitNegativeMark;
-  }
-  const cat = EXAM_CATEGORIES.find((c) => c.id === categoryId);
-  return cat ? cat.defaultNegativeMark : 0.25;
-}
-
-/* BUG-04 FIX: Deterministic Date-Seeded Daily Challenge Question Selector */
-export function getDailyChallengeQuestions(allQuestions: QuestionMCQ[], dateStr?: string): QuestionMCQ[] {
-  const key = dateStr || getDhakaDateStr();
-  let seed = 0;
-  for (let i = 0; i < key.length; i++) {
-    seed = (seed * 31 + key.charCodeAt(i)) >>> 0;
-  }
-  const copy = [...allQuestions];
-  for (let i = copy.length - 1; i > 0; i--) {
-    seed = (seed * 1664525 + 1013904223) >>> 0;
-    const j = seed % (i + 1);
-    const tmp = copy[i];
-    copy[i] = copy[j];
-    copy[j] = tmp;
-  }
-  return copy.slice(0, Math.min(8, copy.length));
-}
-
-/* Section 3.3 FIX: Question & Option Shuffling (preserves i, ii, iii order on multi-statement MCQs) */
-export function prepareQuizQuestions(
-  pool: QuestionMCQ[],
-  count?: number,
-  shouldShuffle = true
-): QuestionMCQ[] {
-  const list = [...pool];
-  if (shouldShuffle) {
-    for (let i = list.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      const tmp = list[i];
-      list[i] = list[j];
-      list[j] = tmp;
-    }
-  }
-  const sliced = count && count > 0 ? list.slice(0, count) : list;
-  return sliced.map((q) => {
-    const copy: QuestionMCQ = JSON.parse(JSON.stringify(q));
-    if (!shouldShuffle || copy.questionType === 'multi' || !Array.isArray(copy.options)) {
-      return copy;
-    }
-    const indexed = copy.options.map((text, idx) => ({ text, isCorrect: idx === copy.correctIndex }));
-    for (let i = indexed.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      const t = indexed[i];
-      indexed[i] = indexed[j];
-      indexed[j] = t;
-    }
-    copy.options = indexed.map((item) => item.text);
-    copy.correctIndex = indexed.findIndex((item) => item.isCorrect);
-    return copy;
-  });
-}
-
-export function createFreshState(): AppState {
-  const today = getDhakaDateStr();
-  const mastery: Record<string, number> = {};
-  const subjStats: Record<string, { attempted: number; correct: number }> = {};
-  SUBJECTS.forEach((s) => {
-    mastery[s.id] = 0;
-    subjStats[s.id] = { attempted: 0, correct: 0 };
-  });
 
   return {
-    theme: 'light',
-    user: {
-      name: 'Student Scholar',
-      username: '@student_ev',
-      avatarInitials: 'SS',
-      targetTrack: 'Science (বিজ্ঞান বিভাগ)',
-      level: 1,
-      xp: 0,
-      xpForNextLevel: 500,
-      streakDays: 0,
-      streakActive: false,
-      lastStudyDate: null,
-      joinedDate: today,
-      isAdmin: false
-    },
-    stats: {
-      totalQuestionsSeen: 0,
-      totalAttempted: 0,
-      totalCorrect: 0,
-      totalIncorrect: 0,
-      totalSkipped: 0,
-      completedQuizzes: 0,
-      totalScorePctSum: 0,
-      totalMistakesResolved: 0,
-      stemQuestionsSolved: 0,
-      cqCompletedCount: 0,
-      weeklyActivity: buildRolling7Days([]),
-      subjectMastery: mastery,
-      subjectStats: subjStats
-    },
-    dailyChallenge: {
-      date: today,
-      totalQuestions: 8,
-      completedQuestions: 0,
-      isCompleted: false,
-      completedDate: null,
-      rewardXp: 150
-    },
-    activeSession: null,
-    bookmarks: [],
-    bookmarkNotes: {},
-    cqScores: {},
-    mistakes: [],
-    quizHistory: [],
-    unlockedBadges: [],
-    settings: {
-      soundEnabled: true,
-      soundVolume: 0.75,
-      vibrationEnabled: true,
-      timerEnabled: true,
-      defaultDurationPerQuestionSec: 45,
-      negativeMarkingEnabled: true,
-      notificationsEnabled: true,
-      dailyReminderTime: '20:00',
-      language: 'bilingual'
-    }
+    tierId: current.id,
+    tierNameEn: current.en,
+    tierNameBn: current.bn,
+    division,
+    fullTitleEn: division === 'MAX' ? `${current.en} Grandmaster` : `${current.en} ${division}`,
+    fullTitleBn: division === 'MAX' ? `${current.bn} গ্র্যান্ডমাস্টার` : `${current.bn} ${division}`,
+    rankScore,
+    nextTierScore: current.max + 1,
+    progressPct,
+    colorHex: current.colorHex,
+    bgSoft: current.bgSoft,
+    xpScore: xp,
+    accuracyPct: Math.round(accuracyPct),
+    masteryPct,
+    consistencyPct,
   };
 }
 
-/* Syncs Dhaka Date, Resets Daily Challenge on New Day, and Resets Broken Streak (BUG-04 & BUG-10) */
-export function syncCalendarAndStreak(state: AppState): AppState {
-  const today = getDhakaDateStr();
-  const yesterday = getYesterdayDhakaDateStr();
-  const next = { ...state, user: { ...state.user }, dailyChallenge: { ...state.dailyChallenge }, stats: { ...state.stats } };
+/* =====================================================================
+   COMPLETE BILINGUAL UI DICTIONARY (English & বাংলা)
+   ===================================================================== */
+export const UI_DICT: Record<string, { en: string; bn: string }> = {
+  // Navigation
+  nav_dashboard: { en: 'Dashboard', bn: 'ড্যাশবোর্ড' },
+  nav_subjects: { en: 'Subjects', bn: 'বিষয়সমূহ' },
+  nav_analytics: { en: 'Analytics', bn: 'পারফরম্যান্স' },
+  nav_mistakes: { en: 'Mistake Bank', bn: 'ভুলের খাতা' },
+  nav_flashcards: { en: 'Flashcards', bn: 'ফ্ল্যাশকার্ড' },
+  nav_formulas: { en: 'Formula Sheet', bn: 'সূত্রসমূহ' },
+  nav_planner: { en: 'Study Planner', bn: 'পড়ার রুটিন' },
+  nav_battle: { en: '1v1 Battle', bn: 'কুইজ ব্যাটল' },
+  nav_community: { en: 'Doubt Forum', bn: 'প্রশ্নোত্তর ফোরাম' },
+  nav_leaderboard: { en: 'Leaderboard', bn: 'লিডারবোর্ড' },
+  nav_achievements: { en: 'Rank & Badges', bn: 'র‍্যাঙ্ক ও ব্যাজ' },
+  nav_more: { en: 'More', bn: 'আরও' },
 
-  next.stats.weeklyActivity = buildRolling7Days(next.stats.weeklyActivity);
+  // Header & Greeting
+  welcome_back: { en: 'Welcome back', bn: 'স্বাগতম' },
+  sign_in: { en: 'Sign In', bn: 'সাইন ইন' },
+  sign_out: { en: 'Sign Out', bn: 'লগ আউট' },
+  streak_days: { en: 'Day Streak', bn: 'দিনের স্ট্রিক' },
+  personal_rank: { en: 'Personal Rank', bn: 'ব্যক্তিগত র‍্যাঙ্ক' },
+  leaderboard_pos: { en: 'Leaderboard Position', bn: 'লিডারবোর্ড অবস্থান' },
 
-  /* Reset Daily Challenge when a new Dhaka calendar day starts */
-  if (next.dailyChallenge.date !== today) {
-    next.dailyChallenge.date = today;
-    next.dailyChallenge.completedQuestions = 0;
-    next.dailyChallenge.isCompleted = next.dailyChallenge.completedDate === today;
-  }
+  // Dashboard & Subjects
+  choose_class_group: { en: 'Class & Group', bn: 'শ্রেণি ও বিভাগ' },
+  all_subjects: { en: 'Your Subjects', bn: 'তোমার বিষয়সমূহ' },
+  chapters_count: { en: 'Chapters', bn: 'অধ্যায়' },
+  questions_count: { en: 'Questions', bn: 'প্রশ্ন' },
+  start_practice: { en: 'Start Practice', bn: 'অনুশীলন শুরু করো' },
+  daily_challenge: { en: 'Daily Challenge', bn: 'আজকের চ্যালেঞ্জ' },
+  quick_mock: { en: 'Quick Mock Exam', bn: 'কুইক মক টেস্ট' },
+  mastery: { en: 'Mastery', bn: 'দক্ষতা' },
+  accuracy: { en: 'Accuracy', bn: 'সঠিকতার হার' },
+  consistency: { en: 'Consistency', bn: 'ধারাবাহিকতা' },
+  rank_points: { en: 'Rank Score', bn: 'র‍্যাঙ্ক স্কোর' },
 
-  /* BUG-10 FIX: Reset streak to 0 if user missed yesterday and hasn't studied today */
-  const lastDate = next.user.lastStudyDate;
-  if (!lastDate) {
-    next.user.streakDays = 0;
-    next.user.streakActive = false;
-  } else if (lastDate === today || lastDate === yesterday) {
-    next.user.streakActive = true;
-  } else {
-    next.user.streakDays = 0;
-    next.user.streakActive = false;
-  }
+  // Quiz & Bottom Sheet
+  question: { en: 'Question', bn: 'প্রশ্ন' },
+  time_left: { en: 'Time Left', bn: 'বাকি সময়' },
+  question_palette: { en: 'Question Navigator', bn: 'প্রশ্ন নেভিগেটর' },
+  submit_exam: { en: 'Submit Exam', bn: 'পরীক্ষা জমা দাও' },
+  prev_q: { en: 'Previous', bn: 'পূর্ববর্তী' },
+  next_q: { en: 'Next', bn: 'পরবর্তী' },
+  flag_q: { en: 'Flag', bn: 'মার্ক করো' },
+  answered: { en: 'Answered', bn: 'উত্তর দেওয়া' },
+  unanswered: { en: 'Unanswered', bn: 'বাকি আছে' },
 
-  const lv = getLevelProgress(next.user.xp);
-  next.user.level = lv.level;
-  next.user.xpForNextLevel = lv.xpForNextLevel;
-  return next;
+  // Leaderboard
+  global_ranking: { en: 'Global Ranking', bn: 'সর্বজনীন র‍্যাঙ্কিং' },
+  friends_ranking: { en: 'Friends Ranking', bn: 'বন্ধুদের র‍্যাঙ্কিং' },
+  subject_ranking: { en: 'Subject-wise', bn: 'বিষয়ভিত্তিক' },
+  filter_today: { en: 'Today', bn: 'আজ' },
+  filter_weekly: { en: 'Weekly', bn: 'সাপ্তাহিক' },
+  filter_monthly: { en: 'Monthly', bn: 'মাসিক' },
+  filter_alltime: { en: 'All-Time', bn: 'সর্বমোট' },
+};
+
+export function trKey(key: keyof typeof UI_DICT, lang: LanguageMode): string {
+  const item = UI_DICT[key];
+  if (!item) return String(key);
+  if (lang === 'bn') return item.bn;
+  if (lang === 'bilingual') return `${item.bn} (${item.en})`;
+  return item.en;
 }
 
-/* BUG-06 FIX: Load State Scoped to Specific Authenticated User ID (or Guest) */
-export function loadStoredState(userId?: string | null): AppState {
-  const fresh = createFreshState();
-  const storageKey = getStorageKeyForUser(userId);
-  try {
-    const raw = window.localStorage.getItem(storageKey);
-    const savedTheme = window.localStorage.getItem(THEME_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      const merged: AppState = {
-        ...fresh,
-        ...parsed,
-        user: { ...fresh.user, ...(parsed.user || {}) },
-        stats: {
-          ...fresh.stats,
-          ...(parsed.stats || {}),
-          weeklyActivity: buildRolling7Days(parsed.stats?.weeklyActivity || []),
-          subjectMastery: { ...fresh.stats.subjectMastery, ...(parsed.stats?.subjectMastery || {}) },
-          subjectStats: { ...fresh.stats.subjectStats, ...(parsed.stats?.subjectStats || {}) }
+export function trText(text: LocalizedText | string | undefined, lang: LanguageMode): string {
+  if (!text) return '';
+  if (typeof text === 'string') return text;
+  if (lang === 'bn') return text.bn || text.en;
+  if (lang === 'bilingual') {
+    return text.bn && text.en && text.bn !== text.en ? `${text.bn} • ${text.en}` : text.bn || text.en;
+  }
+  return text.en || text.bn;
+}
+
+interface ExamStoreState {
+  // User & Auth
+  userId: string | null;
+  userName: string;
+  userEmail: string;
+  userAvatar: string;
+  isAuthenticated: boolean;
+
+  // Preferences
+  language: LanguageMode;
+  darkMode: boolean;
+  selectedClass: string;
+  selectedGroup: string;
+  activeTab: NavTabId;
+
+  // Progression & Stats
+  xp: number;
+  streak: number;
+  lastActiveDate: string;
+  examHistory: ExamHistoryItem[];
+  mistakes: MistakeItem[];
+  flashcards: FlashcardItem[];
+  studyTasks: StudyTask[];
+  communityPosts: CommunityPost[];
+  bookmarks: string[];
+  chapterMastery: Record<string, number>;
+  friendsList: string[];
+
+  // Modals & Active Quiz
+  isAuthModalOpen: boolean;
+  isSettingsModalOpen: boolean;
+  activeQuiz: ActiveQuizConfig | null;
+
+  // Actions
+  setLanguage: (lang: LanguageMode) => void;
+  toggleDarkMode: () => void;
+  setClassAndGroup: (cls: string, grp: string) => void;
+  setActiveTab: (tab: NavTabId) => void;
+  setAuthModalOpen: (open: boolean) => void;
+  setSettingsModalOpen: (open: boolean) => void;
+  setUserProfile: (profile: {
+    id?: string | null;
+    name?: string;
+    email?: string;
+    avatar?: string;
+    isAuthenticated?: boolean;
+  }) => void;
+  startQuiz: (config: ActiveQuizConfig) => void;
+  closeQuiz: () => void;
+  recordExamResult: (result: Omit<ExamHistoryItem, 'id' | 'date'>, newMistakes: MistakeItem[]) => void;
+  markMistakeMastered: (id: string) => void;
+  addStudyTask: (task: Omit<StudyTask, 'id' | 'completed'>) => void;
+  toggleStudyTask: (id: string) => void;
+  deleteStudyTask: (id: string) => void;
+  addCommunityPost: (post: Omit<CommunityPost, 'id' | 'createdAt' | 'likes' | 'solved' | 'replies'>) => void;
+  addCommunityReply: (postId: string, authorName: string, text: string) => void;
+  togglePostLike: (postId: string) => void;
+  addFriendByCode: (friendName: string) => void;
+  getRankInfo: () => RankProgressInfo;
+}
+
+export const useExamStore = create<ExamStoreState>()(
+  persist(
+    (set, get) => ({
+      userId: null,
+      userName: 'শিক্ষার্থী (Scholar)',
+      userEmail: '',
+      userAvatar: '🎓',
+      isAuthenticated: false,
+
+      language: 'bn',
+      darkMode: false,
+      selectedClass: 'HSC',
+      selectedGroup: 'Science',
+      activeTab: 'dashboard',
+
+      xp: 640,
+      streak: 5,
+      lastActiveDate: new Date().toISOString().slice(0, 10),
+      examHistory: [
+        {
+          id: 'demo-1',
+          date: new Date(Date.now() - 86400000 * 2).toISOString(),
+          subjectId: 'physics',
+          subjectName: 'পদার্থবিজ্ঞান (Physics)',
+          chapterId: 'phy-1',
+          chapterName: 'ভৌত জগৎ ও পরিমাপ',
+          mode: 'mcq',
+          score: 18,
+          total: 20,
+          accuracy: 90,
+          timeSpentSec: 410,
+          xpEarned: 180,
         },
-        dailyChallenge: { ...fresh.dailyChallenge, ...(parsed.dailyChallenge || {}) },
-        settings: { ...fresh.settings, ...(parsed.settings || {}) }
-      };
-      merged.theme = savedTheme === 'dark' ? 'dark' : 'light';
-      document.documentElement.setAttribute('data-theme', merged.theme);
-      return syncCalendarAndStreak(merged);
-    }
-  } catch {}
-  document.documentElement.setAttribute('data-theme', fresh.theme);
-  return syncCalendarAndStreak(fresh);
-}
+        {
+          id: 'demo-2',
+          date: new Date(Date.now() - 86400000).toISOString(),
+          subjectId: 'chemistry',
+          subjectName: 'রসায়ন (Chemistry)',
+          chapterId: 'chem-1',
+          chapterName: 'ল্যাবরেটরির নিরাপদ ব্যবহার',
+          mode: 'mcq',
+          score: 16,
+          total: 20,
+          accuracy: 80,
+          timeSpentSec: 460,
+          xpEarned: 160,
+        },
+      ],
+      mistakes: [],
+      flashcards: [
+        {
+          id: 'fc-1',
+          subjectId: 'physics',
+          front: { en: "Newton's Second Law Formula", bn: 'নিউটনের গতির দ্বিতীয় সূত্র' },
+          back: { en: 'F = ma (Force = mass × acceleration)', bn: 'F = ma (বল = ভর × ত্বরণ)' },
+          box: 2,
+          nextReviewDate: new Date().toISOString().slice(0, 10),
+        },
+        {
+          id: 'fc-2',
+          subjectId: 'chemistry',
+          front: { en: 'Ideal Gas Equation', bn: 'আদর্শ গ্যাস সমীকরণ' },
+          back: { en: 'PV = nRT', bn: 'PV = nRT (চাপ × আয়তন = মোল × ধ্রুবক × তাপমাত্রা)' },
+          box: 3,
+          nextReviewDate: new Date().toISOString().slice(0, 10),
+        },
+      ],
+      studyTasks: [
+        {
+          id: 'st-1',
+          title: 'ভেক্টর অধ্যায়ের ২৫টি বোর্ড MCQ সমাধান',
+          subjectName: 'পদার্থবিজ্ঞান',
+          dueDate: new Date().toISOString().slice(0, 10),
+          targetMinutes: 35,
+          completed: false,
+        },
+        {
+          id: 'st-2',
+          title: 'জৈব রসায়নের নামকরণ রিভিশন',
+          subjectName: 'রসায়ন',
+          dueDate: new Date().toISOString().slice(0, 10),
+          targetMinutes: 45,
+          completed: true,
+        },
+      ],
+      communityPosts: [
+        {
+          id: 'cp-1',
+          authorName: 'তানভীর আহমেদ',
+          authorAvatar: '🧑‍🔬',
+          authorRank: 'Gold II',
+          subjectName: 'পদার্থবিজ্ঞান',
+          title: 'প্রাসের গতিপথে সর্বোচ্চ উচ্চতায় বেগ ও ত্বরণের মধ্যবর্তী কোণ কত?',
+          body: 'সর্বোচ্চ বিন্দুতে উল্লম্ব বেগ শূন্য হয়ে যায়, শুধুমাত্র অনুভূমিক বেগ থাকে। তাহলে অভিকর্ষজ ত্বরণ g-এর সাথে কোণ কি ৯০ ডিগ্রি হবে?',
+          createdAt: '২ ঘণ্টা আগে',
+          likes: 14,
+          solved: true,
+          replies: [
+            {
+              id: 'r-1',
+              authorName: 'নুসরাত জাহান (Platinum I)',
+              text: 'হ্যাঁ! সর্বোচ্চ বিন্দুতে বেগ সম্পূর্ণ অনুভূমিক (vx = v cosθ) এবং ত্বরণ g খাড়া নিচের দিকে ক্রিয়া করে, তাই মধ্যবর্তী কোণ ঠিক 90°।',
+              createdAt: '১ ঘণ্টা আগে',
+              isBestAnswer: true,
+            },
+          ],
+        },
+      ],
+      bookmarks: [],
+      chapterMastery: { 'phy-1': 90, 'chem-1': 80, 'math-1': 75 },
+      friendsList: ['তানভীর আহমেদ', 'নুসরাত জাহান', 'রাফি ইসলাম', 'সাদিয়া করিম'],
 
-export function saveStoredState(state: AppState, userId?: string | null) {
-  const storageKey = getStorageKeyForUser(userId);
-  try {
-    window.localStorage.setItem(storageKey, JSON.stringify(state));
-    window.localStorage.setItem(THEME_KEY, state.theme);
-    document.documentElement.setAttribute('data-theme', state.theme);
-  } catch {}
-}
+      isAuthModalOpen: false,
+      isSettingsModalOpen: false,
+      activeQuiz: null,
 
-/* Full Quiz Grading Engine Fixing BUG-04, BUG-08, BUG-09, BUG-10, BUG-11 */
-export function gradeAndApplyQuizSession(
-  prevState: AppState,
-  session: QuizSession
-): { nextState: AppState; resultItem: QuizHistoryItem; newlyUnlockedBadges: string[] } {
-  const today = getDhakaDateStr();
-  const yesterday = getYesterdayDhakaDateStr();
+      setLanguage: (language) => set({ language }),
+      toggleDarkMode: () =>
+        set((state) => {
+          const next = !state.darkMode;
+          if (typeof document !== 'undefined') {
+            document.documentElement.classList.toggle('dark', next);
+          }
+          return { darkMode: next };
+        }),
+      setClassAndGroup: (selectedClass, selectedGroup) => set({ selectedClass, selectedGroup }),
+      setActiveTab: (activeTab) => set({ activeTab }),
+      setAuthModalOpen: (isAuthModalOpen) => set({ isAuthModalOpen }),
+      setSettingsModalOpen: (isSettingsModalOpen) => set({ isSettingsModalOpen }),
+      setUserProfile: (profile) =>
+        set((state) => ({
+          userId: profile.id !== undefined ? profile.id : state.userId,
+          userName: profile.name ?? state.userName,
+          userEmail: profile.email ?? state.userEmail,
+          userAvatar: profile.avatar ?? state.userAvatar,
+          isAuthenticated: profile.isAuthenticated ?? state.isAuthenticated,
+        })),
 
-  let correct = 0;
-  let incorrect = 0;
-  let skipped = 0;
-  let stemCorrectDelta = 0;
+      startQuiz: (activeQuiz) => set({ activeQuiz }),
+      closeQuiz: () => set({ activeQuiz: null }),
 
-  /* BUG-08 FIX: Track attempted & correct separately for EVERY subject in the quiz */
-  const subjectBreakdown: Record<string, { attempted: number; correct: number; total: number }> = {};
-  const updatedMistakes: MistakeEntry[] = [...prevState.mistakes];
-  let resolvedDelta = 0;
+      recordExamResult: (result, newMistakes) =>
+        set((state) => {
+          const today = new Date().toISOString().slice(0, 10);
+          const streakIncrement = state.lastActiveDate !== today ? 1 : 0;
+          const item: ExamHistoryItem = {
+            ...result,
+            id: `exam-${Date.now()}`,
+            date: new Date().toISOString(),
+          };
+          const updatedMastery = { ...state.chapterMastery };
+          if (result.chapterId) {
+            const prev = updatedMastery[result.chapterId] || 0;
+            updatedMastery[result.chapterId] = Math.max(prev, result.accuracy);
+          }
+          return {
+            xp: state.xp + result.xpEarned,
+            streak: state.streak + streakIncrement,
+            lastActiveDate: today,
+            examHistory: [item, ...state.examHistory],
+            mistakes: [...newMistakes, ...state.mistakes],
+            chapterMastery: updatedMastery,
+          };
+        }),
 
-  session.questions.forEach((q) => {
-    if (!subjectBreakdown[q.subjectId]) {
-      subjectBreakdown[q.subjectId] = { attempted: 0, correct: 0, total: 0 };
-    }
-    subjectBreakdown[q.subjectId].total += 1;
+      markMistakeMastered: (id) =>
+        set((state) => ({
+          mistakes: state.mistakes.map((m) => (m.id === id ? { ...m, mastered: true } : m)),
+        })),
 
-    const chosen = session.answers[q.id];
-    const existingMistakeIdx = updatedMistakes.findIndex((m) => m.questionId === q.id);
+      addStudyTask: (task) =>
+        set((state) => ({
+          studyTasks: [
+            { ...task, id: `task-${Date.now()}`, completed: false },
+            ...state.studyTasks,
+          ],
+        })),
 
-    if (chosen === undefined || chosen === null) {
-      skipped += 1;
-    } else if (chosen === q.correctIndex) {
-      correct += 1;
-      subjectBreakdown[q.subjectId].attempted += 1;
-      subjectBreakdown[q.subjectId].correct += 1;
-      if (['physics', 'chemistry', 'math'].includes(q.subjectId)) {
-        stemCorrectDelta += 1;
-      }
-      /* BUG-11 FIX: If question was previously in Mistake Bank, mark it Resolved */
-      if (existingMistakeIdx !== -1 && updatedMistakes[existingMistakeIdx].status !== 'Resolved') {
-        updatedMistakes[existingMistakeIdx] = {
-          ...updatedMistakes[existingMistakeIdx],
-          status: 'Resolved',
-          timestamp: today
-        };
-        resolvedDelta += 1;
-      }
-    } else {
-      incorrect += 1;
-      subjectBreakdown[q.subjectId].attempted += 1;
-      /* BUG-11 FIX: Update retryCount, status ('New' -> 'Practicing'), selectedIndex & timestamp */
-      if (existingMistakeIdx !== -1) {
-        const prevM = updatedMistakes[existingMistakeIdx];
-        updatedMistakes[existingMistakeIdx] = {
-          ...prevM,
-          selectedIndex: chosen,
-          timestamp: today,
-          retryCount: (prevM.retryCount || 1) + 1,
-          status: 'Practicing',
-          note: q.explanation
-        };
-      } else {
-        updatedMistakes.unshift({
-          questionId: q.id,
-          selectedIndex: chosen,
-          timestamp: today,
-          retryCount: 1,
-          status: 'New',
-          note: q.explanation
+      toggleStudyTask: (id) =>
+        set((state) => ({
+          studyTasks: state.studyTasks.map((t) =>
+            t.id === id ? { ...t, completed: !t.completed } : t
+          ),
+        })),
+
+      deleteStudyTask: (id) =>
+        set((state) => ({
+          studyTasks: state.studyTasks.filter((t) => t.id !== id),
+        })),
+
+      addCommunityPost: (post) =>
+        set((state) => ({
+          communityPosts: [
+            {
+              ...post,
+              id: `post-${Date.now()}`,
+              createdAt: 'এইমাত্র',
+              likes: 0,
+              solved: false,
+              replies: [],
+            },
+            ...state.communityPosts,
+          ],
+        })),
+
+      addCommunityReply: (postId, authorName, text) =>
+        set((state) => ({
+          communityPosts: state.communityPosts.map((p) =>
+            p.id === postId
+              ? {
+                  ...p,
+                  solved: true,
+                  replies: [
+                    ...p.replies,
+                    { id: `rep-${Date.now()}`, authorName, text, createdAt: 'এইমাত্র' },
+                  ],
+                }
+              : p
+          ),
+        })),
+
+      togglePostLike: (postId) =>
+        set((state) => ({
+          communityPosts: state.communityPosts.map((p) =>
+            p.id === postId ? { ...p, likes: p.likes + 1 } : p
+          ),
+        })),
+
+      addFriendByCode: (friendName) =>
+        set((state) => ({
+          friendsList: state.friendsList.includes(friendName)
+            ? state.friendsList
+            : [...state.friendsList, friendName],
+        })),
+
+      getRankInfo: () => {
+        const s = get();
+        const avgAcc =
+          s.examHistory.length > 0
+            ? s.examHistory.reduce((acc, e) => acc + e.accuracy, 0) / s.examHistory.length
+            : 78;
+        const masteredCount = Object.values(s.chapterMastery).filter((v) => v >= 75).length;
+        return calculateUserRank({
+          xp: s.xp,
+          accuracyPct: avgAcc,
+          masteredChaptersCount: masteredCount,
+          totalChaptersCount: 16,
+          streakDays: s.streak,
+          examsCompleted: s.examHistory.length,
         });
-      }
+      },
+    }),
+    {
+      name: 'examverse-v3-storage',
     }
-  });
-
-  const attempted = correct + incorrect;
-  const accuracy = attempted > 0 ? Math.round((correct / attempted) * 100) : 0;
-  const scorePct = session.questions.length > 0 ? Math.round((correct / session.questions.length) * 100) : 0;
-  const penalty = Number((incorrect * (session.negativeMark || 0)).toFixed(2));
-  const netScore = Number(Math.max(0, correct - penalty).toFixed(2));
-
-  /* BUG-04 FIX: Daily Challenge One-Time +150 XP Bonus */
-  const dailyAlreadyClaimed = prevState.dailyChallenge.completedDate === today;
-  let xpEarned = 0;
-  if (attempted > 0 && correct > 0) {
-    xpEarned = correct * 20;
-    if (attempted >= 3 && accuracy >= 80) xpEarned += 35;
-    else if (attempted >= 3 && accuracy >= 50) xpEarned += 15;
-    if (session.isDailyChallenge && attempted >= session.questions.length && !dailyAlreadyClaimed) {
-      xpEarned += prevState.dailyChallenge.rewardXp || 150;
-    }
-  }
-
-  /* Update Per-Subject Stats & Mastery (BUG-08 FIX) */
-  const nextSubjectStats = { ...prevState.stats.subjectStats };
-  const nextSubjectMastery = { ...prevState.stats.subjectMastery };
-  Object.keys(subjectBreakdown).forEach((subjId) => {
-    const b = subjectBreakdown[subjId];
-    if (b.attempted > 0) {
-      const prevSubj = nextSubjectStats[subjId] || { attempted: 0, correct: 0 };
-      const totAtt = prevSubj.attempted + b.attempted;
-      const totCor = prevSubj.correct + b.correct;
-      nextSubjectStats[subjId] = { attempted: totAtt, correct: totCor };
-      nextSubjectMastery[subjId] = Math.min(100, Math.round((totCor / totAtt) * 100));
-    }
-  });
-
-  /* BUG-10 FIX: Consecutive Day Streak Calculation */
-  let nextStreakDays = prevState.user.streakDays;
-  let nextStreakActive = prevState.user.streakActive;
-  let nextLastStudyDate = prevState.user.lastStudyDate;
-  if (attempted > 0) {
-    if (prevState.user.lastStudyDate === today) {
-      nextStreakActive = true;
-    } else if (prevState.user.lastStudyDate === yesterday) {
-      nextStreakDays += 1;
-      nextStreakActive = true;
-      nextLastStudyDate = today;
-    } else {
-      nextStreakDays = 1;
-      nextStreakActive = true;
-      nextLastStudyDate = today;
-    }
-  }
-
-  /* Update Rolling 7-Day Activity */
-  const nextWeekly = buildRolling7Days(prevState.stats.weeklyActivity).map((d) =>
-    d.dateKey === today
-      ? { ...d, attempted: d.attempted + attempted, correct: d.correct + correct, xp: d.xp + xpEarned }
-      : d
-  );
-
-  const nextCompletedQuizzes = prevState.stats.completedQuizzes + (attempted > 0 ? 1 : 0);
-  const nextTotalAttempted = prevState.stats.totalAttempted + attempted;
-  const nextStemSolved = (prevState.stats.stemQuestionsSolved || 0) + stemCorrectDelta;
-  const nextMistakesResolved = (prevState.stats.totalMistakesResolved || 0) + resolvedDelta;
-
-  let totalXp = prevState.user.xp + xpEarned;
-
-  /* BUG-09 FIX: Evaluate Achievement Badges & Award Badge Bonus XP */
-  const nextUnlockedBadges = [...prevState.unlockedBadges];
-  const newlyUnlockedBadges: string[] = [];
-  const prelimLevel = getLevelProgress(totalXp).level;
-  const activeUnresolvedMistakes = updatedMistakes.filter((m) => m.status !== 'Resolved').length;
-
-  const badgeConditions: Record<string, boolean> = {
-    'badge-first-step': nextCompletedQuizzes >= 1 && nextTotalAttempted >= 1,
-    'badge-streak-7': nextStreakDays >= 7,
-    'badge-precision-90': attempted >= 3 && accuracy >= 90,
-    'badge-stem-scholar': nextStemSolved >= 20,
-    'badge-mistake-conqueror': nextMistakesResolved >= 3 && activeUnresolvedMistakes === 0,
-    'badge-centurion': prelimLevel >= 10 && totalXp >= 4500
-  };
-
-  ACHIEVEMENTS.forEach((ach) => {
-    if (!nextUnlockedBadges.includes(ach.id) && badgeConditions[ach.id]) {
-      nextUnlockedBadges.push(ach.id);
-      totalXp += ach.xpBonus;
-      newlyUnlockedBadges.push(ach.title);
-    }
-  });
-
-  const finalLv = getLevelProgress(totalXp);
-
-  /* Update Daily Challenge State */
-  const nextDaily = { ...prevState.dailyChallenge, date: today };
-  if (session.isDailyChallenge && attempted > 0) {
-    nextDaily.completedQuestions = Math.max(nextDaily.completedQuestions, attempted);
-    if (attempted >= session.questions.length) {
-      nextDaily.isCompleted = true;
-      nextDaily.completedDate = today;
-    }
-  }
-
-  const timeTakenSec = Math.max(1, Math.floor((Date.now() - session.startedAtMs) / 1000));
-  const resultItem: QuizHistoryItem = {
-    id: session.id,
-    title: session.title,
-    category: session.categoryLabel,
-    categoryId: session.categoryId,
-    subjectId: session.primarySubjectId,
-    mode: session.mode,
-    score: correct,
-    netScore,
-    negativeMark: session.negativeMark,
-    total: session.questions.length,
-    attempted,
-    incorrect,
-    skipped,
-    accuracy,
-    scorePct,
-    timeTakenSec,
-    xpEarned,
-    date: today,
-    subjectBreakdown,
-    questionsSnapshot: session.questions,
-    answersSnapshot: session.answers
-  };
-
-  const nextState: AppState = {
-    ...prevState,
-    activeSession: null,
-    user: {
-      ...prevState.user,
-      xp: totalXp,
-      level: finalLv.level,
-      xpForNextLevel: finalLv.xpForNextLevel,
-      streakDays: nextStreakDays,
-      streakActive: nextStreakActive,
-      lastStudyDate: nextLastStudyDate
-    },
-    stats: {
-      ...prevState.stats,
-      totalQuestionsSeen: prevState.stats.totalQuestionsSeen + session.questions.length,
-      totalAttempted: nextTotalAttempted,
-      totalCorrect: prevState.stats.totalCorrect + correct,
-      totalIncorrect: prevState.stats.totalIncorrect + incorrect,
-      totalSkipped: prevState.stats.totalSkipped + skipped,
-      completedQuizzes: nextCompletedQuizzes,
-      totalScorePctSum: prevState.stats.totalScorePctSum + (attempted > 0 ? accuracy : 0),
-      totalMistakesResolved: nextMistakesResolved,
-      stemQuestionsSolved: nextStemSolved,
-      weeklyActivity: nextWeekly,
-      subjectMastery: nextSubjectMastery,
-      subjectStats: nextSubjectStats
-    },
-    dailyChallenge: nextDaily,
-    mistakes: updatedMistakes,
-    quizHistory: [resultItem, ...prevState.quizHistory],
-    unlockedBadges: nextUnlockedBadges
-  };
-
-  return { nextState, resultItem, newlyUnlockedBadges };
-}
+  )
+);
