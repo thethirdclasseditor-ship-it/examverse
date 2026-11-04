@@ -1,262 +1,164 @@
-export type AcademicGroup = 'Science' | 'Commerce' | 'Arts' | 'Common';
+export type LanguageMode = 'en' | 'bn' | 'bilingual';
 
-export type ViewName =
-  | 'home'
-  | 'exams'
-  | 'archive'
-  | 'battle'
-  | 'rapid'
-  | 'quiz'
-  | 'cq'
-  | 'results'
-  | 'review'
-  | 'stats'
-  | 'leaderboard'
-  | 'profile'
-  | 'bookmarks'
-  | 'mistakes'
-  | 'history'
-  | 'daily'
-  | 'settings'
-  | 'admin';
+export type RankTierId = 'bronze' | 'silver' | 'gold' | 'platinum' | 'elite';
 
-export interface Chapter {
-  id: string;
-  paper: string;
-  title: string;
-  titleBn: string;
-  difficulty: 'Easy' | 'Medium' | 'Hard';
-}
-
-export interface Subject {
-  id: string;
-  name: string;
-  nameBn: string;
-  group: AcademicGroup;
-  color: string;
+export interface RankProgressInfo {
+  tierId: RankTierId;
+  tierNameEn: string;
+  tierNameBn: string;
+  division: 'I' | 'II' | 'III' | 'MAX';
+  fullTitleEn: string;
+  fullTitleBn: string;
+  rankScore: number;
+  nextTierScore: number;
+  progressPct: number;
+  colorHex: string;
   bgSoft: string;
-  borderColor: string;
-  tagBn: string;
-  chapters: Chapter[];
+  xpScore: number;
+  accuracyPct: number;
+  masteryPct: number;
+  consistencyPct: number;
 }
 
-export interface QuestionMCQ {
+export interface LocalizedText {
+  en: string;
+  bn: string;
+}
+
+export interface MCQQuestion {
   id: string;
-  subjectId: string;
-  chapterId: string;
-  categories: string[];
-  difficulty: 'Easy' | 'Medium' | 'Hard';
-  questionType: 'standard' | 'multi';
-  examTag: string;
-  paperId?: string;
-  institution?: string;
-  year?: string;
-  unit?: string;
-  question: string;
-  questionBn: string;
-  statements?: string[];
-  options: string[];
-  correctIndex: number;
-  explanation: string;
-}
-
-export interface CQPart {
-  marks: number;
-  label: string;
-  question: string;
-  answer: string;
-}
-
-export interface QuestionCQ {
-  id: string;
-  subjectId: string;
-  chapterId: string;
-  categories: string[];
-  boardTag: string;
-  board?: string;
-  year?: string;
-  title: string;
-  stemBn: string;
-  stemEn: string;
-  parts: {
-    ka: CQPart;
-    kha: CQPart;
-    ga: CQPart;
-    gha: CQPart;
+  q: LocalizedText;
+  options: {
+    en: string[];
+    bn: string[];
   };
+  ans: number;
+  explanation?: LocalizedText;
+  boardTag?: string;
+  difficulty?: 'easy' | 'medium' | 'hard';
 }
 
-export interface ExamCategory {
+export interface CQQuestion {
   id: string;
-  name: string;
-  nameBn: string;
-  fullTitle: string;
-  badge: string;
-  description: string;
-  subjects: string[];
-  defaultNegativeMark: number;
+  stem: LocalizedText;
+  a: LocalizedText;
+  b: LocalizedText;
+  c: LocalizedText;
+  d: LocalizedText;
+  ansA?: LocalizedText;
+  ansB?: LocalizedText;
+  ansC?: LocalizedText;
+  ansD?: LocalizedText;
+  boardTag?: string;
 }
 
-export interface RecommendedPack {
+export interface ChapterFormula {
   id: string;
-  title: string;
-  titleBn: string;
-  subtitle: string;
-  category: string;
-  subjectId: string;
-  questionIds: string[];
-  durationSec: number;
-  negativeMark: number;
-  xpReward: number;
-  badgeText: string;
+  title: LocalizedText;
+  formula: string;
+  note?: LocalizedText;
 }
 
-export interface AchievementBadge {
+export interface ChapterData {
   id: string;
-  title: string;
-  titleBn: string;
-  description: string;
-  xpBonus: number;
-  tier: 'gold' | 'silver' | 'bronze';
+  name: LocalizedText;
+  mcqs: MCQQuestion[];
+  cqs: CQQuestion[];
+  formulas?: ChapterFormula[];
 }
 
-export interface LeaderboardEntry {
-  rank: number;
-  name: string;
-  handle: string;
-  avatar: string;
-  level: number;
-  xp: number;
-  badge: string;
-  subjectXp?: Record<string, number>;
-  isCurrentUser?: boolean;
-}
-
-export interface UserProfile {
-  id?: string;
-  name: string;
-  username: string;
-  avatarInitials: string;
-  avatarUrl?: string;
-  targetTrack: string;
-  level: number;
-  xp: number;
-  xpForNextLevel: number;
-  streakDays: number;
-  streakActive: boolean;
-  lastStudyDate: string | null;
-  joinedDate?: string;
-  isAdmin?: boolean;
-}
-
-export interface WeeklyDayActivity {
-  dateKey: string;
-  day: string;
-  attempted: number;
-  correct: number;
-  xp: number;
-}
-
-export type MistakeStatus = 'New' | 'Practicing' | 'Resolved';
-
-export interface MistakeEntry {
-  questionId: string;
-  selectedIndex: number;
-  timestamp: string;
-  retryCount: number;
-  status?: MistakeStatus;
-  note: string;
-}
-
-export interface QuizHistoryItem {
+export interface SubjectData {
   id: string;
-  title: string;
-  category: string;
-  categoryId: string;
-  subjectId: string;
-  mode: 'practice' | 'exam';
-  score: number;
-  netScore: number;
-  negativeMark: number;
-  total: number;
-  attempted: number;
-  incorrect: number;
-  skipped: number;
-  accuracy: number;
-  scorePct: number;
-  timeTakenSec: number;
-  xpEarned: number;
+  name: LocalizedText;
+  icon: string;
+  color: string;
+  rgb?: string; // e.g. "79, 70, 229"
+  chapters: ChapterData[];
+}
+
+export type GroupMap = Record<string, SubjectData[]>;
+export type ClassMap = Record<string, GroupMap>;
+export type SyllabusDB = Record<string, ClassMap>;
+
+export interface ExamHistoryItem {
+  id: string;
   date: string;
-  subjectBreakdown?: Record<string, { attempted: number; correct: number; total: number }>;
-  questionsSnapshot: QuestionMCQ[];
-  answersSnapshot: Record<string, number>;
+  subjectId: string;
+  subjectName: string;
+  chapterId?: string;
+  chapterName?: string;
+  mode: 'mcq' | 'cq' | 'battle' | 'daily';
+  score: number;
+  total: number;
+  accuracy: number;
+  timeSpentSec: number;
+  xpEarned: number;
 }
 
-export interface QuizSession {
+export interface MistakeItem {
+  id: string;
+  questionId: string;
+  subjectId: string;
+  subjectName: string;
+  chapterName: string;
+  question: LocalizedText;
+  options: { en: string[]; bn: string[] };
+  correctIndex: number;
+  selectedIndex: number;
+  explanation?: LocalizedText;
+  wrongCount: number;
+  lastMissedAt: string;
+  mastered: boolean;
+}
+
+export interface FlashcardItem {
+  id: string;
+  subjectId: string;
+  front: LocalizedText;
+  back: LocalizedText;
+  box: 1 | 2 | 3 | 4 | 5;
+  nextReviewDate: string;
+}
+
+export interface CommunityPost {
+  id: string;
+  authorId?: string;
+  authorName: string;
+  authorAvatar?: string;
+  authorRank?: string;
+  subjectName: string;
+  title: string;
+  body: string;
+  createdAt: string;
+  likes: number;
+  solved: boolean;
+  replies: {
+    id: string;
+    authorName: string;
+    text: string;
+    createdAt: string;
+    isBestAnswer?: boolean;
+  }[];
+}
+
+export interface StudyTask {
   id: string;
   title: string;
-  categoryLabel: string;
-  categoryId: string;
-  primarySubjectId: string;
-  mode: 'practice' | 'exam';
-  negativeMark: number;
-  isDailyChallenge: boolean;
-  questions: QuestionMCQ[];
-  currentIndex: number;
-  answers: Record<string, number>;
-  revealed: Record<string, boolean>;
-  markedForReview?: Record<string, boolean>;
-  startedAtMs: number;
-  deadlineMs: number;
+  subjectName: string;
+  dueDate: string;
+  targetMinutes: number;
+  completed: boolean;
+}
+
+export interface ActiveQuizConfig {
+  mode: 'practice' | 'timed' | 'board' | 'mistake_review';
+  examType: 'mcq' | 'cq';
+  subjectId: string;
+  subjectName: LocalizedText;
+  chapterId: string;
+  chapterName: LocalizedText;
+  questions: MCQQuestion[];
+  cqs: CQQuestion[];
   durationSec: number;
-  remainingSec: number;
-  isSubmitted: boolean;
-}
-
-export interface AppSettings {
-  soundEnabled: boolean;
-  soundVolume: number;
-  vibrationEnabled: boolean;
-  timerEnabled: boolean;
-  defaultDurationPerQuestionSec: number;
-  negativeMarkingEnabled: boolean;
-  notificationsEnabled?: boolean;
-  dailyReminderTime?: string;
-  language: 'bilingual' | 'en' | 'bn';
-}
-
-export interface AppState {
-  theme: 'light' | 'dark';
-  user: UserProfile;
-  stats: {
-    totalQuestionsSeen: number;
-    totalAttempted: number;
-    totalCorrect: number;
-    totalIncorrect: number;
-    totalSkipped: number;
-    completedQuizzes: number;
-    totalScorePctSum: number;
-    totalMistakesResolved: number;
-    stemQuestionsSolved: number;
-    cqCompletedCount: number;
-    weeklyActivity: WeeklyDayActivity[];
-    subjectMastery: Record<string, number>;
-    subjectStats: Record<string, { attempted: number; correct: number }>;
-  };
-  dailyChallenge: {
-    date: string;
-    totalQuestions: number;
-    completedQuestions: number;
-    isCompleted: boolean;
-    completedDate: string | null;
-    rewardXp: number;
-  };
-  activeSession?: QuizSession | null;
-  bookmarks: string[];
-  bookmarkNotes: Record<string, string>;
-  cqScores: Record<string, { marks: number; date: string; userAnswer?: string }>;
-  mistakes: MistakeEntry[];
-  quizHistory: QuizHistoryItem[];
-  unlockedBadges: string[];
-  settings: AppSettings;
+  negativeMarking: number;
 }
