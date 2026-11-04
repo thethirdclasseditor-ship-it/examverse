@@ -1,6 +1,11 @@
 import React, { useState } from 'react';
-import { calculateUserRank, trKey, trText, useExamStore } from '../store/useExamStore';
-import { SYLLABUS_DB } from '../data/syllabusData';
+import {
+  calculateUserRank,
+  getSubjectsForSelection,
+  trKey,
+  trText,
+  useExamStore,
+} from '../store/useExamStore';
 
 export const ExtraFeaturesView: React.FC = () => {
   const {
@@ -20,7 +25,6 @@ export const ExtraFeaturesView: React.FC = () => {
     deleteStudyTask,
     communityPosts,
     addCommunityPost,
-    addCommunityReply,
     togglePostLike,
     friendsList,
     addFriendByCode,
@@ -32,38 +36,26 @@ export const ExtraFeaturesView: React.FC = () => {
   const isBn = language !== 'en';
   const myRank = getRankInfo();
 
-  // Leaderboard states
   const [lbScope, setLbScope] = useState<'global' | 'friends' | 'subject'>('global');
   const [lbPeriod, setLbPeriod] = useState<'today' | 'weekly' | 'monthly' | 'alltime'>('weekly');
-  const [lbSubject, setLbSubject] = useState<string>('all');
+  const [lbSubject] = useState<string>('all');
   const [friendInput, setFriendInput] = useState('');
 
-  // Study Planner states
   const [taskTitle, setTaskTitle] = useState('');
-  const [taskSubject, setTaskSubject] = useState('পদার্থবিজ্ঞান');
-  const [taskMinutes, setTaskMinutes] = useState(30);
+  const [taskSubject] = useState('পদার্থবিজ্ঞান');
+  const [taskMinutes] = useState(30);
 
-  // Community states
   const [postTitle, setPostTitle] = useState('');
   const [postBody, setPostBody] = useState('');
-  const [replyText, setReplyText] = useState<Record<string, string>>({});
 
-  // Battle states
   const [battleStage, setBattleStage] = useState<'lobby' | 'matched'>('lobby');
   const [opponentName, setOpponentName] = useState('আরিফ হোসেন (Gold III)');
 
-  // Flashcard states
   const [fcIndex, setFcIndex] = useState(0);
   const [fcFlipped, setFcFlipped] = useState(false);
 
-  const subjects =
-    SYLLABUS_DB[selectedClass]?.[selectedGroup] ||
-    SYLLABUS_DB.HSC?.Science ||
-    [];
+  const subjects = getSubjectsForSelection(selectedClass, selectedGroup);
 
-  /* =====================================================================
-     1. PREMIUM PODIUM & FILTERABLE LEADERBOARD (Separate Personal Rank vs Position)
-     ===================================================================== */
   if (activeTab === 'leaderboard') {
     const periodMultiplier =
       lbPeriod === 'today' ? 0.18 : lbPeriod === 'weekly' ? 0.55 : lbPeriod === 'monthly' ? 0.82 : 1;
@@ -101,7 +93,6 @@ export const ExtraFeaturesView: React.FC = () => {
 
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-        {/* Personal Rank vs Leaderboard Position Banner */}
         <div
           className="ev-card"
           style={{
@@ -166,7 +157,6 @@ export const ExtraFeaturesView: React.FC = () => {
           </div>
         </div>
 
-        {/* Ranking Scope & Time Period Filters */}
         <div className="ev-card">
           <div
             style={{
@@ -249,9 +239,7 @@ export const ExtraFeaturesView: React.FC = () => {
             </div>
           )}
 
-          {/* Premium 2nd - 1st - 3rd Metallic Podium */}
           <div className="ev-podium">
-            {/* 2nd Place */}
             {top2 && (
               <div className="ev-podium-slot second">
                 <div style={{ fontSize: 20 }}>🥈 #2</div>
@@ -273,7 +261,6 @@ export const ExtraFeaturesView: React.FC = () => {
               </div>
             )}
 
-            {/* 1st Place with Crown */}
             {top1 && (
               <div className="ev-podium-slot first">
                 <div style={{ fontSize: 24 }}>👑 #1</div>
@@ -302,7 +289,6 @@ export const ExtraFeaturesView: React.FC = () => {
               </div>
             )}
 
-            {/* 3rd Place */}
             {top3 && (
               <div className="ev-podium-slot third">
                 <div style={{ fontSize: 20 }}>🥉 #3</div>
@@ -325,7 +311,6 @@ export const ExtraFeaturesView: React.FC = () => {
             )}
           </div>
 
-          {/* Full Standing Table */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 16 }}>
             {filteredPeers.map((peer, idx) => (
               <div
@@ -393,9 +378,6 @@ export const ExtraFeaturesView: React.FC = () => {
     );
   }
 
-  /* =====================================================================
-     2. RANK PROGRESSION & BADGES VIEW (Bronze -> Silver -> Gold -> Platinum -> Elite)
-     ===================================================================== */
   if (activeTab === 'achievements') {
     const allTiers = [
       {
@@ -514,9 +496,6 @@ export const ExtraFeaturesView: React.FC = () => {
     );
   }
 
-  /* =====================================================================
-     3. ANALYTICS VIEW
-     ===================================================================== */
   if (activeTab === 'Analytics') {
     return (
       <div className="ev-card">
@@ -575,9 +554,6 @@ export const ExtraFeaturesView: React.FC = () => {
     );
   }
 
-  /* =====================================================================
-     4. MISTAKE BANK VIEW
-     ===================================================================== */
   if (activeTab === 'mistakes') {
     const activeMistakes = mistakes.filter((m) => !m.mastered);
     return (
@@ -630,9 +606,6 @@ export const ExtraFeaturesView: React.FC = () => {
     );
   }
 
-  /* =====================================================================
-     5. FLASHCARDS VIEW
-     ===================================================================== */
   if (activeTab === 'flashcards') {
     const card = flashcards[fcIndex % Math.max(1, flashcards.length)];
     return (
@@ -685,9 +658,6 @@ export const ExtraFeaturesView: React.FC = () => {
     );
   }
 
-  /* =====================================================================
-     6. SUBJECT-WISE FORMULA SHEET VIEW
-     ===================================================================== */
   if (activeTab === 'formulas') {
     return (
       <div className="ev-card">
@@ -720,9 +690,6 @@ export const ExtraFeaturesView: React.FC = () => {
     );
   }
 
-  /* =====================================================================
-     7. STUDY PLANNER VIEW
-     ===================================================================== */
   if (activeTab === 'planner') {
     return (
       <div className="ev-card">
@@ -797,9 +764,6 @@ export const ExtraFeaturesView: React.FC = () => {
     );
   }
 
-  /* =====================================================================
-     8. 1v1 QUIZ BATTLE VIEW
-     ===================================================================== */
   if (activeTab === 'battle') {
     return (
       <div className="ev-card" style={{ textAlign: 'center', padding: 28 }}>
@@ -836,10 +800,7 @@ export const ExtraFeaturesView: React.FC = () => {
             <div style={{ fontSize: 16, fontWeight: 800, marginBottom: 12 }}>
               {userName} ({isBn ? myRank.fullTitleBn : myRank.fullTitleEn}) 🆚 {opponentName}
             </div>
-            <button
-              className="ev-btn ev-btn-secondary"
-              onClick={() => setBattleStage('lobby')}
-            >
+            <button className="ev-btn ev-btn-secondary" onClick={() => setBattleStage('lobby')}>
               {isBn ? 'লবিতে ফিরে যাও' : 'Back to Lobby'}
             </button>
           </div>
@@ -848,9 +809,6 @@ export const ExtraFeaturesView: React.FC = () => {
     );
   }
 
-  /* =====================================================================
-     9. DOUBT FORUM / COMMUNITY VIEW
-     ===================================================================== */
   return (
     <div className="ev-card">
       <div className="ev-section-head">
