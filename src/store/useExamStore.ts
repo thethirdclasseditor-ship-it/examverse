@@ -799,5 +799,5 @@ export function useExamStore(): ExamStoreState {
 }
 
 export const ExamProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  return <>{children}</>;
+  return React.createElement(React.Fragment, null, children);
 };
