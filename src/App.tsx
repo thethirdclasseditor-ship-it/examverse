@@ -38,6 +38,19 @@ function getSubjectThemeAttr(subjId: string): string {
   return 'physics';
 }
 
+function getSubjectIconName(subjId: string): string {
+  const id = subjId.toLowerCase();
+  if (id.includes('phy')) return 'zap';
+  if (id.includes('chem')) return 'layers';
+  if (id.includes('math')) return 'formula';
+  if (id.includes('bio')) return 'shield';
+  if (id.includes('ict')) return 'cloud';
+  if (id.includes('acc') || id.includes('fin')) return 'chart';
+  if (id.includes('bom') || id.includes('pmm')) return 'calendar';
+  if (id.includes('ban') || id.includes('eng')) return 'book';
+  return 'book';
+}
+
 export function App() {
   const {
     language,
@@ -295,8 +308,8 @@ export function App() {
                 style={{ background: 'none', border: 'none' }}
                 onClick={handleBrandLogoClick}
               >
-                <ExamVerseLogo size={32} />
-                <span style={{ fontWeight: 800, fontSize: '1rem' }}>ExamVerse</span>
+                <ExamVerseLogo size={30} />
+                <span style={{ fontWeight: 800, fontSize: '0.98rem' }}>ExamVerse</span>
               </button>
 
               <div className="ev-greeting-wrap">
@@ -313,14 +326,6 @@ export function App() {
             </div>
 
             <div className="ev-topbar-right">
-              <button
-                type="button"
-                className="ev-btn ev-btn-soft ev-btn-sm ev-mobile-sprint-trigger"
-                onClick={() => setMobileSprintPopupOpen(true)}
-              >
-                ⚡ {isBn ? 'স্প্রিন্ট' : 'Sprint'}
-              </button>
-
               <button
                 type="button"
                 className={`ev-streak-pill ${streak > 0 ? 'is-active' : 'is-muted'}`}
@@ -346,7 +351,7 @@ export function App() {
 
               <button type="button" className="ev-profile-trigger" onClick={() => setAuthModalOpen(true)}>
                 <span className="ev-avatar-ring">
-                  <LevelRingSvg size={40} strokeWidth={3} pct={lvInfo.progressPercent} />
+                  <LevelRingSvg size={38} strokeWidth={3} pct={lvInfo.progressPercent} />
                   <span className="ev-avatar-sm">{userInitials}</span>
                   <span className="ev-avatar-lv">{lvInfo.level}</span>
                 </span>
@@ -373,7 +378,7 @@ export function App() {
                       ← {isBn ? 'সব বিষয়ে ফিরে যাও' : 'Back to Subjects'}
                     </button>
                     <h2 className="ev-section-title">
-                      {selectedSubject.icon} {trText(selectedSubject.name, language)}
+                      {trText(selectedSubject.name, language)}
                     </h2>
                   </div>
 
@@ -385,7 +390,7 @@ export function App() {
                       setActiveTab('formulas');
                     }}
                   >
-                    📐 {isBn ? 'এই বিষয়ের সকল সূত্র দেখো' : 'View Subject Formulas'}
+                    📐 {isBn ? 'অধ্যায়ভিত্তিক সূত্র দেখো' : 'Chapter Formulas'}
                   </button>
                 </div>
 
@@ -401,19 +406,19 @@ export function App() {
                         className="ev-card ev-subj-panel"
                         data-subj={getSubjectThemeAttr(selectedSubject.id)}
                         style={{
-                          padding: '0.95rem 1.1rem',
+                          padding: '0.9rem 1rem',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'space-between',
-                          gap: 12,
+                          gap: 10,
                           flexWrap: 'wrap',
                         }}
                       >
                         <div>
-                          <div style={{ fontWeight: 800, fontSize: 15 }}>
+                          <div style={{ fontWeight: 800, fontSize: 14.5 }}>
                             {idx + 1}. {trText(chap.name, language)}
                           </div>
-                          <div style={{ fontSize: 12.5, color: 'var(--text-muted)', fontWeight: 600, marginTop: 3 }}>
+                          <div style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600, marginTop: 2 }}>
                             MCQ: {mcqCount} • {isBn ? 'সূত্র' : 'Formulas'}: {formulaCount} • {trKey('mastery', language)}: {chapMastery}%
                           </div>
                         </div>
@@ -447,12 +452,13 @@ export function App() {
               <>
                 {activeTab === 'dashboard' && (
                   <div className="ev-home-top-grid">
+                    {/* Compact Notepad Rank & Streak Card */}
                     <div className="ev-card ev-hero">
                       <HeroSketchSvg />
 
                       <div className="ev-hero-main">
                         <div className="ev-hero-ring">
-                          <LevelRingSvg size={108} strokeWidth={8} pct={rank.progressPct} />
+                          <LevelRingSvg size={88} strokeWidth={7} pct={rank.progressPct} />
                           <div className="ev-hero-ring-num">
                             <small>RANK</small>
                             <b>{lvInfo.level}</b>
@@ -460,16 +466,17 @@ export function App() {
                         </div>
 
                         <div className="ev-hero-copy">
-                          <span className="ev-badge-pill ev-badge-indigo">
-                            🛡️ {isBn ? rank.fullTitleBn : rank.fullTitleEn} • {rank.rankScore} RP
-                          </span>
-                          <h1 className="ev-hero-title">
-                            {selectedClass} • {selectedGroup}
-                          </h1>
-                          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 4 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                            <span className="ev-badge-pill ev-badge-indigo">
+                              🛡️ {isBn ? rank.fullTitleBn : rank.fullTitleEn} • {rank.rankScore} RP
+                            </span>
+                            <span className="ev-badge-pill ev-badge-warning">🔥 {streak}d</span>
+                          </div>
+
+                          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 2 }}>
                             <select
                               className="ev-select"
-                              style={{ width: 'auto', minHeight: 36, padding: '0 10px', fontSize: 13, fontWeight: 700 }}
+                              style={{ width: 'auto', minHeight: 34, padding: '0 8px', fontSize: 12.5, fontWeight: 700 }}
                               value={selectedClass}
                               onChange={(e) => {
                                 const nextCls = e.target.value;
@@ -486,7 +493,7 @@ export function App() {
 
                             <select
                               className="ev-select"
-                              style={{ width: 'auto', minHeight: 36, padding: '0 10px', fontSize: 13, fontWeight: 700 }}
+                              style={{ width: 'auto', minHeight: 34, padding: '0 8px', fontSize: 12.5, fontWeight: 700 }}
                               value={selectedGroup}
                               onChange={(e) => setClassAndGroup(selectedClass, e.target.value)}
                             >
@@ -515,13 +522,8 @@ export function App() {
                       <div className={`ev-streak-strip ${streak === 0 ? 'is-cold' : ''}`}>
                         <div className="ev-streak-lead">
                           <FlameBigSvg />
-                          <div>
-                            <div className="ev-streak-num">
-                              {streak} {isBn ? 'দিনের স্ট্রিক' : 'Day Streak'}
-                            </div>
-                            <div className="ev-streak-lab">
-                              {isBn ? 'নিয়মিত অনুশীলনে র‍্যাঙ্ক বৃদ্ধি পায়' : 'Practice daily to boost Rank'}
-                            </div>
+                          <div className="ev-streak-num">
+                            {streak} {isBn ? 'দিনের স্ট্রিক' : 'Day Streak'}
                           </div>
                         </div>
 
@@ -529,7 +531,7 @@ export function App() {
                           {(isBn ? weekDaysBn : weekDaysEn).map((d, i) => {
                             const isLit = i < Math.min(7, streak);
                             return (
-                              <div key={d} className={`ev-wk-day ${isLit ? 'is-lit' : ''} ${i === (streak % 7) ? 'is-today' : ''}`}>
+                              <div key={d} className={`ev-wk-day ${isLit ? 'is-lit' : ''}`}>
                                 <i>{isLit ? '✓' : '•'}</i>
                                 <em>{d}</em>
                               </div>
@@ -539,16 +541,15 @@ export function App() {
                       </div>
                     </div>
 
+                    {/* Desktop Daily Merit Sprint Card (Hidden inline on mobile; shown as popup modal on mobile!) */}
                     <div className="ev-card ev-daily-card ev-daily-inline">
                       <div className="ev-daily-head">
                         <div className="ev-daily-ic">
-                          <EvIcon name="zap" size={26} />
+                          <EvIcon name="zap" size={24} />
                         </div>
                         <div style={{ flex: 1 }}>
                           <div className="ev-daily-title">{trKey('daily_challenge', language)}</div>
-                          <div className="ev-daily-sub">
-                            {new Date().toISOString().slice(0, 10)} • 10 MCQs
-                          </div>
+                          <div className="ev-daily-sub">10 MCQs • {selectedClass}</div>
                         </div>
                         <span className="ev-xp-chip">+120 XP</span>
                       </div>
@@ -574,16 +575,17 @@ export function App() {
                 <div>
                   <div className="ev-section-header">
                     <h2 className="ev-section-title">
-                      📚 {trKey('all_subjects', language)} ({subjects.length})
+                      {trKey('all_subjects', language)} ({subjects.length})
                     </h2>
                     <button type="button" className="ev-section-link" onClick={() => setActiveTab('formulas')}>
-                      📐 {isBn ? 'সকল বিষয়ের সূত্রসমূহ →' : 'All Subject Formulas →'}
+                      📐 {isBn ? 'সূত্রসমূহ →' : 'Formulas →'}
                     </button>
                   </div>
 
                   <div className="ev-grid-4">
                     {subjects.map((subj) => {
                       const subjAttr = getSubjectThemeAttr(subj.id);
+                      const iconName = getSubjectIconName(subj.id);
                       const totalMcqs = subj.chapters.reduce((sum, c) => sum + (c.mcqs?.length || 0), 0);
                       const subjMastery = Math.min(
                         100,
@@ -602,11 +604,9 @@ export function App() {
                         >
                           <div className="ev-subject-top">
                             <div className="ev-subject-icon-box" data-subj={subjAttr}>
-                              <span style={{ fontSize: 22 }}>{subj.icon}</span>
+                              <EvIcon name={iconName} size={20} />
                             </div>
-                            <span className="ev-mcq-pill">
-                              {subj.chapters.length} {trKey('chapters_count', language)} • {totalMcqs} MCQs
-                            </span>
+                            <span className="ev-mcq-pill">{totalMcqs} MCQs</span>
                           </div>
 
                           <div className="ev-subject-names">
@@ -617,7 +617,7 @@ export function App() {
                           <div className="ev-subject-meter">
                             <div className="ev-subject-meter-row">
                               <span>
-                                {selectedClass} • {selectedGroup}
+                                {subj.chapters.length} {trKey('chapters_count', language)}
                               </span>
                               <span>{subjMastery}%</span>
                             </div>
@@ -698,12 +698,12 @@ export function App() {
         <div className="ev-modal-backdrop is-open" onClick={handleDismissMobileSprint}>
           <div
             className="ev-card ev-daily-card"
-            style={{ width: '100%', maxWidth: 390, padding: 20 }}
+            style={{ width: '100%', maxWidth: 380, padding: 18 }}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="ev-daily-head">
               <div className="ev-daily-ic">
-                <EvIcon name="zap" size={26} />
+                <EvIcon name="zap" size={24} />
               </div>
               <div style={{ flex: 1 }}>
                 <div className="ev-daily-title">{trKey('daily_challenge', language)}</div>
@@ -732,7 +732,7 @@ export function App() {
                 🚀 {isBn ? 'এখনই শুরু করো' : 'Start Now'}
               </button>
               <button type="button" className="ev-btn ev-btn-secondary" onClick={handleDismissMobileSprint}>
-                {isBn ? 'পরে দেব' : 'Later'}
+                {isBn ? 'কেটে দিন' : 'Close'}
               </button>
             </div>
           </div>
@@ -749,6 +749,18 @@ export function App() {
               </button>
             </div>
             <div className="ev-more-menu-grid">
+              <button
+                type="button"
+                className="ev-more-menu-item"
+                onClick={() => {
+                  setMobileMoreOpen(false);
+                  setMobileSprintPopupOpen(true);
+                }}
+              >
+                <EvIcon name="zap" />
+                <span>⚡ {trKey('daily_challenge', language)}</span>
+              </button>
+
               {[
                 ...secondaryNav,
                 { id: 'Analytics' as NavTabId, icon: 'chart', labelKey: 'nav_analytics' },
