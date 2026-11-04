@@ -1,786 +1,941 @@
-import React, { useEffect, useState } from 'react';
-import { AppState, LeaderboardEntry, QuestionMCQ } from '../types';
-import { SUBJECTS, BENCHMARK_LEADERBOARD } from '../data/syllabusData';
-import { supabase, fetchRealCloudLeaderboard } from '../lib/supabase';
+import React, { useState } from 'react';
+import { calculateUserRank, trKey, trText, useExamStore } from '../store/useExamStore';
+import { SYLLABUS_DB } from '../data/syllabusData';
 
-const CUSTOM_QUESTIONS_STORAGE_KEY = 'examverse_custom_questions_v1';
+export const ExtraFeaturesView: React.FC = () => {
+  const {
+    activeTab,
+    language,
+    userName,
+    userAvatar,
+    xp,
+    streak,
+    examHistory,
+    mistakes,
+    markMistakeMastered,
+    flashcards,
+    studyTasks,
+    addStudyTask,
+    toggleStudyTask,
+    deleteStudyTask,
+    communityPosts,
+    addCommunityPost,
+    addCommunityReply,
+    togglePostLike,
+    friendsList,
+    addFriendByCode,
+    selectedClass,
+    selectedGroup,
+    getRankInfo,
+  } = useExamStore();
 
-export function loadCustomQuestions(): QuestionMCQ[] {
-  try {
-    const raw = window.localStorage.getItem(CUSTOM_QUESTIONS_STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) return parsed;
-    }
-  } catch {}
-  return [];
-}
+  const isBn = language !== 'en';
+  const myRank = getRankInfo();
 
-export function saveCustomQuestions(list: QuestionMCQ[]) {
-  try {
-    window.localStorage.setItem(CUSTOM_QUESTIONS_STORAGE_KEY, JSON.stringify(list));
-  } catch {}
-}
+  // Leaderboard states
+  const [lbScope, setLbScope] = useState<'global' | 'friends' | 'subject'>('global');
+  const [lbPeriod, setLbPeriod] = useState<'today' | 'weekly' | 'monthly' | 'alltime'>('weekly');
+  const [lbSubject, setLbSubject] = useState<string>('all');
+  const [friendInput, setFriendInput] = useState('');
 
-/* ==========================================================================
-   FEATURE 1 (Audit 3.5 Fix): PAST YEAR QUESTION BANK ARCHIVE
-   ========================================================================== */
-export interface PastYearPaper {
-  id: string;
-  examGroup: 'Admission' | 'BCS & Bank' | 'HSC Board' | 'SSC Board';
-  institution: string;
-  year: string;
-  unit: string;
-  titleBn: string;
-  titleEn: string;
-  negativeMark: number;
-  categoryFilter: string;
-  subjectIds: string[];
-}
+  // Study Planner states
+  const [taskTitle, setTaskTitle] = useState('');
+  const [taskSubject, setTaskSubject] = useState('পদার্থবিজ্ঞান');
+  const [taskMinutes, setTaskMinutes] = useState(30);
 
-export const PAST_YEAR_PAPERS: PastYearPaper[] = [
-  { id: 'py-du-a-24', examGroup: 'Admission', institution: 'Dhaka University', year: '2024–25', unit: 'A-Unit (Science)', titleBn: 'ঢাবি ক-ইউনিট (বিজ্ঞান) ভর্তি প্রশ্ন সেট ২০২৪–২৫', titleEn: 'DU A-Unit Science Question Set', negativeMark: 0.25, categoryFilter: 'uni', subjectIds: ['physics', 'chemistry', 'math', 'biology'] },
-  { id: 'py-du-b-24', examGroup: 'Admission', institution: 'Dhaka University', year: '2024–25', unit: 'B-Unit (Arts)', titleBn: 'ঢাবি খ-ইউনিট (মানবিক) ভর্তি প্রশ্ন সেট ২০২৪–২৫', titleEn: 'DU B-Unit Arts & Humanities Set', negativeMark: 0.25, categoryFilter: 'uni', subjectIds: ['bangla', 'english', 'gk', 'economics', 'civics', 'history'] },
-  { id: 'py-du-c-24', examGroup: 'Admission', institution: 'Dhaka University', year: '2024–25', unit: 'C-Unit (Commerce)', titleBn: 'ঢাবি গ-ইউনিট (ব্যবসায় শিক্ষা) ভর্তি প্রশ্ন সেট ২০২৪–২৫', titleEn: 'DU C-Unit Business Studies Set', negativeMark: 0.25, categoryFilter: 'uni', subjectIds: ['accounting', 'management', 'finance', 'marketing', 'english', 'bangla'] },
-  { id: 'py-buet-24', examGroup: 'Admission', institution: 'BUET', year: '2024', unit: 'Preliminary', titleBn: 'বুয়েট প্রিলিমিনারি ভর্তি প্রশ্ন সেট ২০২৪', titleEn: 'BUET Engineering Preliminary Set', negativeMark: 0.25, categoryFilter: 'eng', subjectIds: ['physics', 'chemistry', 'math'] },
-  { id: 'py-med-24', examGroup: 'Admission', institution: 'DGHS Medical', year: '2024–25', unit: 'MBBS', titleBn: 'মেডিকেল (MBBS) ভর্তি পরীক্ষা প্রশ্ন সেট ২০২৪–২৫', titleEn: 'Medical Admission Standard Paper', negativeMark: 0.25, categoryFilter: 'med', subjectIds: ['biology', 'chemistry', 'physics', 'english', 'gk'] },
-  { id: 'py-bcs-46', examGroup: 'BCS & Bank', institution: 'BPSC', year: '2024', unit: '46th BCS', titleBn: '৪৬তম বিসিএস প্রিলিমিনারি প্রশ্ন সেট', titleEn: '46th BCS Preliminary Paper', negativeMark: 0.5, categoryFilter: 'bcs', subjectIds: ['bangla', 'english', 'gk', 'math', 'ict', 'economics', 'civics'] },
-  { id: 'py-bb-ad-24', examGroup: 'BCS & Bank', institution: 'Bangladesh Bank', year: '2024', unit: 'AD General', titleBn: 'বাংলাদেশ ব্যাংক সহকারী পরিচালক (AD) ২০২৪', titleEn: 'Bangladesh Bank AD Paper', negativeMark: 0.25, categoryFilter: 'bank', subjectIds: ['math', 'english', 'accounting', 'finance', 'economics', 'ict', 'gk'] },
-  { id: 'py-hsc-dhaka-24', examGroup: 'HSC Board', institution: 'Dhaka Board', year: '2024', unit: 'HSC Final', titleBn: 'ঢাকা বোর্ড এইচএসসি চূড়ান্ত প্রশ্ন সেট ২০২৪', titleEn: 'Dhaka Board HSC Paper 2024', negativeMark: 0, categoryFilter: 'hsc', subjectIds: ['physics', 'chemistry', 'math', 'biology', 'accounting', 'economics', 'bangla', 'english', 'ict'] },
-  { id: 'py-ssc-dhaka-24', examGroup: 'SSC Board', institution: 'Dhaka Board', year: '2024', unit: 'SSC Final', titleBn: 'ঢাকা বোর্ড এসএসসি চূড়ান্ত প্রশ্ন সেট ২০২৪', titleEn: 'Dhaka Board SSC Paper 2024', negativeMark: 0, categoryFilter: 'ssc', subjectIds: ['physics', 'chemistry', 'math', 'biology', 'accounting', 'bangla', 'english', 'gk'] }
-];
+  // Community states
+  const [postTitle, setPostTitle] = useState('');
+  const [postBody, setPostBody] = useState('');
+  const [replyText, setReplyText] = useState<Record<string, string>>({});
 
-export const PastYearArchiveView: React.FC<{
-  allQuestions: QuestionMCQ[];
-  onStartPaper: (questions: QuestionMCQ[], title: string, mode: 'practice' | 'exam', categoryId: string, negativeMark: number) => void;
-}> = ({ allQuestions, onStartPaper }) => {
-  const [filterTrack, setFilterTrack] = useState<string>('all');
-  const [yearSearch, setYearSearch] = useState<string>('');
+  // Battle states
+  const [battleStage, setBattleStage] = useState<'lobby' | 'matched'>('lobby');
+  const [opponentName, setOpponentName] = useState('আরিফ হোসেন (Gold III)');
 
-  const filteredPapers = PAST_YEAR_PAPERS.filter((p) => {
-    const matchTrack = filterTrack === 'all' || p.examGroup === filterTrack;
-    const matchQuery =
-      !yearSearch ||
-      p.titleBn.includes(yearSearch) ||
-      p.titleEn.toLowerCase().includes(yearSearch.toLowerCase()) ||
-      p.institution.toLowerCase().includes(yearSearch.toLowerCase()) ||
-      p.year.includes(yearSearch);
-    return matchTrack && matchQuery;
-  });
+  // Flashcard states
+  const [fcIndex, setFcIndex] = useState(0);
+  const [fcFlipped, setFcFlipped] = useState(false);
 
-  return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.85rem', marginBottom: '1.15rem' }}>
-        <div>
-          <span className="ev-badge-pill ev-badge-indigo" style={{ marginBottom: '0.3rem' }}>Question Bank Archive</span>
-          <h1 className="font-bn" style={{ fontSize: '1.38rem', fontWeight: 800 }}>📚 বিগত বছরের প্রশ্ন ব্যাংক আর্কাইভ</h1>
-        </div>
-        <input
-          type="text"
-          className="ev-input"
-          style={{ maxWidth: '280px' }}
-          placeholder="সাল, ইউনিট বা প্রতিষ্ঠান খুঁজুন..."
-          value={yearSearch}
-          onChange={(e) => setYearSearch(e.target.value)}
-        />
-      </div>
+  const subjects =
+    SYLLABUS_DB[selectedClass]?.[selectedGroup] ||
+    SYLLABUS_DB.HSC?.Science ||
+    [];
 
-      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '1.25rem' }}>
-        {(['all', 'Admission', 'BCS & Bank', 'HSC Board', 'SSC Board'] as const).map((tr) => (
-          <button
-            key={tr}
-            type="button"
-            className={`ev-btn ev-btn-sm ${filterTrack === tr ? 'ev-btn-primary' : 'ev-btn-secondary'}`}
-            onClick={() => setFilterTrack(tr)}
-          >
-            {tr === 'all' ? 'সকল আর্কাইভ (All Papers)' : tr}
-          </button>
-        ))}
-      </div>
+  /* =====================================================================
+     1. PREMIUM PODIUM & FILTERABLE LEADERBOARD (Separate Personal Rank vs Position)
+     ===================================================================== */
+  if (activeTab === 'leaderboard') {
+    const periodMultiplier =
+      lbPeriod === 'today' ? 0.18 : lbPeriod === 'weekly' ? 0.55 : lbPeriod === 'monthly' ? 0.82 : 1;
 
-      <div className="ev-grid-2">
-        {filteredPapers.map((paper) => {
-          /* Audit 3.5 Fix: Filter by paperId if tagged, or by the exact unit's subjectIds + category */
-          const pool = allQuestions.filter(
-            (q) =>
-              q.paperId === paper.id ||
-              (paper.subjectIds.includes(q.subjectId) && q.categories.includes(paper.categoryFilter))
-          );
-          return (
-            <div key={paper.id} className="ev-card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: '0.9rem' }}>
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.45rem', flexWrap: 'wrap', gap: '0.4rem' }}>
-                  <span className="ev-badge-pill ev-badge-indigo">{paper.institution} • {paper.unit}</span>
-                  <span className="ev-badge-pill ev-badge-warning font-mono">{paper.year} • Neg: -{paper.negativeMark}</span>
-                </div>
-                <h3 className="font-bn" style={{ fontSize: '1.05rem', fontWeight: 800, marginBottom: '0.2rem' }}>{paper.titleBn}</h3>
-                <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
-                  {paper.titleEn} • <strong>{pool.length} Subject-Matched MCQs</strong>
-                </div>
-              </div>
-              <div style={{ display: 'flex', gap: '0.5rem', paddingTop: '0.6rem', borderTop: '1px solid var(--border-subtle)' }}>
-                <button
-                  type="button"
-                  className="ev-btn ev-btn-soft ev-btn-sm"
-                  style={{ flex: 1 }}
-                  onClick={() => onStartPaper(pool, paper.titleBn, 'practice', paper.categoryFilter, 0)}
-                >
-                  Practice &amp; Solution
-                </button>
-                <button
-                  type="button"
-                  className="ev-btn ev-btn-primary ev-btn-sm"
-                  style={{ flex: 1 }}
-                  onClick={() => onStartPaper(pool, paper.titleBn, 'exam', paper.categoryFilter, paper.negativeMark)}
-                >
-                  Timed Exam (-{paper.negativeMark})
-                </button>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-};
+    const basePeers = [
+      { name: 'নুসরাত জাহান', avatar: '👩‍🎓', baseXp: 2450, acc: 94, streak: 14, isFriend: true, favSubj: 'physics' },
+      { name: 'তানভীর আহমেদ', avatar: '🧑‍🔬', baseXp: 1980, acc: 91, streak: 11, isFriend: true, favSubj: 'chemistry' },
+      { name: 'মাহির ফয়সাল', avatar: '🚀', baseXp: 1740, acc: 88, streak: 9, isFriend: false, favSubj: 'math' },
+      { name: userName, avatar: userAvatar, baseXp: Math.max(640, xp), acc: myRank.accuracyPct, streak, isFriend: true, isMe: true, favSubj: 'physics' },
+      { name: 'রাফি ইসলাম', avatar: '⚡', baseXp: 1320, acc: 84, streak: 7, isFriend: true, favSubj: 'biology' },
+      { name: 'সাদিয়া করিম', avatar: '🌟', baseXp: 1150, acc: 82, streak: 6, isFriend: true, favSubj: 'ict' },
+      { name: 'নাফিস ইকবাল', avatar: '📘', baseXp: 890, acc: 77, streak: 4, isFriend: false, favSubj: 'physics' },
+    ];
 
-/* ==========================================================================
-   FEATURE 3 (Audit 3.6 Fix): 1v1 QUIZ BATTLE (Supabase Realtime Room + Practice Bot Mode)
-   ========================================================================== */
-export const QuizBattleView: React.FC<{
-  allQuestions: QuestionMCQ[];
-  userName: string;
-  onAwardBattleXp: (xp: number) => void;
-}> = ({ allQuestions, userName, onAwardBattleXp }) => {
-  const [battleMode, setBattleMode] = useState<'bot' | 'realtime'>('bot');
-  const [roomCode, setRoomCode] = useState<string>('EV-' + Math.floor(1000 + Math.random() * 9000));
-  const [joinCode, setJoinCode] = useState<string>('');
-  const [selectedSubject, setSelectedSubject] = useState<string>('all');
-  const [opponentName, setOpponentName] = useState<string>('Practice AI Bot');
-  const [battleQuestions, setBattleQuestions] = useState<QuestionMCQ[]>([]);
-  const [currentIdx, setCurrentIdx] = useState<number>(0);
-  const [myScore, setMyScore] = useState<number>(0);
-  const [oppScore, setOppScore] = useState<number>(0);
-  const [status, setStatus] = useState<'lobby' | 'playing' | 'finished'>('lobby');
-  const [chosenOpt, setChosenOpt] = useState<number | null>(null);
-  const [activeChannel, setActiveChannel] = useState<any>(null);
+    const filteredPeers = basePeers
+      .filter((p) => (lbScope === 'friends' ? p.isFriend || friendsList.includes(p.name) : true))
+      .filter((p) => (lbScope === 'subject' && lbSubject !== 'all' ? p.favSubj === lbSubject : true))
+      .map((p) => {
+        const scaledXp = Math.round(p.baseXp * periodMultiplier);
+        const peerRank = calculateUserRank({
+          xp: p.baseXp,
+          accuracyPct: p.acc,
+          masteredChaptersCount: Math.round(p.acc / 8),
+          streakDays: p.streak,
+          examsCompleted: 8,
+        });
+        return { ...p, displayXp: scaledXp, rankInfo: peerRank };
+      })
+      .sort((a, b) => b.displayXp - a.displayXp);
 
-  useEffect(() => {
-    return () => {
-      if (activeChannel) supabase.removeChannel(activeChannel);
-    };
-  }, [activeChannel]);
+    const myPosition = filteredPeers.findIndex((p) => p.isMe) + 1 || 1;
+    const top1 = filteredPeers[0];
+    const top2 = filteredPeers[1];
+    const top3 = filteredPeers[2];
 
-  const startBattle = (modeType: 'bot' | 'realtime', customCode?: string) => {
-    const code = customCode || roomCode;
-    const pool = allQuestions.filter((q) => selectedSubject === 'all' || q.subjectId === selectedSubject);
-    /* Deterministic shuffle by room code so two players in the same Realtime room get the exact same 5 questions */
-    let seed = 0;
-    for (let i = 0; i < code.length; i++) seed = (seed * 31 + code.charCodeAt(i)) >>> 0;
-    const ordered = [...pool].sort((a, b) => ((a.id.charCodeAt(2) + seed) % 13) - ((b.id.charCodeAt(2) + seed) % 13)).slice(0, 5);
-
-    setBattleMode(modeType);
-    setOpponentName(modeType === 'bot' ? 'Practice AI Challenger (Bot)' : `Room Opponent (${code})`);
-    setBattleQuestions(ordered);
-    setCurrentIdx(0);
-    setMyScore(0);
-    setOppScore(0);
-    setChosenOpt(null);
-    setStatus('playing');
-
-    if (modeType === 'realtime') {
-      const ch = supabase.channel(`ev-battle-${code}`);
-      ch.on('broadcast', { event: 'score_update' }, (payload: any) => {
-        if (payload?.payload?.sender !== userName) {
-          setOpponentName(payload.payload.sender || 'Live Challenger');
-          setOppScore(Number(payload.payload.score) || 0);
-        }
-      }).subscribe();
-      setActiveChannel(ch);
-    }
-  };
-
-  const handlePickBattleOption = (idx: number) => {
-    if (chosenOpt !== null) return;
-    setChosenOpt(idx);
-    const q = battleQuestions[currentIdx];
-    const isMeCorrect = idx === q.correctIndex;
-    const nextMy = myScore + (isMeCorrect ? 20 : 0);
-    setMyScore(nextMy);
-
-    if (battleMode === 'realtime' && activeChannel) {
-      activeChannel.send({
-        type: 'broadcast',
-        event: 'score_update',
-        payload: { sender: userName, score: nextMy }
-      });
-    } else {
-      const isBotCorrect = Math.random() < 0.7;
-      setOppScore((prev) => prev + (isBotCorrect ? 20 : 0));
-    }
-
-    window.setTimeout(() => {
-      if (currentIdx + 1 < battleQuestions.length) {
-        setCurrentIdx((i) => i + 1);
-        setChosenOpt(null);
-      } else {
-        setStatus('finished');
-        if (nextMy > 0) onAwardBattleXp(nextMy >= oppScore ? 40 : 15);
-      }
-    }, 900);
-  };
-
-  if (status === 'lobby') {
     return (
-      <div style={{ maxWidth: '780px', margin: '0 auto' }}>
-        <span className="ev-badge-pill ev-badge-violet" style={{ marginBottom: '0.35rem' }}>1v1 Challenge &amp; Practice Bot</span>
-        <h1 className="font-bn" style={{ fontSize: '1.4rem', fontWeight: 800, marginBottom: '1rem' }}>
-          ⚔️ ১-অন-১ কুইজ ব্যাটল (Live Room Sync &amp; Practice Bot Battle)
-        </h1>
-
-        <div style={{ marginBottom: '1rem' }}>
-          <label style={{ fontSize: '0.78rem', fontWeight: 700, display: 'block', marginBottom: '0.3rem' }}>ব্যাটলের বিষয় নির্বাচন করুন (Select Subject)</label>
-          <select className="ev-select" style={{ maxWidth: '340px' }} value={selectedSubject} onChange={(e) => setSelectedSubject(e.target.value)}>
-            <option value="all">সকল বিষয় (All 17 Subjects)</option>
-            {SUBJECTS.map((s) => (
-              <option key={s.id} value={s.id}>{s.nameBn} ({s.name})</option>
-            ))}
-          </select>
-        </div>
-
-        <div className="ev-grid-2">
-          {/* Option 1: Honest Practice Bot Battle (Audit 3.6 recommendation) */}
-          <div className="ev-card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: '0.85rem' }}>
-            <div>
-              <span className="ev-badge-pill ev-badge-indigo" style={{ marginBottom: '0.35rem' }}>Instant Solo Match</span>
-              <h3 className="font-bn" style={{ fontSize: '1.08rem', fontWeight: 800 }}>🤖 Practice Bot Battle (তাৎক্ষণিক প্র্যাকটিস ম্যাচ)</h3>
-              <p className="font-bn" style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
-                যেকোনো সময় অপেক্ষা ছাড়াই AI Bot প্রতিদ্বন্দ্বীর সাথে ৫টি প্রশ্নের দ্রুতগতির প্র্যাকটিস ম্যাচ খেলুন।
-              </p>
-            </div>
-            <button type="button" className="ev-btn ev-btn-primary" onClick={() => startBattle('bot')}>
-              🤖 Start Practice Bot Battle →
-            </button>
-          </div>
-
-          {/* Option 2: Real-Time Room Sync via Supabase Realtime Channel */}
-          <div className="ev-card" style={{ border: '1.5px solid var(--brand-primary-border)', background: 'linear-gradient(145deg, var(--bg-surface) 0%, var(--brand-primary-soft) 100%)' }}>
-            <span className="ev-badge-pill ev-badge-success" style={{ marginBottom: '0.35rem' }}>Supabase Realtime Channel</span>
-            <h3 className="font-bn" style={{ fontSize: '1.08rem', fontWeight: 800 }}>🌐 Live Friend Room Battle (রুম কোড ম্যাচ)</h3>
-            <div className="font-mono" style={{ fontSize: '1.2rem', fontWeight: 800, padding: '0.45rem', background: 'var(--bg-surface)', borderRadius: '8px', border: '1px dashed var(--brand-primary)', textAlign: 'center', margin: '0.55rem 0', color: 'var(--brand-primary)' }}>
-              Your Room Code: {roomCode}
-            </div>
-            <div style={{ display: 'flex', gap: '0.45rem', marginBottom: '0.55rem' }}>
-              <input
-                type="text"
-                className="ev-input font-mono"
-                placeholder="বন্ধুর কোড (যেমন: EV-4829)"
-                value={joinCode}
-                onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
-              />
-              <button type="button" className="ev-btn ev-btn-soft ev-btn-sm" onClick={() => startBattle('realtime', joinCode || roomCode)}>
-                Join / Start
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (status === 'finished') {
-    const won = myScore >= oppScore;
-    return (
-      <div className="ev-card" style={{ maxWidth: '640px', margin: '0 auto', textAlign: 'center', padding: '2rem' }}>
-        <div style={{ fontSize: '2.5rem', marginBottom: '0.35rem' }}>{won ? '🏆' : '⚡'}</div>
-        <h2 className="font-bn" style={{ fontSize: '1.4rem', fontWeight: 800 }}>
-          {won ? 'অভিনন্দন! আপনি ম্যাচে এগিয়ে থেকে জয়ী হয়েছেন!' : 'দারুণ লড়াই হয়েছে! আবার চেষ্টা করুন!'}
-        </h2>
-        <div className="ev-grid-2" style={{ margin: '1.25rem 0' }}>
-          <div className="ev-card" style={{ background: 'var(--status-success-bg)' }}>
-            <div style={{ fontSize: '0.8rem', fontWeight: 700 }}>{userName} (আপনি)</div>
-            <div className="font-mono" style={{ fontSize: '1.55rem', fontWeight: 800, color: 'var(--status-success-text)' }}>{myScore} pts</div>
-          </div>
-          <div className="ev-card" style={{ background: 'var(--bg-surface-muted)' }}>
-            <div style={{ fontSize: '0.8rem', fontWeight: 700 }}>{opponentName}</div>
-            <div className="font-mono" style={{ fontSize: '1.55rem', fontWeight: 800 }}>{oppScore} pts</div>
-          </div>
-        </div>
-        <div style={{ display: 'flex', gap: '0.6rem', justifyContent: 'center' }}>
-          <button type="button" className="ev-btn ev-btn-primary" onClick={() => startBattle(battleMode)}>Play Again</button>
-          <button type="button" className="ev-btn ev-btn-secondary" onClick={() => setStatus('lobby')}>Back to Lobby</button>
-        </div>
-      </div>
-    );
-  }
-
-  const q = battleQuestions[currentIdx];
-  return (
-    <div style={{ maxWidth: '760px', margin: '0 auto' }}>
-      <div className="ev-card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', background: 'linear-gradient(90deg, var(--brand-primary-soft), var(--brand-accent-soft))' }}>
-        <div>
-          <div style={{ fontSize: '0.75rem', fontWeight: 700 }}>👤 {userName}</div>
-          <div className="font-mono" style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--brand-primary)' }}>{myScore} pts</div>
-        </div>
-        <span className="ev-badge-pill ev-badge-warning">
-          {battleMode === 'bot' ? '🤖 Bot Match' : '🌐 Live Room'} • Q {currentIdx + 1}/5
-        </span>
-        <div style={{ textAlign: 'right' }}>
-          <div style={{ fontSize: '0.75rem', fontWeight: 700 }}>{opponentName}</div>
-          <div className="font-mono" style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--brand-accent)' }}>{oppScore} pts</div>
-        </div>
-      </div>
-
-      <div className="ev-card">
-        <div className="font-bn" style={{ fontSize: '1.12rem', fontWeight: 800, marginBottom: '0.85rem' }}>{q.questionBn}</div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
-          {q.options.map((opt, idx) => {
-            let cls = 'ev-option-btn';
-            if (chosenOpt !== null) {
-              if (idx === q.correctIndex) cls += ' is-correct';
-              else if (idx === chosenOpt) cls += ' is-incorrect';
-            }
-            return (
-              <button key={idx} type="button" className={cls} onClick={() => handlePickBattleOption(idx)}>
-                <span className="ev-badge-pill ev-badge-neutral">{String.fromCharCode(65 + idx)}</span>
-                <span className="font-bn">{opt}</span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-    </div>
-  );
-};
-
-/* ==========================================================================
-   FEATURE 11: 60-SECOND RAPID FIRE SPRINT
-   ========================================================================== */
-export const RapidFireView: React.FC<{
-  allQuestions: QuestionMCQ[];
-  onAwardSprintXp: (xp: number) => void;
-}> = ({ allQuestions, onAwardSprintXp }) => {
-  const [status, setStatus] = useState<'ready' | 'running' | 'done'>('ready');
-  const [timeLeft, setTimeLeft] = useState<number>(60);
-  const [pool, setPool] = useState<QuestionMCQ[]>([]);
-  const [idx, setIdx] = useState<number>(0);
-  const [correctCount, setCorrectCount] = useState<number>(0);
-  const [streakCombo, setStreakCombo] = useState<number>(0);
-  const [xpClaimed, setXpClaimed] = useState<boolean>(false);
-  const [bestScore, setBestScore] = useState<number>(() => Number(window.localStorage.getItem('ev_rapid_best') || 0));
-
-  useEffect(() => {
-    if (status !== 'running') return;
-    const timer = window.setInterval(() => {
-      setTimeLeft((t) => {
-        if (t <= 1) {
-          window.clearInterval(timer);
-          setStatus('done');
-          return 0;
-        }
-        return t - 1;
-      });
-    }, 1000);
-    return () => window.clearInterval(timer);
-  }, [status]);
-
-  const startSprint = () => {
-    setPool([...allQuestions].sort(() => Math.random() - 0.5));
-    setIdx(0);
-    setCorrectCount(0);
-    setStreakCombo(0);
-    setXpClaimed(false);
-    setTimeLeft(60);
-    setStatus('running');
-  };
-
-  const answerInstant = (optIdx: number) => {
-    const q = pool[idx % pool.length];
-    const isRight = optIdx === q.correctIndex;
-    const nextCorrect = isRight ? correctCount + 1 : correctCount;
-    setCorrectCount(nextCorrect);
-    setStreakCombo(isRight ? streakCombo + 1 : 0);
-    if (nextCorrect > bestScore) {
-      setBestScore(nextCorrect);
-      try {
-        window.localStorage.setItem('ev_rapid_best', String(nextCorrect));
-      } catch {}
-    }
-    setIdx((i) => i + 1);
-  };
-
-  if (status === 'ready') {
-    return (
-      <div className="ev-card" style={{ maxWidth: '640px', margin: '0 auto', textAlign: 'center', padding: '2.2rem' }}>
-        <span className="ev-badge-pill ev-badge-warning" style={{ marginBottom: '0.5rem' }}>⚡ 60-Second Speed Challenge</span>
-        <h1 className="font-bn" style={{ fontSize: '1.45rem', fontWeight: 800, marginBottom: '0.45rem' }}>
-          ৬০-সেকেন্ড র‍্যাপিড ফায়ার মোড
-        </h1>
-        <div style={{ marginBottom: '1.25rem', fontWeight: 800, color: 'var(--brand-primary)' }}>
-          🏅 আপনার সর্বোচ্চ রেকর্ড (Personal Best): {bestScore} সঠিক উত্তর / ৬০ সেকেন্ড
-        </div>
-        <button type="button" className="ev-btn ev-btn-primary" onClick={startSprint}>
-          ⚡ ৬০ সেকেন্ড স্প্রিন্ট শুরু করুন →
-        </button>
-      </div>
-    );
-  }
-
-  if (status === 'done') {
-    const earnedXp = correctCount * 10;
-    return (
-      <div className="ev-card" style={{ maxWidth: '620px', margin: '0 auto', textAlign: 'center', padding: '2rem' }}>
-        <h2 className="font-bn" style={{ fontSize: '1.4rem', fontWeight: 800, marginBottom: '0.5rem' }}>⏱ সময় শেষ!</h2>
-        <div style={{ fontSize: '2rem', fontWeight: 800, color: 'var(--brand-primary)', marginBottom: '0.4rem' }}>
-          {correctCount} সঠিক উত্তর (+{earnedXp} XP)
-        </div>
-        <button
-          type="button"
-          className="ev-btn ev-btn-primary"
-          onClick={() => {
-            if (!xpClaimed && earnedXp > 0) {
-              setXpClaimed(true);
-              onAwardSprintXp(earnedXp);
-            }
-            startSprint();
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+        {/* Personal Rank vs Leaderboard Position Banner */}
+        <div
+          className="ev-card"
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+            gap: 12,
+            background: 'linear-gradient(135deg, var(--surface) 0%, var(--surface-2) 100%)',
           }}
         >
-          আবার খেলুন →
-        </button>
-      </div>
-    );
-  }
-
-  const q = pool[idx % pool.length];
-  return (
-    <div style={{ maxWidth: '720px', margin: '0 auto' }}>
-      <div className="ev-card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-        <span className="ev-badge-pill ev-badge-danger font-mono">⏱ {timeLeft}s Left</span>
-        <span className="ev-badge-pill ev-badge-indigo">🔥 Combo: {streakCombo}x</span>
-        <span className="font-mono" style={{ fontWeight: 800, color: 'var(--status-success)' }}>✓ Correct: {correctCount}</span>
-      </div>
-      <div className="ev-card">
-        <div className="font-bn" style={{ fontSize: '1.1rem', fontWeight: 800, marginBottom: '0.85rem' }}>{q.questionBn}</div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-          {q.options.map((opt, oIdx) => (
-            <button key={oIdx} type="button" className="ev-option-btn" onClick={() => answerInstant(oIdx)}>
-              <span className="ev-badge-pill ev-badge-neutral">{String.fromCharCode(65 + oIdx)}</span>
-              <span className="font-bn">{opt}</span>
-            </button>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-};
-
-/* ==========================================================================
-   FEATURE 14 (Audit 3.7 Fix): REAL DATABASE & SUBJECT-WISE LEADERBOARD
-   ========================================================================== */
-export const SubjectLeaderboardView: React.FC<{ state: AppState }> = ({ state }) => {
-  const [selectedSubj, setSelectedSubj] = useState<string>('all');
-  const [cloudRows, setCloudRows] = useState<LeaderboardEntry[]>([]);
-  const [loading, setLoading] = useState<boolean>(false);
-  const activeSubjectObj = SUBJECTS.find((s) => s.id === selectedSubj);
-
-  useEffect(() => {
-    setLoading(true);
-    fetchRealCloudLeaderboard(selectedSubj)
-      .then((rows) => setCloudRows(rows))
-      .finally(() => setLoading(false));
-  }, [selectedSubj, state.user.xp]);
-
-  /* User's real subject score based on actual correct answers & mastery in that subject */
-  const mySubjXp =
-    selectedSubj === 'all'
-      ? state.user.xp
-      : (state.stats.subjectStats[selectedSubj]?.correct || 0) * 20 +
-        (state.stats.subjectMastery[selectedSubj] || 0) * 3;
-
-  const baseList = cloudRows.length > 0 ? cloudRows : BENCHMARK_LEADERBOARD;
-  const combined = [
-    ...baseList.filter((r) => r.handle !== state.user.username),
-    {
-      rank: 0,
-      name: `${state.user.name} (আপনি)`,
-      handle: state.user.username,
-      avatar: state.user.avatarInitials,
-      level: state.user.level,
-      xp: mySubjXp,
-      badge: activeSubjectObj ? `${state.stats.subjectMastery[selectedSubj] || 0}% Mastery` : state.user.targetTrack,
-      isCurrentUser: true
-    }
-  ]
-    .sort((a, b) => b.xp - a.xp)
-    .map((item, idx) => ({ ...item, rank: idx + 1 }));
-
-  return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.85rem', marginBottom: '1rem' }}>
-        <div>
-          <span className="ev-badge-pill ev-badge-success" style={{ marginBottom: '0.3rem' }}>
-            {cloudRows.length > 0 ? `✓ Live Database Ranking (${cloudRows.length} Users)` : 'Merit Leaderboard'}
-          </span>
-          <h1 className="font-bn" style={{ fontSize: '1.38rem', fontWeight: 800 }}>
-            🏆 {activeSubjectObj ? `${activeSubjectObj.nameBn} — সাবজেক্ট লিডারবোর্ড` : 'সার্বিক ও সাবজেক্ট ভিত্তিক লিডারবোর্ড'}
-          </h1>
-        </div>
-        <select
-          className="ev-select"
-          style={{ maxWidth: '310px', fontWeight: 700 }}
-          value={selectedSubj}
-          onChange={(e) => setSelectedSubj(e.target.value)}
-        >
-          <option value="all">🌐 সকল বিষয় (Overall Global XP)</option>
-          {SUBJECTS.map((s) => (
-            <option key={s.id} value={s.id}>
-              📘 {s.nameBn} ({s.name})
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {loading && <div style={{ fontSize: '0.84rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>ডাটাবেস থেকে র‍্যাংকিং লোড হচ্ছে...</div>}
-
-      <div className="ev-podium-grid">
-        {combined.slice(0, 3).map((item, idx) => (
-          <div key={item.handle + idx} className={`ev-podium-card rank-${idx + 1}`}>
-            <div style={{ fontSize: '1.5rem', fontWeight: 800 }}>
-              {idx === 0 ? '👑 #1 Gold' : idx === 1 ? '🥈 #2 Silver' : '🥉 #3 Bronze'}
-            </div>
-            <div style={{ fontSize: '1.05rem', fontWeight: 800 }}>{item.name}</div>
-            <span className="ev-badge-pill ev-badge-indigo">{item.badge}</span>
-            <div className="font-mono" style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--brand-primary)' }}>
-              {item.xp.toLocaleString()} XP • Lv.{item.level}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <div className="ev-card">
-        {combined.map((row) => (
-          <div
-            key={row.handle + row.rank}
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              padding: '0.82rem 1rem',
-              borderBottom: '1px solid var(--border-subtle)',
-              background: row.isCurrentUser ? 'var(--brand-primary-soft)' : 'transparent',
-              borderRadius: row.isCurrentUser ? '8px' : '0'
-            }}
-          >
-            <div>
-              <strong>#{row.rank} {row.name}</strong>{' '}
-              <span className="font-bn" style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>({row.badge})</span>
-            </div>
-            <div className="font-mono" style={{ fontWeight: 800, color: 'var(--brand-primary)' }}>
-              {row.xp.toLocaleString()} XP • Lv.{row.level}
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-};
-
-/* ==========================================================================
-   FEATURE 15 (BUG-05 Fix): ROLE-PROTECTED ADMIN PANEL & BULK UPLOADER
-   ========================================================================== */
-export const AdminDashboardView: React.FC<{
-  isAdmin: boolean;
-  authEmail: string | null;
-  customQuestions: QuestionMCQ[];
-  onAddQuestions: (newQs: QuestionMCQ[]) => void;
-  onDeleteCustomQuestion: (id: string) => void;
-  showToast: (msg: string) => void;
-}> = ({ isAdmin, authEmail, customQuestions, onAddQuestions, onDeleteCustomQuestion, showToast }) => {
-  const [subjectId, setSubjectId] = useState<string>('physics');
-  const activeSubj = SUBJECTS.find((s) => s.id === subjectId) || SUBJECTS[0];
-  const [chapterId, setChapterId] = useState<string>(activeSubj.chapters[0].id);
-  const [difficulty, setDifficulty] = useState<'Easy' | 'Medium' | 'Hard'>('Medium');
-  const [examTag, setExamTag] = useState<string>('DU / HSC Standard');
-  const [questionBn, setQuestionBn] = useState<string>('');
-  const [optA, setOptA] = useState<string>('');
-  const [optB, setOptB] = useState<string>('');
-  const [optC, setOptC] = useState<string>('');
-  const [optD, setOptD] = useState<string>('');
-  const [correctIndex, setCorrectIndex] = useState<number>(0);
-  const [explanation, setExplanation] = useState<string>('');
-  const [bulkJsonText, setBulkJsonText] = useState<string>('');
-
-  /* BUG-05 Security Gate: Block unauthorized users from Admin Panel */
-  if (!authEmail || !isAdmin) {
-    return (
-      <div className="ev-card" style={{ maxWidth: '580px', margin: '2rem auto', textAlign: 'center', padding: '2rem' }}>
-        <span className="ev-badge-pill ev-badge-danger" style={{ marginBottom: '0.5rem' }}>🔒 Restricted Admin Area</span>
-        <h2 className="font-bn" style={{ fontSize: '1.3rem', fontWeight: 800, marginBottom: '0.5rem' }}>
-          শুধুমাত্র অনুমোদিত অ্যাডমিন এই প্যানেলে প্রবেশ করতে পারবেন
-        </h2>
-        <p className="font-bn" style={{ fontSize: '0.86rem', color: 'var(--text-secondary)' }}>
-          আপনার অ্যাডমিন একাউন্ট দিয়ে লগইন করুন এবং নিশ্চিত করুন যে Supabase ডাটাবেসের `user_profiles` টেবিলে আপনার একাউন্টে `is_admin = true` দেওয়া আছে।
-        </p>
-      </div>
-    );
-  }
-
-  const handleCreateSingleMCQ = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const newQ: QuestionMCQ = {
-      id: 'q-custom-' + Date.now(),
-      subjectId,
-      chapterId,
-      categories: ['ssc', 'hsc', 'uni', 'bcs', 'bank'],
-      difficulty,
-      questionType: 'standard',
-      examTag,
-      question: questionBn.trim(),
-      questionBn: questionBn.trim(),
-      options: [optA.trim(), optB.trim(), optC.trim() || 'None', optD.trim() || 'All'],
-      correctIndex,
-      explanation: explanation.trim() || 'বোর্ড পাঠ্যবই অনুসারে যাচাইকৃত।'
-    };
-
-    const { error } = await supabase.from('questions_mcq').upsert({
-      id: newQ.id,
-      subject_id: newQ.subjectId,
-      chapter_id: newQ.chapterId,
-      categories: newQ.categories,
-      difficulty: newQ.difficulty,
-      exam_tag: newQ.examTag,
-      question_en: newQ.question,
-      question_bn: newQ.questionBn,
-      options: newQ.options,
-      correct_index: newQ.correctIndex,
-      explanation: newQ.explanation
-    });
-
-    if (error) {
-      showToast('Database RLS Warning: ' + error.message);
-    }
-
-    onAddQuestions([newQ]);
-    setQuestionBn('');
-    setOptA('');
-    setOptB('');
-    setOptC('');
-    setOptD('');
-    setExplanation('');
-    showToast('নতুন MCQ সফলভাবে যুক্ত হয়েছে!');
-  };
-
-  const handleBulkImport = () => {
-    try {
-      const parsed = JSON.parse(bulkJsonText);
-      const arr = Array.isArray(parsed) ? parsed : [parsed];
-      const valid: QuestionMCQ[] = arr.map((item, idx) => ({
-        id: item.id || `q-bulk-${Date.now()}-${idx}`,
-        subjectId: item.subjectId || 'physics',
-        chapterId: item.chapterId || 'phy-1',
-        categories: item.categories || ['hsc', 'uni', 'bcs'],
-        difficulty: item.difficulty || 'Medium',
-        questionType: item.questionType || 'standard',
-        examTag: item.examTag || 'Verified Question',
-        question: item.question || item.questionBn || '',
-        questionBn: item.questionBn || item.question || '',
-        options: item.options || ['Option A', 'Option B', 'Option C', 'Option D'],
-        correctIndex: Number(item.correctIndex) || 0,
-        explanation: item.explanation || ''
-      }));
-      onAddQuestions(valid);
-      setBulkJsonText('');
-      showToast(`${valid.length}টি প্রশ্ন আপলোড হয়েছে!`);
-    } catch {
-      showToast('সঠিক JSON ফরম্যাট দিন!');
-    }
-  };
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-      <div>
-        <span className="ev-badge-pill ev-badge-success" style={{ marginBottom: '0.3rem' }}>✓ Verified Admin ({authEmail})</span>
-        <h1 className="font-bn" style={{ fontSize: '1.38rem', fontWeight: 800 }}>🛠️ অ্যাডমিন প্যানেল ও প্রশ্ন আপলোডার</h1>
-      </div>
-
-      <div className="ev-grid-2">
-        <form onSubmit={handleCreateSingleMCQ} className="ev-card" style={{ display: 'flex', flexDirection: 'column', gap: '0.7rem' }}>
-          <h3 className="font-bn" style={{ fontSize: '1.05rem', fontWeight: 800 }}>+ নতুন MCQ প্রশ্ন যোগ করুন</h3>
-          <div className="ev-grid-2">
-            <select
-              className="ev-select"
-              value={subjectId}
-              onChange={(e) => {
-                const s = SUBJECTS.find((x) => x.id === e.target.value) || SUBJECTS[0];
-                setSubjectId(s.id);
-                setChapterId(s.chapters[0].id);
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div
+              style={{
+                width: 48,
+                height: 48,
+                borderRadius: 14,
+                background: myRank.bgSoft,
+                color: myRank.colorHex,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: 22,
+                fontWeight: 800,
               }}
             >
-              {SUBJECTS.map((s) => (
-                <option key={s.id} value={s.id}>{s.nameBn}</option>
-              ))}
-            </select>
-            <select className="ev-select" value={chapterId} onChange={(e) => setChapterId(e.target.value)}>
-              {activeSubj.chapters.map((ch) => (
-                <option key={ch.id} value={ch.id}>{ch.titleBn}</option>
-              ))}
-            </select>
-          </div>
-          <div className="ev-grid-2">
-            <select className="ev-select" value={difficulty} onChange={(e) => setDifficulty(e.target.value as any)}>
-              <option value="Easy">Easy</option>
-              <option value="Medium">Medium</option>
-              <option value="Hard">Hard</option>
-            </select>
-            <input type="text" className="ev-input" value={examTag} onChange={(e) => setExamTag(e.target.value)} placeholder="Exam Tag (DU / 46th BCS)" />
-          </div>
-          <input type="text" className="ev-input" value={questionBn} onChange={(e) => setQuestionBn(e.target.value)} placeholder="প্রশ্নটি লিখুন..." required />
-          <div className="ev-grid-2">
-            <input type="text" className="ev-input" placeholder="অপশন A" value={optA} onChange={(e) => setOptA(e.target.value)} required />
-            <input type="text" className="ev-input" placeholder="অপশন B" value={optB} onChange={(e) => setOptB(e.target.value)} required />
-            <input type="text" className="ev-input" placeholder="অপশন C" value={optC} onChange={(e) => setOptC(e.target.value)} />
-            <input type="text" className="ev-input" placeholder="অপশন D" value={optD} onChange={(e) => setOptD(e.target.value)} />
-          </div>
-          <select className="ev-select" value={correctIndex} onChange={(e) => setCorrectIndex(Number(e.target.value))}>
-            <option value={0}>সঠিক উত্তর: Option A</option>
-            <option value={1}>সঠিক উত্তর: Option B</option>
-            <option value={2}>সঠিক উত্তর: Option C</option>
-            <option value={3}>সঠিক উত্তর: Option D</option>
-          </select>
-          <input type="text" className="ev-input" value={explanation} onChange={(e) => setExplanation(e.target.value)} placeholder="ব্যাখ্যা লিখুন..." />
-          <button type="submit" className="ev-btn ev-btn-primary">✓ প্রশ্ন সেভ করুন</button>
-        </form>
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          <div className="ev-card">
-            <h3 className="font-bn" style={{ fontSize: '1.05rem', fontWeight: 800, marginBottom: '0.4rem' }}>⚡ বাল্ক প্রশ্ন আপলোড (Bulk JSON)</h3>
-            <textarea
-              className="ev-input font-mono"
-              rows={5}
-              style={{ fontSize: '0.75rem', marginBottom: '0.65rem' }}
-              placeholder={'[{"subjectId":"physics","chapterId":"phy-1","questionBn":"প্রশ্ন?","options":["A","B","C","D"],"correctIndex":0,"explanation":"..."}]'}
-              value={bulkJsonText}
-              onChange={(e) => setBulkJsonText(e.target.value)}
-            />
-            <button type="button" className="ev-btn ev-btn-soft" style={{ width: '100%' }} onClick={handleBulkImport}>
-              Import Bulk Questions
-            </button>
+              🛡️
+            </div>
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--ink-3)' }}>
+                {trKey('personal_rank', language)} (XP + Accuracy + Mastery)
+              </div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: myRank.colorHex }}>
+                {isBn ? myRank.fullTitleBn : myRank.fullTitleEn} • {myRank.rankScore} RP
+              </div>
+            </div>
           </div>
 
-          <div className="ev-card">
-            <h3 className="font-bn" style={{ fontSize: '1rem', fontWeight: 800, marginBottom: '0.5rem' }}>
-              কাস্টম প্রশ্নসমূহ ({customQuestions.length}টি)
-            </h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '220px', overflowY: 'auto' }}>
-              {customQuestions.map((cq) => (
-                <div key={cq.id} style={{ padding: '0.6rem', background: 'var(--bg-surface-muted)', borderRadius: '6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span className="font-bn" style={{ fontSize: '0.82rem', fontWeight: 700 }}>{cq.questionBn}</span>
-                  <button type="button" className="ev-btn ev-btn-danger ev-btn-sm" onClick={() => onDeleteCustomQuestion(cq.id)}>Delete</button>
-                </div>
-              ))}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div
+              style={{
+                width: 48,
+                height: 48,
+                borderRadius: 14,
+                background: 'var(--primary-soft)',
+                color: 'var(--primary)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: 20,
+                fontWeight: 800,
+              }}
+            >
+              #{myPosition}
+            </div>
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--ink-3)' }}>
+                {trKey('leaderboard_pos', language)}
+              </div>
+              <div style={{ fontSize: 17, fontWeight: 800, color: 'var(--ink)' }}>
+                {isBn ? `বর্তমান পজিশন #${myPosition}` : `Current Standing #${myPosition}`}
+              </div>
             </div>
           </div>
         </div>
+
+        {/* Ranking Scope & Time Period Filters */}
+        <div className="ev-card">
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 10,
+              flexWrap: 'wrap',
+              marginBottom: 14,
+            }}
+          >
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {(
+                [
+                  { id: 'global', label: trKey('global_ranking', language), icon: '🌍' },
+                  { id: 'friends', label: trKey('friends_ranking', language), icon: '👥' },
+                  { id: 'subject', label: trKey('subject_ranking', language), icon: '📚' },
+                ] as const
+              ).map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setLbScope(tab.id)}
+                  className={`ev-btn ${lbScope === tab.id ? 'ev-btn-primary' : 'ev-btn-secondary'}`}
+                  style={{ minHeight: 38, padding: '0 14px', fontSize: 13 }}
+                >
+                  {tab.icon} {tab.label}
+                </button>
+              ))}
+            </div>
+
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {(
+                [
+                  { id: 'today', label: trKey('filter_today', language) },
+                  { id: 'weekly', label: trKey('filter_weekly', language) },
+                  { id: 'monthly', label: trKey('filter_monthly', language) },
+                  { id: 'alltime', label: trKey('filter_alltime', language) },
+                ] as const
+              ).map((p) => (
+                <button
+                  key={p.id}
+                  onClick={() => setLbPeriod(p.id)}
+                  className={`ev-btn ${lbPeriod === p.id ? 'ev-btn-primary' : 'ev-btn-secondary'}`}
+                  style={{ minHeight: 36, padding: '0 12px', fontSize: 12.5 }}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {lbScope === 'friends' && (
+            <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+              <input
+                type="text"
+                placeholder={isBn ? 'বন্ধুর নাম বা কোড লিখুন...' : 'Enter friend name or code...'}
+                value={friendInput}
+                onChange={(e) => setFriendInput(e.target.value)}
+                style={{
+                  flex: 1,
+                  height: 40,
+                  padding: '0 12px',
+                  borderRadius: 10,
+                  border: '1px solid var(--border-strong)',
+                  background: 'var(--surface-2)',
+                }}
+              />
+              <button
+                className="ev-btn ev-btn-primary"
+                style={{ minHeight: 40 }}
+                onClick={() => {
+                  if (friendInput.trim()) {
+                    addFriendByCode(friendInput.trim());
+                    setFriendInput('');
+                  }
+                }}
+              >
+                + {isBn ? 'বন্ধু যোগ করো' : 'Add Friend'}
+              </button>
+            </div>
+          )}
+
+          {/* Premium 2nd - 1st - 3rd Metallic Podium */}
+          <div className="ev-podium">
+            {/* 2nd Place */}
+            {top2 && (
+              <div className="ev-podium-slot second">
+                <div style={{ fontSize: 20 }}>🥈 #2</div>
+                <div style={{ fontSize: 28 }}>{top2.avatar}</div>
+                <div style={{ fontWeight: 800, fontSize: 13.5 }}>{top2.name}</div>
+                <span
+                  className="ev-rank-badge-pill"
+                  style={{
+                    background: top2.rankInfo.bgSoft,
+                    color: top2.rankInfo.colorHex,
+                    fontSize: 11,
+                  }}
+                >
+                  {isBn ? top2.rankInfo.fullTitleBn : top2.rankInfo.fullTitleEn}
+                </span>
+                <div style={{ fontFamily: 'var(--font-mono)', fontWeight: 800, fontSize: 13 }}>
+                  {top2.displayXp} XP
+                </div>
+              </div>
+            )}
+
+            {/* 1st Place with Crown */}
+            {top1 && (
+              <div className="ev-podium-slot first">
+                <div style={{ fontSize: 24 }}>👑 #1</div>
+                <div style={{ fontSize: 34 }}>{top1.avatar}</div>
+                <div style={{ fontWeight: 800, fontSize: 15 }}>{top1.name}</div>
+                <span
+                  className="ev-rank-badge-pill"
+                  style={{
+                    background: top1.rankInfo.bgSoft,
+                    color: top1.rankInfo.colorHex,
+                    fontSize: 11.5,
+                  }}
+                >
+                  {isBn ? top1.rankInfo.fullTitleBn : top1.rankInfo.fullTitleEn}
+                </span>
+                <div
+                  style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontWeight: 800,
+                    fontSize: 14.5,
+                    color: 'var(--amber)',
+                  }}
+                >
+                  {top1.displayXp} XP
+                </div>
+              </div>
+            )}
+
+            {/* 3rd Place */}
+            {top3 && (
+              <div className="ev-podium-slot third">
+                <div style={{ fontSize: 20 }}>🥉 #3</div>
+                <div style={{ fontSize: 28 }}>{top3.avatar}</div>
+                <div style={{ fontWeight: 800, fontSize: 13.5 }}>{top3.name}</div>
+                <span
+                  className="ev-rank-badge-pill"
+                  style={{
+                    background: top3.rankInfo.bgSoft,
+                    color: top3.rankInfo.colorHex,
+                    fontSize: 11,
+                  }}
+                >
+                  {isBn ? top3.rankInfo.fullTitleBn : top3.rankInfo.fullTitleEn}
+                </span>
+                <div style={{ fontFamily: 'var(--font-mono)', fontWeight: 800, fontSize: 13 }}>
+                  {top3.displayXp} XP
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Full Standing Table */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 16 }}>
+            {filteredPeers.map((peer, idx) => (
+              <div
+                key={peer.name}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 10,
+                  padding: '12px 14px',
+                  borderRadius: 12,
+                  background: peer.isMe ? 'var(--primary-soft)' : 'var(--surface-2)',
+                  border: peer.isMe ? '1.5px solid var(--primary)' : '1px solid var(--border)',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+                  <span
+                    style={{
+                      width: 28,
+                      fontWeight: 800,
+                      fontFamily: 'var(--font-mono)',
+                      color: 'var(--ink-2)',
+                    }}
+                  >
+                    #{idx + 1}
+                  </span>
+                  <span style={{ fontSize: 22 }}>{peer.avatar}</span>
+                  <div style={{ minWidth: 0 }}>
+                    <div
+                      style={{
+                        fontWeight: 800,
+                        fontSize: 14.5,
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                      }}
+                    >
+                      {peer.name} {peer.isMe ? (isBn ? '(তুমি)' : '(You)') : ''}
+                    </div>
+                    <div style={{ fontSize: 12, color: 'var(--ink-3)', fontWeight: 600 }}>
+                      {trKey('accuracy', language)}: {peer.acc}% • 🔥 {peer.streak}d
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+                  <span
+                    className="ev-rank-badge-pill"
+                    style={{
+                      background: peer.rankInfo.bgSoft,
+                      color: peer.rankInfo.colorHex,
+                    }}
+                  >
+                    {isBn ? peer.rankInfo.fullTitleBn : peer.rankInfo.fullTitleEn}
+                  </span>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 800, fontSize: 14 }}>
+                    {peer.displayXp} XP
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  /* =====================================================================
+     2. RANK PROGRESSION & BADGES VIEW (Bronze -> Silver -> Gold -> Platinum -> Elite)
+     ===================================================================== */
+  if (activeTab === 'achievements') {
+    const allTiers = [
+      {
+        id: 'bronze',
+        nameEn: 'Bronze Tier (I – III)',
+        nameBn: 'ব্রোঞ্জ র‍্যাঙ্ক (I – III)',
+        range: '0 – 199 RP',
+        color: '#B45309',
+        icon: '🥉',
+        descBn: 'প্রাথমিক অনুশীলন ও নিয়মিত অধ্যায় ভিত্তিক কুইজ অংশগ্রহণ।',
+        descEn: 'Foundation practice and consistent chapter quiz participation.',
+      },
+      {
+        id: 'silver',
+        nameEn: 'Silver Tier (I – III)',
+        nameBn: 'সিলভার র‍্যাঙ্ক (I – III)',
+        range: '200 – 399 RP',
+        color: '#475569',
+        icon: '🥈',
+        descBn: '৭০%+ সঠিকতার হার এবং অন্তত ৩টি অধ্যায়ে দক্ষতা অর্জন।',
+        descEn: '70%+ accuracy rate and solid mastery across core chapters.',
+      },
+      {
+        id: 'gold',
+        nameEn: 'Gold Tier (I – III)',
+        nameBn: 'গোল্ড র‍্যাঙ্ক (I – III)',
+        range: '400 – 649 RP',
+        color: '#D97706',
+        icon: '🥇',
+        descBn: '৮০%+ সঠিকতা, উচ্চ XP এবং ৭ দিনের ধারাবাহিক স্ট্রিক।',
+        descEn: '80%+ accuracy, strong XP accumulation, and 7-day consistency.',
+      },
+      {
+        id: 'platinum',
+        nameEn: 'Platinum Tier (I – III)',
+        nameBn: 'প্লাটিনাম র‍্যাঙ্ক (I – III)',
+        range: '650 – 849 RP',
+        color: '#0284C7',
+        icon: '💎',
+        descBn: '৮৮%+ সঠিকতা এবং অধিকাংশ অধ্যায়ে বোর্ড স্ট্যান্ডার্ড দক্ষতা।',
+        descEn: '88%+ accuracy and board-standard mastery across subjects.',
+      },
+      {
+        id: 'elite',
+        nameEn: 'Elite Grandmaster',
+        nameBn: 'এলিট গ্র্যান্ডমাস্টার',
+        range: '850 – 1000 RP',
+        color: '#7C3AED',
+        icon: '👑',
+        descBn: 'সর্বোচ্চ র‍্যাঙ্ক! ৯২%+ সঠিকতা, পূর্ণ মাস্টারি ও অবিচল ধারাবাহিকতা।',
+        descEn: 'Apex rank! 92%+ accuracy, complete subject mastery & streak.',
+      },
+    ];
+
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+        <div className="ev-card">
+          <div className="ev-section-head">
+            <div>
+              <h3 className="ev-section-title">
+                🏆 {isBn ? 'র‍্যাঙ্ক প্রগ্রেশন সিস্টেম (Bronze → Elite)' : 'Rank Progression System'}
+              </h3>
+              <p className="ev-section-sub">
+                {isBn
+                  ? 'XP (40%), সঠিকতার হার (25%), অধ্যায় দক্ষতা (20%) এবং স্ট্রিক ধারাবাহিকতা (15%) মিলে তোমার র‍্যাঙ্ক নির্ধারিত হয়।'
+                  : 'Calculated from XP (40%), Accuracy (25%), Subject Mastery (20%), and Consistency (15%).'}
+              </p>
+            </div>
+            <span
+              className="ev-rank-badge-pill"
+              style={{ background: myRank.bgSoft, color: myRank.colorHex, fontSize: 14 }}
+            >
+              {isBn ? myRank.fullTitleBn : myRank.fullTitleEn} • {myRank.rankScore} / 1000 RP
+            </span>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {allTiers.map((t) => {
+              const isCurrent = t.id === myRank.tierId;
+              return (
+                <div
+                  key={t.id}
+                  style={{
+                    padding: 16,
+                    borderRadius: 14,
+                    background: isCurrent ? myRank.bgSoft : 'var(--surface-2)',
+                    border: isCurrent ? `2px solid ${t.color}` : '1px solid var(--border)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 12,
+                    flexWrap: 'wrap',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <span style={{ fontSize: 28 }}>{t.icon}</span>
+                    <div>
+                      <div style={{ fontWeight: 800, fontSize: 15.5, color: t.color }}>
+                        {isBn ? t.nameBn : t.nameEn}{' '}
+                        {isCurrent && (isBn ? '• (তোমার বর্তমান র‍্যাঙ্ক)' : '• (Current Rank)')}
+                      </div>
+                      <div style={{ fontSize: 13, color: 'var(--ink-2)', fontWeight: 500 }}>
+                        {isBn ? t.descBn : t.descEn}
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{ fontFamily: 'var(--font-mono)', fontWeight: 800, fontSize: 13.5 }}>
+                    {t.range}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  /* =====================================================================
+     3. ANALYTICS VIEW
+     ===================================================================== */
+  if (activeTab === 'Analytics') {
+    return (
+      <div className="ev-card">
+        <div className="ev-section-head">
+          <h3 className="ev-section-title">📊 {trKey('nav_analytics', language)}</h3>
+        </div>
+        <div className="ev-rank-metrics" style={{ marginBottom: 18 }}>
+          <div className="ev-rank-metric-box">
+            <div className="ev-rank-metric-val">{examHistory.length}</div>
+            <div className="ev-rank-metric-lbl">{isBn ? 'মোট পরীক্ষা' : 'Total Exams'}</div>
+          </div>
+          <div className="ev-rank-metric-box">
+            <div className="ev-rank-metric-val">{myRank.accuracyPct}%</div>
+            <div className="ev-rank-metric-lbl">{trKey('accuracy', language)}</div>
+          </div>
+          <div className="ev-rank-metric-box">
+            <div className="ev-rank-metric-val">{myRank.masteryPct}%</div>
+            <div className="ev-rank-metric-lbl">{trKey('mastery', language)}</div>
+          </div>
+          <div className="ev-rank-metric-box">
+            <div className="ev-rank-metric-val">{myRank.rankScore} RP</div>
+            <div className="ev-rank-metric-lbl">{trKey('rank_points', language)}</div>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {examHistory.map((item) => (
+            <div
+              key={item.id}
+              style={{
+                padding: '12px 14px',
+                borderRadius: 12,
+                background: 'var(--surface-2)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 10,
+              }}
+            >
+              <div>
+                <div style={{ fontWeight: 800, fontSize: 14.5 }}>{item.subjectName}</div>
+                <div style={{ fontSize: 12.5, color: 'var(--ink-3)' }}>
+                  {item.chapterName} • {new Date(item.date).toLocaleDateString()}
+                </div>
+              </div>
+              <div style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', fontWeight: 800 }}>
+                <div style={{ color: 'var(--emerald)' }}>
+                  {item.score}/{item.total} ({item.accuracy}%)
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--primary)' }}>+{item.xpEarned} XP</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  /* =====================================================================
+     4. MISTAKE BANK VIEW
+     ===================================================================== */
+  if (activeTab === 'mistakes') {
+    const activeMistakes = mistakes.filter((m) => !m.mastered);
+    return (
+      <div className="ev-card">
+        <div className="ev-section-head">
+          <h3 className="ev-section-title">
+            🎯 {trKey('nav_mistakes', language)} ({activeMistakes.length})
+          </h3>
+        </div>
+        {activeMistakes.length === 0 ? (
+          <p style={{ color: 'var(--ink-2)', fontWeight: 600 }}>
+            {isBn
+              ? 'দারুণ! তোমার ভুলের খাতায় বর্তমানে কোনো অমীমাংসিত প্রশ্ন নেই।'
+              : 'Great job! You have no pending mistakes to review.'}
+          </p>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {activeMistakes.map((m) => (
+              <div
+                key={m.id}
+                style={{
+                  padding: 16,
+                  borderRadius: 14,
+                  background: 'var(--surface-2)',
+                  border: '1px solid var(--border)',
+                }}
+              >
+                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--rose)', marginBottom: 4 }}>
+                  {m.subjectName} • {m.chapterName}
+                </div>
+                <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 8 }}>
+                  {trText(m.question, language)}
+                </div>
+                <div style={{ fontSize: 13.5, color: 'var(--emerald)', fontWeight: 700 }}>
+                  ✅ {isBn ? 'সঠিক উত্তর:' : 'Correct Answer:'}{' '}
+                  {(language === 'en' ? m.options.en : m.options.bn)[m.correctIndex]}
+                </div>
+                <button
+                  className="ev-btn ev-btn-secondary"
+                  style={{ marginTop: 10, minHeight: 38 }}
+                  onClick={() => markMistakeMastered(m.id)}
+                >
+                  ✔️ {isBn ? 'বুঝেছি ও আয়ত্ত করেছি' : 'Mark as Mastered'}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  /* =====================================================================
+     5. FLASHCARDS VIEW
+     ===================================================================== */
+  if (activeTab === 'flashcards') {
+    const card = flashcards[fcIndex % Math.max(1, flashcards.length)];
+    return (
+      <div className="ev-card" style={{ textAlign: 'center', padding: 28 }}>
+        <h3 className="ev-section-title" style={{ justifyContent: 'center', marginBottom: 14 }}>
+          🗂️ {trKey('nav_flashcards', language)}
+        </h3>
+        {card && (
+          <div
+            onClick={() => setFcFlipped(!fcFlipped)}
+            style={{
+              maxWidth: 520,
+              margin: '0 auto',
+              minHeight: 190,
+              padding: 24,
+              borderRadius: 18,
+              background: 'var(--surface-2)',
+              border: '1.5px solid var(--border-strong)',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              gap: 10,
+            }}
+          >
+            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--primary)' }}>
+              {fcFlipped ? (isBn ? 'উত্তর (Back)' : 'Answer') : isBn ? 'প্রশ্ন (Front)' : 'Prompt'}
+            </span>
+            <div style={{ fontSize: 18, fontWeight: 800 }}>
+              {trText(fcFlipped ? card.back : card.front, language)}
+            </div>
+            <span style={{ fontSize: 12, color: 'var(--ink-3)' }}>
+              {isBn ? '(কার্ডে ট্যাপ করে উল্টাও)' : '(Tap card to flip)'}
+            </span>
+          </div>
+        )}
+        <div style={{ display: 'flex', justifyContent: 'center', gap: 10, marginTop: 18 }}>
+          <button
+            className="ev-btn ev-btn-secondary"
+            onClick={() => {
+              setFcFlipped(false);
+              setFcIndex((i) => (i + 1) % flashcards.length);
+            }}
+          >
+            {isBn ? 'পরবর্তী কার্ড →' : 'Next Card →'}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  /* =====================================================================
+     6. SUBJECT-WISE FORMULA SHEET VIEW
+     ===================================================================== */
+  if (activeTab === 'formulas') {
+    return (
+      <div className="ev-card">
+        <div className="ev-section-head">
+          <h3 className="ev-section-title">📐 {trKey('nav_formulas', language)}</h3>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 12 }}>
+          {subjects.map((sub) => (
+            <div
+              key={sub.id}
+              style={{
+                padding: 16,
+                borderRadius: 14,
+                background: 'var(--surface-2)',
+                border: '1px solid var(--border)',
+              }}
+            >
+              <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 8 }}>
+                {sub.icon} {trText(sub.name, language)}
+              </div>
+              <div style={{ fontSize: 13.5, fontFamily: 'var(--font-mono)', color: 'var(--ink-2)', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <div>• v = u + at | s = ut + ½at²</div>
+                <div>• F = G(m₁m₂)/r² | E = mc²</div>
+                <div>• W = F·s cosθ | P = W/t</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  /* =====================================================================
+     7. STUDY PLANNER VIEW
+     ===================================================================== */
+  if (activeTab === 'planner') {
+    return (
+      <div className="ev-card">
+        <div className="ev-section-head">
+          <h3 className="ev-section-title">📅 {trKey('nav_planner', language)}</h3>
+        </div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
+          <input
+            type="text"
+            placeholder={isBn ? 'আজকের পড়ার টার্গেট লেখো...' : 'Add study goal...'}
+            value={taskTitle}
+            onChange={(e) => setTaskTitle(e.target.value)}
+            style={{
+              flex: 1,
+              minWidth: 200,
+              height: 44,
+              padding: '0 12px',
+              borderRadius: 10,
+              border: '1px solid var(--border-strong)',
+              background: 'var(--surface-2)',
+            }}
+          />
+          <button
+            className="ev-btn ev-btn-primary"
+            onClick={() => {
+              if (!taskTitle.trim()) return;
+              addStudyTask({
+                title: taskTitle.trim(),
+                subjectName: taskSubject,
+                dueDate: new Date().toISOString().slice(0, 10),
+                targetMinutes: taskMinutes,
+              });
+              setTaskTitle('');
+            }}
+          >
+            + {isBn ? 'যোগ করো' : 'Add Task'}
+          </button>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {studyTasks.map((t) => (
+            <div
+              key={t.id}
+              style={{
+                padding: '12px 14px',
+                borderRadius: 12,
+                background: 'var(--surface-2)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 10,
+              }}
+            >
+              <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontWeight: 700 }}>
+                <input
+                  type="checkbox"
+                  checked={t.completed}
+                  onChange={() => toggleStudyTask(t.id)}
+                  style={{ width: 18, height: 18, accentColor: 'var(--primary)' }}
+                />
+                <span style={{ textDecoration: t.completed ? 'line-through' : 'none' }}>
+                  {t.title} ({t.targetMinutes}m)
+                </span>
+              </label>
+              <button className="ev-btn ev-btn-ghost" onClick={() => deleteStudyTask(t.id)}>
+                🗑️
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  /* =====================================================================
+     8. 1v1 QUIZ BATTLE VIEW
+     ===================================================================== */
+  if (activeTab === 'battle') {
+    return (
+      <div className="ev-card" style={{ textAlign: 'center', padding: 28 }}>
+        <h3 className="ev-section-title" style={{ justifyContent: 'center', marginBottom: 8 }}>
+          ⚔️ {trKey('nav_battle', language)}
+        </h3>
+        <p className="ev-section-sub" style={{ marginBottom: 18 }}>
+          {isBn
+            ? 'সমমানের র‍্যাঙ্কের শিক্ষার্থীর সাথে রিয়েল-টাইম স্পিড কুইজ মোকাবিলা!'
+            : 'Compete head-to-head against a peer in your Rank Tier!'}
+        </p>
+
+        {battleStage === 'lobby' ? (
+          <button
+            className="ev-btn ev-btn-primary"
+            onClick={() => {
+              setOpponentName('তানভীর আহমেদ (Gold II)');
+              setBattleStage('matched');
+            }}
+          >
+            ⚡ {isBn ? 'প্রতিদ্বন্দ্বী খুঁজুন (Find Match)' : 'Find Opponent'}
+          </button>
+        ) : (
+          <div
+            style={{
+              maxWidth: 460,
+              margin: '0 auto',
+              padding: 20,
+              borderRadius: 16,
+              background: 'var(--surface-2)',
+              border: '1px solid var(--border-strong)',
+            }}
+          >
+            <div style={{ fontSize: 16, fontWeight: 800, marginBottom: 12 }}>
+              {userName} ({isBn ? myRank.fullTitleBn : myRank.fullTitleEn}) 🆚 {opponentName}
+            </div>
+            <button
+              className="ev-btn ev-btn-secondary"
+              onClick={() => setBattleStage('lobby')}
+            >
+              {isBn ? 'লবিতে ফিরে যাও' : 'Back to Lobby'}
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  /* =====================================================================
+     9. DOUBT FORUM / COMMUNITY VIEW
+     ===================================================================== */
+  return (
+    <div className="ev-card">
+      <div className="ev-section-head">
+        <h3 className="ev-section-title">💬 {trKey('nav_community', language)}</h3>
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 18 }}>
+        <input
+          type="text"
+          placeholder={isBn ? 'তোমার প্রশ্নের শিরোনাম...' : 'Question title...'}
+          value={postTitle}
+          onChange={(e) => setPostTitle(e.target.value)}
+          style={{
+            height: 42,
+            padding: '0 12px',
+            borderRadius: 10,
+            border: '1px solid var(--border-strong)',
+            background: 'var(--surface-2)',
+          }}
+        />
+        <div style={{ display: 'flex', gap: 8 }}>
+          <input
+            type="text"
+            placeholder={isBn ? 'বিস্তারিত লেখো...' : 'Explain your doubt...'}
+            value={postBody}
+            onChange={(e) => setPostBody(e.target.value)}
+            style={{
+              flex: 1,
+              height: 42,
+              padding: '0 12px',
+              borderRadius: 10,
+              border: '1px solid var(--border-strong)',
+              background: 'var(--surface-2)',
+            }}
+          />
+          <button
+            className="ev-btn ev-btn-primary"
+            onClick={() => {
+              if (!postTitle.trim()) return;
+              addCommunityPost({
+                authorName: userName,
+                authorAvatar: userAvatar,
+                authorRank: isBn ? myRank.fullTitleBn : myRank.fullTitleEn,
+                subjectName: 'পদার্থবিজ্ঞান',
+                title: postTitle.trim(),
+                body: postBody.trim(),
+              });
+              setPostTitle('');
+              setPostBody('');
+            }}
+          >
+            {isBn ? 'পোস্ট করো' : 'Post'}
+          </button>
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {communityPosts.map((post) => (
+          <div
+            key={post.id}
+            style={{
+              padding: 16,
+              borderRadius: 14,
+              background: 'var(--surface-2)',
+              border: '1px solid var(--border)',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, fontWeight: 700, color: 'var(--ink-3)', marginBottom: 6 }}>
+              <span>
+                {post.authorAvatar} {post.authorName} •{' '}
+                <strong style={{ color: 'var(--primary)' }}>{post.authorRank || 'Gold I'}</strong>
+              </span>
+              <span>{post.createdAt}</span>
+            </div>
+            <div style={{ fontWeight: 800, fontSize: 15.5, marginBottom: 4 }}>{post.title}</div>
+            <p style={{ fontSize: 14, color: 'var(--ink-2)', marginBottom: 10 }}>{post.body}</p>
+            <button
+              className="ev-btn ev-btn-secondary"
+              style={{ minHeight: 34, padding: '0 10px', fontSize: 12.5 }}
+              onClick={() => togglePostLike(post.id)}
+            >
+              👍 {post.likes}
+            </button>
+          </div>
+        ))}
       </div>
     </div>
   );
