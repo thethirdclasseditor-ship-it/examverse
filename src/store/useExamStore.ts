@@ -31,6 +31,31 @@ export type NavTabId =
   | 'achievements';
 
 /* =====================================================================
+   REQUIRED BY src/lib/supabase.ts (Line 3: import { getLevelProgress })
+   ===================================================================== */
+export function getLevelProgress(xp: number): {
+  level: number;
+  currentXp: number;
+  xpForNextLevel: number;
+  progressPercent: number;
+} {
+  const safeXp = Math.max(0, Number(xp) || 0);
+  const level = Math.floor(safeXp / 250) + 1;
+  const xpForNextLevel = level * 250;
+  const currentLevelBase = (level - 1) * 250;
+  const progressPercent = Math.min(
+    100,
+    Math.round(((safeXp - currentLevelBase) / 250) * 100)
+  );
+  return {
+    level,
+    currentXp: safeXp,
+    xpForNextLevel,
+    progressPercent,
+  };
+}
+
+/* =====================================================================
    MULTI-FACTOR RANK PROGRESSION ENGINE (Bronze -> Silver -> Gold -> Platinum -> Elite)
    Evaluates: XP (40%) + Accuracy % (25%) + Mastery % (20%) + Consistency (15%)
    ===================================================================== */
@@ -158,252 +183,156 @@ export function calculateUserRank(params: {
 }
 
 /* =====================================================================
-   SYLLABUS ADAPTER (Works seamlessly with any syllabusData.ts format)
+   SYLLABUS ADAPTER (Directly maps SUBJECTS, QUESTIONS_MCQ & CREATIVE_QUESTIONS
+   from your src/data/syllabusData.ts)
    ===================================================================== */
-const FALLBACK_SUBJECTS: SubjectData[] = [
-  {
-    id: 'physics',
-    name: { en: 'Physics', bn: 'পদার্থবিজ্ঞান' },
-    icon: '⚛️',
-    color: '#4F46E5',
-    chapters: [
-      {
-        id: 'phy-1',
-        name: { en: 'Physical World & Measurement', bn: 'ভৌত জগৎ ও পরিমাপ' },
-        mcqs: [
-          {
-            id: 'q-phy-1',
-            q: { en: 'Which is a fundamental unit in SI?', bn: 'নিচের কোনটি মৌলিক একক?' },
-            options: {
-              en: ['Joule', 'Ampere', 'Newton', 'Watt'],
-              bn: ['জুল (Joule)', 'অ্যাম্পিয়ার (Ampere)', 'নিউটন (Newton)', 'ওয়াট (Watt)'],
-            },
-            ans: 1,
-            explanation: {
-              en: 'Ampere is one of the 7 SI base units.',
-              bn: 'তড়িৎ প্রবাহের একক অ্যাম্পিয়ার হলো ৭টি মৌলিক এককের একটি।',
-            },
-          },
-          {
-            id: 'q-phy-2',
-            q: { en: 'Dimension of force is —', bn: 'বলের মাত্রা সমীকরণ কোনটি?' },
-            options: {
-              en: ['MLT⁻²', 'ML²T⁻²', 'MLT⁻¹', 'ML⁻¹T⁻²'],
-              bn: ['[MLT⁻²]', '[ML²T⁻²]', '[MLT⁻¹]', '[ML⁻¹T⁻²]'],
-            },
-            ans: 0,
-            explanation: {
-              en: 'Force = mass × acceleration = [M][LT⁻²] = [MLT⁻²].',
-              bn: 'বল F = ma অনুসারে বলের মাত্রা [MLT⁻²]।',
-            },
-          },
-        ],
-        cqs: [
-          {
-            id: 'cq-phy-1',
-            stem: {
-              en: 'A slide calipers has main scale reading 4.2 cm and vernier constant 0.01 cm.',
-              bn: 'একটি স্লাইড ক্যালিপার্সের প্রধান স্কেল পাঠ 4.2 cm এবং ভার্নিয়ার ধ্রুবক 0.01 cm।',
-            },
-            a: { en: 'What is vernier constant?', bn: 'ভার্নিয়ার ধ্রুবক কাকে বলে?' },
-            b: { en: 'Why is backlight error seen in screw gauge?', bn: 'পিচ ও লঘিষ্ঠ গণনের পার্থক্য লেখো।' },
-            c: { en: 'Determine the measured length if vernier coincidence is 6.', bn: 'ভার্নিয়ার সমপাতন 6 হলে দণ্ডটির দৈর্ঘ্য নির্ণয় করো।' },
-            d: { en: 'Analyze percentage error in volume measurement.', bn: 'আয়তন পরিমাপে আপেক্ষিক ত্রুটির প্রভাব বিশ্লেষণ করো।' },
-          },
-        ],
-      },
-    ],
-  },
-  {
-    id: 'chemistry',
-    name: { en: 'Chemistry', bn: 'রসায়ন' },
-    icon: '🧪',
-    color: '#059669',
-    chapters: [
-      {
-        id: 'chem-1',
-        name: { en: 'Safe Use of Laboratory', bn: 'ল্যাবরেটরির নিরাপদ ব্যবহার' },
-        mcqs: [
-          {
-            id: 'q-chem-1',
-            q: { en: 'What is the primary reagent in a 4-digit balance?', bn: 'পল-বুঙ্গি ব্যালেন্সে সর্বনিম্ন কত ভর মাপা যায়?' },
-            options: {
-              en: ['0.1 g', '0.01 g', '0.001 g', '0.0001 g'],
-              bn: ['0.1 g', '0.01 g', '0.001 g', '0.0001 g'],
-            },
-            ans: 2,
-            explanation: {
-              en: 'Paul-Bunge balance measures down to 0.001 g (1 mg).',
-              bn: 'পল-বুঙ্গি ব্যালেন্সে 1 mg বা 0.001 g পর্যন্ত নিখুঁত ভর মাপা যায়।',
-            },
-          },
-        ],
-        cqs: [],
-      },
-    ],
-  },
-  {
-    id: 'math',
-    name: { en: 'Higher Math', bn: 'উচ্চতর গণিত' },
-    icon: '📐',
-    color: '#D97706',
-    chapters: [
-      {
-        id: 'math-1',
-        name: { en: 'Matrices & Determinants', bn: 'ম্যাট্রিক্স ও নির্ণায়ক' },
-        mcqs: [
-          {
-            id: 'q-math-1',
-            q: { en: 'If |A| = 0, matrix A is called —', bn: 'কোনো বর্গ ম্যাট্রিক্স A-এর নির্ণায়ক |A| = 0 হলে তাকে কী বলে?' },
-            options: {
-              en: ['Singular Matrix', 'Identity Matrix', 'Scalar Matrix', 'Symmetric Matrix'],
-              bn: ['ব্যতিক্রমী ম্যাট্রিক্স', 'অভেদক ম্যাট্রিক্স', 'স্কেলার ম্যাট্রিক্স', 'প্রতিসম ম্যাট্রিক্স'],
-            },
-            ans: 0,
-            explanation: {
-              en: 'A square matrix with determinant 0 is a singular matrix.',
-              bn: 'নির্ণায়কের মান শূন্য হলে ম্যাট্রিক্সটি ব্যতিক্রমী (Singular)।',
-            },
-          },
-        ],
-        cqs: [],
-      },
-    ],
-  },
-  {
-    id: 'biology',
-    name: { en: 'Biology', bn: 'জীববিজ্ঞান' },
-    icon: '🧬',
-    color: '#E11D48',
-    chapters: [
-      {
-        id: 'bio-1',
-        name: { en: 'Cell & Its Structure', bn: 'কোষ ও এর গঠন' },
-        mcqs: [
-          {
-            id: 'q-bio-1',
-            q: { en: 'Which organelle is the powerhouse of the cell?', bn: 'কোষের পাওয়ার হাউস বলা হয় কোন অঙ্গাণুকে?' },
-            options: {
-              en: ['Ribosome', 'Mitochondria', 'Golgi Body', 'Lysosome'],
-              bn: ['রাইবোজোম', 'মাইটোকন্ড্রিয়া', 'গলগি বডি', 'লাইসোজোম'],
-            },
-            ans: 1,
-            explanation: {
-              en: 'Mitochondria produce ATP through cellular respiration.',
-              bn: 'মাইটোকন্ড্রিয়ায় ক্রেবস চক্রের মাধ্যমে ATP শক্তি উৎপন্ন হয়।',
-            },
-          },
-        ],
-        cqs: [],
-      },
-    ],
-  },
-];
+const SUBJECT_ICONS: Record<string, string> = {
+  physics: '⚛️',
+  chemistry: '🧪',
+  math: '📐',
+  biology: '🧬',
+  accounting: '📊',
+  management: '🏢',
+  finance: '🏦',
+  marketing: '📣',
+  economics: '📈',
+  civics: '⚖️',
+  history: '🏛️',
+  logic: '🧠',
+  sociology: '🌐',
+  bangla: 'অ',
+  english: '🔤',
+  ict: '💻',
+  gk: '🌍',
+};
 
 export function getAvailableClasses(): string[] {
   const mod = RawSyllabus as any;
-  if (mod?.SYLLABUS_DB && typeof mod.SYLLABUS_DB === 'object') {
-    return Object.keys(mod.SYLLABUS_DB);
+  if (Array.isArray(mod?.EXAM_CATEGORIES) && mod.EXAM_CATEGORIES.length > 0) {
+    return mod.EXAM_CATEGORIES.map((c: any) => c.name || String(c.id).toUpperCase());
   }
-  return ['HSC', 'SSC', 'Admission'];
+  return ['HSC', 'SSC', 'Admission', 'BCS'];
 }
 
-export function getAvailableGroups(selectedClass: string): string[] {
-  const mod = RawSyllabus as any;
-  if (mod?.SYLLABUS_DB?.[selectedClass]) {
-    return Object.keys(mod.SYLLABUS_DB[selectedClass]);
-  }
-  return ['Science', 'Business', 'Humanities'];
+export function getAvailableGroups(_selectedClass: string): string[] {
+  return ['Science', 'Commerce', 'Arts', 'All'];
 }
 
 export function getSubjectsForSelection(selectedClass: string, selectedGroup: string): SubjectData[] {
   const mod = RawSyllabus as any;
+  const rawSubjects = Array.isArray(mod?.SUBJECTS) ? mod.SUBJECTS : [];
+  const allMcqs = Array.isArray(mod?.QUESTIONS_MCQ) ? mod.QUESTIONS_MCQ : [];
+  const allCqs = Array.isArray(mod?.CREATIVE_QUESTIONS) ? mod.CREATIVE_QUESTIONS : [];
 
-  // Case 1: Nested SYLLABUS_DB exists
-  if (mod?.SYLLABUS_DB?.[selectedClass]?.[selectedGroup]) {
-    return mod.SYLLABUS_DB[selectedClass][selectedGroup];
-  }
+  if (rawSubjects.length === 0) return [];
 
-  // Case 2: Flat SUBJECTS + QUESTIONS_DB + CQ_DB in syllabusData.ts
-  if (Array.isArray(mod?.SUBJECTS) && mod.SUBJECTS.length > 0) {
-    const allQuestions = Array.isArray(mod.QUESTIONS_DB) ? mod.QUESTIONS_DB : [];
-    const allCqs = Array.isArray(mod.CQ_DB) ? mod.CQ_DB : [];
-    const groupKey = selectedGroup.toLowerCase();
+  const grpNorm = selectedGroup.toLowerCase();
+  const filteredSubjects = rawSubjects.filter((s: any) => {
+    if (grpNorm === 'all') return true;
+    const sGrp = String(s.group || '').toLowerCase();
+    return sGrp === grpNorm || sGrp === 'common';
+  });
 
-    const filteredRaw = mod.SUBJECTS.filter((s: any) => {
-      if (!s.group || s.group === 'common' || s.group === 'all') return true;
-      return String(s.group).toLowerCase().includes(groupKey.slice(0, 3));
-    });
+  const targetSubjects = filteredSubjects.length > 0 ? filteredSubjects : rawSubjects;
 
-    const sourceList = filteredRaw.length > 0 ? filteredRaw : mod.SUBJECTS;
+  return targetSubjects.map((rawSubj: any): SubjectData => {
+    const subjId = String(rawSubj.id);
+    const chapters: ChapterData[] = (rawSubj.chapters || []).map((rawCh: any): ChapterData => {
+      const chId = String(rawCh.id);
 
-    return sourceList.map((rawSubj: any): SubjectData => {
-      const chapters: ChapterData[] = (rawSubj.chapters || []).map((rawCh: any): ChapterData => {
-        const chQuestions: MCQQuestion[] = allQuestions
-          .filter((q: any) => q.subj === rawSubj.id && q.ch === rawCh.id)
-          .map((q: any): MCQQuestion => ({
+      const chMcqs: MCQQuestion[] = allMcqs
+        .filter((q: any) => q.subjectId === subjId && q.chapterId === chId)
+        .map((q: any): MCQQuestion => {
+          const statementsText =
+            Array.isArray(q.statements) && q.statements.length > 0
+              ? `\n${q.statements.join('\n')}`
+              : '';
+          const enQ = (q.question || q.questionBn || '') + statementsText;
+          const bnQ = (q.questionBn || q.question || '') + statementsText;
+          const opts = Array.isArray(q.options) ? q.options : [];
+
+          return {
             id: String(q.id),
-            q: {
-              en: q.qEn || q.q || '',
-              bn: q.q || q.qEn || '',
-            },
-            options: {
-              en: Array.isArray(q.optsEn) ? q.optsEn : Array.isArray(q.opts) ? q.opts : [],
-              bn: Array.isArray(q.opts) ? q.opts : Array.isArray(q.optsEn) ? q.optsEn : [],
-            },
-            ans: typeof q.ans === 'number' ? q.ans : 0,
+            q: { en: enQ, bn: bnQ },
+            options: { en: opts, bn: opts },
+            ans: typeof q.correctIndex === 'number' ? q.correctIndex : 0,
             explanation: {
-              en: q.expEn || q.exp || '',
-              bn: q.exp || q.expEn || '',
+              en: q.explanation || '',
+              bn: q.explanation || '',
             },
-            boardTag: q.board,
-          }));
+            boardTag: q.examTag,
+          };
+        });
 
-        const chCqs: CQQuestion[] = allCqs
-          .filter((c: any) => c.subj === rawSubj.id && c.ch === rawCh.id)
-          .map((c: any): CQQuestion => ({
-            id: String(c.id),
-            stem: { en: c.stemEn || c.stem || '', bn: c.stem || c.stemEn || '' },
-            a: { en: c.parts?.a?.qEn || c.parts?.a?.q || '', bn: c.parts?.a?.q || '' },
-            b: { en: c.parts?.b?.qEn || c.parts?.b?.q || '', bn: c.parts?.b?.q || '' },
-            c: { en: c.parts?.c?.qEn || c.parts?.c?.q || '', bn: c.parts?.c?.q || '' },
-            d: { en: c.parts?.d?.qEn || c.parts?.d?.q || '', bn: c.parts?.d?.q || '' },
-            ansA: { en: c.parts?.a?.ansEn || c.parts?.a?.ans || '', bn: c.parts?.a?.ans || '' },
-            ansB: { en: c.parts?.b?.ansEn || c.parts?.b?.ans || '', bn: c.parts?.b?.ans || '' },
-            ansC: { en: c.parts?.c?.ansEn || c.parts?.c?.ans || '', bn: c.parts?.c?.ans || '' },
-            ansD: { en: c.parts?.d?.ansEn || c.parts?.d?.ans || '', bn: c.parts?.d?.ans || '' },
-            boardTag: c.board,
-          }));
-
-        return {
-          id: String(rawCh.id),
-          name: {
-            en: rawCh.nameEn || rawCh.name || 'Chapter',
-            bn: rawCh.name || rawCh.nameEn || 'অধ্যায়',
+      const chCqs: CQQuestion[] = allCqs
+        .filter((c: any) => c.subjectId === subjId && c.chapterId === chId)
+        .map((c: any): CQQuestion => ({
+          id: String(c.id),
+          stem: {
+            en: c.stemEn || c.stemBn || '',
+            bn: c.stemBn || c.stemEn || '',
           },
-          mcqs: chQuestions.length > 0 ? chQuestions : FALLBACK_SUBJECTS[0].chapters[0].mcqs,
-          cqs: chCqs,
-        };
-      });
+          a: {
+            en: c.parts?.ka?.question || '',
+            bn: c.parts?.ka?.question || '',
+          },
+          b: {
+            en: c.parts?.kha?.question || '',
+            bn: c.parts?.kha?.question || '',
+          },
+          c: {
+            en: c.parts?.ga?.question || '',
+            bn: c.parts?.ga?.question || '',
+          },
+          d: {
+            en: c.parts?.gha?.question || '',
+            bn: c.parts?.gha?.question || '',
+          },
+          ansA: {
+            en: c.parts?.ka?.answer || '',
+            bn: c.parts?.ka?.answer || '',
+          },
+          ansB: {
+            en: c.parts?.kha?.answer || '',
+            bn: c.parts?.kha?.answer || '',
+          },
+          ansC: {
+            en: c.parts?.ga?.answer || '',
+            bn: c.parts?.ga?.answer || '',
+          },
+          ansD: {
+            en: c.parts?.gha?.answer || '',
+            bn: c.parts?.gha?.answer || '',
+          },
+          boardTag: c.boardTag,
+        }));
 
       return {
-        id: String(rawSubj.id),
+        id: chId,
         name: {
-          en: rawSubj.nameEn || rawSubj.name || 'Subject',
-          bn: rawSubj.name || rawSubj.nameEn || 'বিষয়',
+          en: rawCh.title || rawCh.name || 'Chapter',
+          bn: rawCh.titleBn || rawCh.title || 'অধ্যায়',
         },
-        icon: rawSubj.icon || '📘',
-        color: rawSubj.color || '#4F46E5',
-        chapters: chapters.length > 0 ? chapters : FALLBACK_SUBJECTS[0].chapters,
+        mcqs: chMcqs,
+        cqs: chCqs,
       };
     });
-  }
 
-  return FALLBACK_SUBJECTS;
+    return {
+      id: subjId,
+      name: {
+        en: rawSubj.name || 'Subject',
+        bn: rawSubj.nameBn || rawSubj.name || 'বিষয়',
+      },
+      icon: rawSubj.icon || SUBJECT_ICONS[subjId] || '📘',
+      color: rawSubj.color || '#4F46E5',
+      chapters,
+    };
+  });
 }
 
 /* =====================================================================
-   SUPABASE AUTH ADAPTER (Safe even if offline or varied exports)
+   SUPABASE AUTH ADAPTER
    ===================================================================== */
 export async function signInOrSignUpUser(params: {
   mode: 'signin' | 'signup';
@@ -525,7 +454,7 @@ export function trText(text: LocalizedText | string | undefined, lang: LanguageM
 }
 
 /* =====================================================================
-   PURE REACT EXTERNAL STORE (Zero external dependencies — no zustand needed!)
+   PURE REACT EXTERNAL STORE
    ===================================================================== */
 export interface ExamStoreState {
   userId: string | null;
@@ -625,7 +554,7 @@ function savePersisted(state: ExamStoreState) {
     };
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(subset));
   } catch {
-    // Ignore quota errors
+    // Ignore storage errors
   }
 }
 
@@ -654,7 +583,7 @@ let storeState: ExamStoreState = {
       subjectId: 'physics',
       subjectName: 'পদার্থবিজ্ঞান (Physics)',
       chapterId: 'phy-1',
-      chapterName: 'ভৌত জগৎ ও পরিমাপ',
+      chapterName: 'ভেক্টর ও নিউটনিয়ান বলবিদ্যা',
       mode: 'mcq',
       score: 18,
       total: 20,
@@ -869,7 +798,6 @@ export function useExamStore(): ExamStoreState {
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }
 
-// Exported so src/main.tsx (<ExamProvider>) works without any modification
 export const ExamProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   return <>{children}</>;
 };
