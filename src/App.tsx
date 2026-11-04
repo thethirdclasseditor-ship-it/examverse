@@ -100,7 +100,6 @@ export function App() {
     });
   };
 
-  // Build 7-day flame chain for the Notepad Hero Card
   const dayNames = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
   const litCount = Math.min(7, Math.max(1, streak));
   const sevenDayChain = Array.from({ length: 7 }).map((_, idx) => {
@@ -108,28 +107,22 @@ export function App() {
     const d = new Date(Date.now() - offset * 86400000);
     const isLit = offset < litCount;
     const isToday = offset === 0;
-    return {
-      key: idx,
-      label: dayNames[d.getDay()],
-      isLit,
-      isToday,
-    };
+    return { key: idx, label: dayNames[d.getDay()], isLit, isToday };
   });
 
-  // Curated Model Sets for Homepage
   const recommendedPacks = [
     {
       id: 'pack-stem',
-      badge: isBn ? 'বিজ্ঞান • Science' : 'Science Track',
-      title: isBn ? 'বিজ্ঞান বিভাগ স্পেশাল মডেল টেস্ট' : 'Science STEM Diagnostic Set',
-      sub: isBn ? 'পদার্থবিজ্ঞান, রসায়ন, উচ্চতর গণিত ও জীববিজ্ঞান' : 'Physics, Chemistry, Higher Math & Biology',
+      badge: `${selectedClass} • ${selectedGroup}`,
+      title: isBn ? `${selectedGroup} স্পেশাল মডেল টেস্ট` : `${selectedGroup} Diagnostic Model Set`,
+      sub: isBn ? 'বোর্ড স্ট্যান্ডার্ড ও বহুপদী (i, ii, iii) প্রশ্নব্যাংক' : 'High-yield board & multi-statement MCQs',
       subj: subjects[0],
     },
     {
       id: 'pack-bcs',
-      badge: isBn ? 'ভর্তি ও বিসিএস (-0.25)' : 'Admission & BCS',
-      title: isBn ? 'বিশ্ববিদ্যালয় ও মেডিকেল মেরিট সেট' : 'University & Medical Merit Set',
-      sub: isBn ? 'বহুপদী (i, ii, iii) ও বোর্ড স্ট্যান্ডার্ড প্রশ্ন' : 'Multi-statement & high-yield board MCQs',
+      badge: isBn ? 'ভর্তি ও মেধা যাচাই (-0.25)' : 'Merit Simulation',
+      title: isBn ? 'টাইমড এক্সাম সিমুলেশন সেট' : 'Timed Examination Simulation',
+      sub: isBn ? 'নেগেটিভ মার্কিং ও রিয়েল-টাইম ডেডলাইন টাইমারসহ' : 'With negative marking & real-time timer',
       subj: subjects[1] || subjects[0],
     },
     {
@@ -144,9 +137,6 @@ export function App() {
 
   return (
     <>
-      {/* =========================================================
-          1. NOTEBOOK PAPER BACKGROUND DOODLES & GLOBAL SVG DEFS
-          ========================================================= */}
       <div className="ev-bg-art" aria-hidden="true">
         <svg className="ev-doodle ev-doodle-book" viewBox="0 0 200 200">
           <g>
@@ -191,7 +181,6 @@ export function App() {
         </svg>
       </div>
 
-      {/* Shared SVG Gradients for Flame & Ring */}
       <svg width="0" height="0" style={{ position: 'absolute' }} aria-hidden="true">
         <defs>
           <linearGradient id="evFlameGrad" x1="0" y1="0" x2="0" y2="1">
@@ -208,9 +197,6 @@ export function App() {
       </svg>
 
       <div className="ev-app-shell">
-        {/* =========================================================
-            2. LIQUID GLASS DESKTOP SIDEBAR WITH MINIMALIST SVG ICONS
-            ========================================================= */}
         <aside className="ev-sidebar" aria-label="Main Sidebar Navigation">
           <button
             type="button"
@@ -274,12 +260,29 @@ export function App() {
           </ul>
 
           <div className="ev-sidebar-footer">
+            {/* ADMIN PANEL BUTTON IN SIDEBAR */}
+            <button
+              type="button"
+              className={`ev-nav-btn ${activeTab === 'admin' ? 'is-active' : ''}`}
+              onClick={() => {
+                setSelectedSubject(null);
+                setActiveTab('admin');
+              }}
+            >
+              <span className="ev-nav-btn-left">
+                <EvIcon name="shield" size={19} />
+                <span>{trKey('nav_admin', language)}</span>
+              </span>
+              <span className="ev-nav-count">CSV</span>
+            </button>
+
             <button type="button" className="ev-nav-btn" onClick={() => setAuthModalOpen(true)}>
               <span className="ev-nav-btn-left">
                 <EvIcon name="cloud" size={19} />
                 <span>{isAuthenticated ? firstName : isBn ? 'ক্লাউড সাইন ইন' : 'Cloud Sync & Login'}</span>
               </span>
             </button>
+
             <button type="button" className="ev-nav-btn" onClick={() => setSettingsModalOpen(true)}>
               <span className="ev-nav-btn-left">
                 <EvIcon name="settings" size={19} />
@@ -289,9 +292,6 @@ export function App() {
           </div>
         </aside>
 
-        {/* =========================================================
-            3. MAIN WRAPPER (Liquid Glass Topbar + Dynamic Content)
-            ========================================================= */}
         <div className="ev-main-wrapper">
           <header className="ev-topbar">
             <div className="ev-topbar-left">
@@ -323,7 +323,6 @@ export function App() {
             </div>
 
             <div className="ev-topbar-right">
-              {/* Glowing Flame Streak Pill */}
               <button
                 type="button"
                 className="ev-streak-pill is-active"
@@ -343,7 +342,6 @@ export function App() {
                 <span>{streak}d</span>
               </button>
 
-              {/* Language Switcher */}
               <button
                 type="button"
                 className="ev-icon-btn"
@@ -356,7 +354,6 @@ export function App() {
                 {language === 'bn' ? 'বাংলা' : language === 'en' ? 'EN' : 'বাং+EN'}
               </button>
 
-              {/* Theme Switch Button */}
               <button
                 type="button"
                 className="ev-icon-btn"
@@ -375,7 +372,6 @@ export function App() {
                 )}
               </button>
 
-              {/* Avatar Ring Profile Trigger */}
               <button
                 type="button"
                 className="ev-profile-trigger"
@@ -394,17 +390,11 @@ export function App() {
             </div>
           </header>
 
-          {/* =========================================================
-              4. DYNAMIC MAIN CONTENT
-              ========================================================= */}
           <main className="ev-content-area">
             <div className="ev-view-animate">
               {activeTab !== 'dashboard' && activeTab !== 'subjects' ? (
                 <ExtraFeaturesView />
               ) : selectedSubject ? (
-                /* =========================================================
-                   SELECTED SUBJECT CHAPTER TREE VIEW
-                   ========================================================= */
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', flexWrap: 'wrap', gap: 10 }}>
                     <button
@@ -443,7 +433,7 @@ export function App() {
                           {trText(selectedSubject.name, language)}
                         </h2>
                         <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
-                          {selectedSubject.chapters.length} {trKey('chapters_count', language)} • Standard & Multi-Statement (i, ii, iii) MCQs + Creative CQs
+                          {selectedSubject.chapters.length} {trKey('chapters_count', language)} • {selectedClass} ({selectedGroup})
                         </div>
                       </div>
                     </div>
@@ -517,15 +507,10 @@ export function App() {
                   </div>
                 </div>
               ) : (
-                /* =========================================================
-                   HOMEPAGE DASHBOARD & SUBJECTS VIEW
-                   ========================================================= */
                 <>
                   {activeTab === 'dashboard' && (
                     <>
-                      {/* TOP HERO GRID: Notepad Rank Scholar Card + Daily Merit Sprint */}
                       <div className="ev-home-top-grid">
-                        {/* Left: Notepad Binding-Hole Hero Card */}
                         <div className="ev-card ev-hero">
                           <HeroSketchSvg />
 
@@ -555,7 +540,6 @@ export function App() {
                             </div>
                           </div>
 
-                          {/* 10%-Ticked XP & Rank Ruler */}
                           <div>
                             <div className="ev-xp-ruler">
                               <div
@@ -571,7 +555,6 @@ export function App() {
                             </div>
                           </div>
 
-                          {/* 7-Day Flame Streak Strip */}
                           <div className="ev-streak-strip">
                             <div className="ev-streak-lead">
                               <FlameBigSvg />
@@ -603,7 +586,6 @@ export function App() {
                           </div>
                         </div>
 
-                        {/* Right: Daily Merit Sprint Featured Card */}
                         <div className="ev-card ev-daily-card">
                           <div className="ev-daily-head">
                             <div className="ev-daily-ic">
@@ -664,16 +646,20 @@ export function App() {
                         </div>
                       </div>
 
-                      {/* CONTINUE LEARNING & TRACK SELECTOR */}
                       <div style={{ marginBottom: '1.65rem' }}>
                         <div className="ev-section-header">
                           <h3 className="ev-section-title">
                             {isBn ? 'পড়াশোনা চালিয়ে যাও (Continue Learning)' : 'Continue Learning & Exam Tools'}
                           </h3>
-                          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                             <select
                               value={selectedClass}
-                              onChange={(e) => setClassAndGroup(e.target.value, selectedGroup)}
+                              onChange={(e) => {
+                                const nextCls = e.target.value;
+                                const availGrps = getAvailableGroups(nextCls);
+                                const nextGrp = availGrps.includes(selectedGroup) ? selectedGroup : availGrps[0];
+                                setClassAndGroup(nextCls, nextGrp);
+                              }}
                               style={{
                                 height: 36,
                                 padding: '0 10px',
@@ -736,7 +722,7 @@ export function App() {
                                     {trText(subjects[0].chapters[0]?.name, language)}
                                   </span>
                                   <span className="ev-badge-pill ev-badge-indigo">
-                                    {isBn ? 'চলমান অধ্যায়' : 'Active Chapter'}
+                                    {selectedClass} • {selectedGroup}
                                   </span>
                                 </div>
                                 <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: 6 }}>
@@ -761,9 +747,9 @@ export function App() {
                               <button
                                 type="button"
                                 className="ev-btn ev-btn-secondary"
-                                onClick={() => handleLaunchSubjectPractice(subjects[0], 0, 'cq', 'practice')}
+                                onClick={() => setActiveTab('admin')}
                               >
-                                {isBn ? 'সৃজনশীল (CQ)' : 'Creative (CQ)'}
+                                {isBn ? '📥 MCQ ইম্পোর্ট (Admin)' : '📥 Bulk Import (Admin)'}
                               </button>
                             </div>
                           </div>
@@ -772,14 +758,13 @@ export function App() {
                     </>
                   )}
 
-                  {/* EXPLORE ALL SUBJECTS (2-Column Grid on Mobile + Inspirational Corner Art) */}
                   <div style={{ marginBottom: '1.65rem' }}>
                     <div className="ev-section-header">
                       <h3 className="ev-section-title">
-                        {trKey('all_subjects', language)} ({subjects.length})
+                        {trKey('all_subjects', language)} — {selectedClass} ({selectedGroup}) ({subjects.length})
                       </h3>
                       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                        {(['Science', 'Commerce', 'Arts', 'All'] as const).map((grp) => (
+                        {groupList.map((grp) => (
                           <button
                             key={grp}
                             type="button"
@@ -792,14 +777,14 @@ export function App() {
                               ? isBn
                                 ? 'বিজ্ঞান'
                                 : 'Science'
-                              : grp === 'Commerce'
+                              : grp === 'Business Studies'
                               ? isBn
-                                ? 'ব্যবসায়'
-                                : 'Commerce'
-                              : grp === 'Arts'
+                                ? 'ব্যবসায় শিক্ষা'
+                                : 'Business Studies'
+                              : grp === 'Humanities'
                               ? isBn
                                 ? 'মানবিক'
-                                : 'Arts'
+                                : 'Humanities'
                               : isBn
                               ? 'সকল বিষয়'
                               : 'All'}
@@ -823,20 +808,21 @@ export function App() {
                             ) / Math.max(1, subj.chapters.length)
                           )
                         );
+                        const sketchId = subj.id.includes('accounting') ? 'accounting' : subj.id;
 
                         return (
                           <button
                             key={subj.id}
                             type="button"
                             className="ev-card ev-card-interactive ev-subject-card"
-                            data-subj={subj.id}
+                            data-subj={sketchId}
                             onClick={() => setSelectedSubject(subj)}
                           >
-                            <SubjectSketchSvg subjId={subj.id} />
+                            <SubjectSketchSvg subjId={sketchId} />
 
                             <div className="ev-subject-top">
-                              <div className="ev-subject-icon-box" data-subj={subj.id}>
-                                <EvIcon name={subj.id} size={25} />
+                              <div className="ev-subject-icon-box" data-subj={sketchId}>
+                                <EvIcon name={sketchId} size={25} />
                               </div>
                               <span className="ev-mcq-pill">
                                 {subj.chapters.length} {trKey('chapters_count', language)} • {totalMcqs} MCQs
@@ -850,7 +836,7 @@ export function App() {
 
                             <div className="ev-subject-meter">
                               <div className="ev-subject-meter-row">
-                                <span>{selectedGroup}</span>
+                                <span>{selectedClass} • {selectedGroup}</span>
                                 <span>{mastery}% mastery</span>
                               </div>
                               <div className="ev-progress-track">
@@ -863,7 +849,6 @@ export function App() {
                     </div>
                   </div>
 
-                  {/* RECOMMENDED MODEL SETS */}
                   {activeTab === 'dashboard' && (
                     <div style={{ marginBottom: '1.65rem' }}>
                       <div className="ev-section-header">
@@ -955,7 +940,6 @@ export function App() {
                     </div>
                   )}
 
-                  {/* RECENT ACTIVITY */}
                   {activeTab === 'dashboard' && (
                     <div>
                       <div className="ev-section-header">
@@ -986,7 +970,7 @@ export function App() {
                             }}
                           >
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
-                              <div className="ev-subject-icon-box" data-subj={item.subjectId}>
+                              <div className="ev-subject-icon-box" data-subj="accounting">
                                 <EvIcon name={item.subjectId} size={22} />
                               </div>
                               <div>
@@ -1019,9 +1003,6 @@ export function App() {
         </div>
       </div>
 
-      {/* =========================================================
-          5. LIQUID GLASS MOBILE BOTTOM NAV WITH DARK/INDIGO TOP BAR
-          ========================================================= */}
       <nav className="ev-bottom-nav" aria-label="Mobile Bottom Navigation">
         <button
           type="button"
@@ -1073,7 +1054,7 @@ export function App() {
 
         <button
           type="button"
-          className={`ev-bottom-nav-btn ${mobileMoreOpen ? 'is-active' : ''}`}
+          className={`ev-bottom-nav-btn ${mobileMoreOpen || activeTab === 'admin' ? 'is-active' : ''}`}
           onClick={() => setMobileMoreOpen(true)}
         >
           <EvIcon name="more" size={20} />
@@ -1081,7 +1062,6 @@ export function App() {
         </button>
       </nav>
 
-      {/* Mobile "More" Drawer Modal */}
       {mobileMoreOpen && (
         <div className="ev-modal-backdrop" onClick={() => setMobileMoreOpen(false)}>
           <div
@@ -1096,26 +1076,28 @@ export function App() {
               </button>
             </div>
             <div className="ev-grid-2" style={{ gap: '0.6rem' }}>
-              {[...studyVaultNav, { id: 'achievements' as NavTabId, icon: 'achievements', labelKey: 'nav_achievements' }].map(
-                (item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    className={`ev-btn ${
-                      activeTab === item.id ? 'ev-btn-primary' : 'ev-btn-secondary'
-                    }`}
-                    style={{ justifyContent: 'flex-start' }}
-                    onClick={() => {
-                      setSelectedSubject(null);
-                      setActiveTab(item.id);
-                      setMobileMoreOpen(false);
-                    }}
-                  >
-                    <EvIcon name={item.icon} size={18} />
-                    <span>{trKey(item.labelKey as any, language)}</span>
-                  </button>
-                )
-              )}
+              {[
+                { id: 'admin' as NavTabId, icon: 'shield', labelKey: 'nav_admin' },
+                ...studyVaultNav,
+                { id: 'achievements' as NavTabId, icon: 'achievements', labelKey: 'nav_achievements' },
+              ].map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  className={`ev-btn ${
+                    activeTab === item.id ? 'ev-btn-primary' : 'ev-btn-secondary'
+                  }`}
+                  style={{ justifyContent: 'flex-start' }}
+                  onClick={() => {
+                    setSelectedSubject(null);
+                    setActiveTab(item.id);
+                    setMobileMoreOpen(false);
+                  }}
+                >
+                  <EvIcon name={item.icon} size={18} />
+                  <span>{trKey(item.labelKey as any, language)}</span>
+                </button>
+              ))}
             </div>
           </div>
         </div>
