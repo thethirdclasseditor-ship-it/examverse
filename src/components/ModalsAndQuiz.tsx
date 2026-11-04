@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { trKey, trText, useExamStore } from '../store/useExamStore';
+import { signInOrSignUpUser, trKey, trText, useExamStore } from '../store/useExamStore';
 import { MistakeItem } from '../types';
-import { supabase } from '../lib/supabase';
 
 /* =====================================================================
    OFFICIAL EXAMVERSE BRAND LOGO (Book + Fountain Nib + Star + Orbit)
@@ -26,22 +25,18 @@ export const ExamVerseLogo: React.FC<{ size?: number }> = ({ size = 38 }) => (
         <stop offset="100%" stopColor="#4338CA" />
       </linearGradient>
     </defs>
-    {/* Soft rounded emblem backing */}
     <rect x="4" y="4" width="56" height="56" rx="16" fill="url(#evGradMain)" />
-    {/* Orbital swoosh ring */}
     <path
       d="M11 38C15 47 29 51 44 45C52 41.5 56 35 54 29"
       stroke="url(#evGradOrbit)"
       strokeWidth="2.6"
       strokeLinecap="round"
     />
-    {/* Open Book Wings */}
     <path
       d="M16 42V26C21 25 27 26.5 32 30C37 26.5 43 25 48 26V42C43 40.8 37 42 32 45C27 42 21 40.8 16 42Z"
       fill="#FFFFFF"
       fillOpacity="0.95"
     />
-    {/* Fountain Pen Nib rising from center */}
     <path
       d="M32 15L26.5 26.5L29 33H35L37.5 26.5L32 15Z"
       fill="#EDE9FE"
@@ -51,7 +46,6 @@ export const ExamVerseLogo: React.FC<{ size?: number }> = ({ size = 38 }) => (
     />
     <circle cx="32" cy="25" r="1.7" fill="#312E81" />
     <path d="M32 15V23.3" stroke="#312E81" strokeWidth="1.5" strokeLinecap="round" />
-    {/* 4-Point Star at Apex */}
     <path
       d="M32 7.5L33.4 10.6L36.5 12L33.4 13.4L32 16.5L30.6 13.4L27.5 12L30.6 10.6L32 7.5Z"
       fill="#FDE68A"
@@ -63,12 +57,7 @@ export const ExamVerseLogo: React.FC<{ size?: number }> = ({ size = 38 }) => (
    CLOUD-WAVE AUTH MODAL (Inspired by User's Purple Sign-In Reference)
    ===================================================================== */
 export const AuthModal: React.FC = () => {
-  const {
-    isAuthModalOpen,
-    setAuthModalOpen,
-    setUserProfile,
-    language,
-  } = useExamStore();
+  const { isAuthModalOpen, setAuthModalOpen, setUserProfile, language } = useExamStore();
 
   const [mode, setMode] = useState<'signin' | 'signup'>('signin');
   const [name, setName] = useState('');
@@ -89,57 +78,28 @@ export const AuthModal: React.FC = () => {
     setStatusMsg(null);
 
     try {
-      if (mode === 'signup') {
-        const { data, error } = await supabase.auth.signUp({
-          email: email.trim(),
-          password,
-          options: {
-            data: { full_name: name.trim() || email.split('@')[0] },
-          },
-        });
-        if (error) throw error;
-        const displayName = name.trim() || data.user?.user_metadata?.full_name || email.split('@')[0];
-        setUserProfile({
-          id: data.user?.id || `local-${Date.now()}`,
-          name: displayName,
-          email: email.trim(),
-          isAuthenticated: true,
-        });
-        setAuthModalOpen(false);
-      } else {
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email: email.trim(),
-          password,
-        });
-        if (error) {
-          // Graceful offline/demo fallback so user is never blocked
-          const fallbackName = name.trim() || email.split('@')[0];
-          setUserProfile({
-            id: `local-${Date.now()}`,
-            name: fallbackName,
-            email: email.trim(),
-            isAuthenticated: true,
-          });
-          setAuthModalOpen(false);
-          return;
-        }
-        setUserProfile({
-          id: data.user?.id || null,
-          name: data.user?.user_metadata?.full_name || email.split('@')[0],
-          email: email.trim(),
-          isAuthenticated: true,
-        });
-        setAuthModalOpen(false);
-      }
+      const profile = await signInOrSignUpUser({
+        mode,
+        name: name.trim(),
+        email: email.trim(),
+        password,
+      });
+      setUserProfile({
+        id: profile.id,
+        name: profile.name,
+        email: profile.email,
+        isAuthenticated: true,
+      });
+      setAuthModalOpen(false);
     } catch (err: any) {
-      setStatusMsg(err?.message || (isBn ? 'লগইন সম্পন্ন হয়েছে (অফলাইন প্রোফাইল)' : 'Signed in locally'));
+      setStatusMsg(err?.message || (isBn ? 'লগইন সম্পন্ন হয়েছে' : 'Signed in'));
       setUserProfile({
         id: `local-${Date.now()}`,
         name: name.trim() || email.split('@')[0],
         email: email.trim(),
         isAuthenticated: true,
       });
-      setTimeout(() => setAuthModalOpen(false), 600);
+      setTimeout(() => setAuthModalOpen(false), 500);
     } finally {
       setLoading(false);
     }
@@ -148,7 +108,6 @@ export const AuthModal: React.FC = () => {
   return (
     <div className="ev-modal-backdrop" onClick={() => setAuthModalOpen(false)}>
       <div className="ev-auth-card" onClick={(e) => e.stopPropagation()}>
-        {/* Left / Main Form Side */}
         <div className="ev-auth-form-side">
           <div style={{ textAlign: 'center', marginBottom: 22 }}>
             <h2 style={{ fontSize: 28, fontWeight: 800, color: '#111827', letterSpacing: '-0.02em' }}>
@@ -217,12 +176,7 @@ export const AuthModal: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setShowPass(!showPass)}
-                style={{
-                  fontSize: 15,
-                  color: '#6D28D9',
-                  padding: '4px 6px',
-                  fontWeight: 700,
-                }}
+                style={{ fontSize: 15, color: '#6D28D9', padding: '4px 6px', fontWeight: 700 }}
                 title="Toggle password"
               >
                 {showPass ? '🙈' : '👁️'}
@@ -344,7 +298,6 @@ export const AuthModal: React.FC = () => {
           </div>
         </div>
 
-        {/* Right / Cloud-Wave Welcome Panel */}
         <div className="ev-auth-cloud-side">
           <button
             type="button"
@@ -600,7 +553,6 @@ export const QuizRunnerModal: React.FC = () => {
     );
   };
 
-  // CQ (Creative Question / সৃজনশীল) Mode
   if (activeQuiz.examType === 'cq') {
     return (
       <div className="ev-modal-backdrop">
@@ -690,7 +642,6 @@ export const QuizRunnerModal: React.FC = () => {
   return (
     <div className="ev-modal-backdrop" style={{ alignItems: 'flex-start', paddingTop: 18 }}>
       <div style={{ width: '100%', maxWidth: 1120, display: 'flex', flexDirection: 'column', gap: 14 }}>
-        {/* Prominent Quiz Header */}
         <div className="ev-quiz-header">
           <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: 15.5, fontWeight: 800, color: 'var(--ink)' }}>
@@ -707,7 +658,6 @@ export const QuizRunnerModal: React.FC = () => {
               ⏱️ {formatTimer(timeLeft)}
             </div>
 
-            {/* Mobile Question Navigator Trigger */}
             <button
               className="ev-btn ev-btn-secondary"
               style={{ minHeight: 40, padding: '0 12px' }}
@@ -726,7 +676,6 @@ export const QuizRunnerModal: React.FC = () => {
           </div>
         </div>
 
-        {/* Main Quiz Body + Desktop Question Palette */}
         <div className="ev-quiz-layout">
           <div className="ev-question-card">
             {currentQ && (
@@ -762,10 +711,8 @@ export const QuizRunnerModal: React.FC = () => {
                   </button>
                 </div>
 
-                {/* Prominent Question Text */}
                 <div className="ev-question-text">{trText(currentQ.q, language)}</div>
 
-                {/* Large Touch-Target Option Buttons */}
                 <div className="ev-options-list">
                   {optionsArray.map((optText, optIdx) => {
                     const isSelected = answers[currentIndex] === optIdx;
@@ -795,7 +742,6 @@ export const QuizRunnerModal: React.FC = () => {
                   })}
                 </div>
 
-                {/* Explanation Box after Submission */}
                 {submitted && currentQ.explanation && (
                   <div
                     style={{
@@ -813,7 +759,6 @@ export const QuizRunnerModal: React.FC = () => {
                   </div>
                 )}
 
-                {/* Bottom Action Bar with >= 44px Touch Targets */}
                 <div
                   style={{
                     display: 'flex',
@@ -861,7 +806,6 @@ export const QuizRunnerModal: React.FC = () => {
             )}
           </div>
 
-          {/* Desktop Question Navigator Card */}
           <div className="ev-card ev-desktop-qnav">
             <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 12 }}>
               🧭 {trKey('question_palette', language)}
@@ -897,7 +841,6 @@ export const QuizRunnerModal: React.FC = () => {
         </div>
       </div>
 
-      {/* MOBILE BOTTOM-SHEET QUESTION NAVIGATOR */}
       {mobileSheetOpen && (
         <div className="ev-sheet-backdrop" onClick={() => setMobileSheetOpen(false)}>
           <div className="ev-bottom-sheet" onClick={(e) => e.stopPropagation()}>
