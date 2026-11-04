@@ -1,26 +1,30 @@
 import React, { useState } from 'react';
-import { NavTabId, trKey, trText, useExamStore } from './store/useExamStore';
-import { SYLLABUS_DB } from './data/syllabusData';
+import {
+  NavTabId,
+  getAvailableClasses,
+  getAvailableGroups,
+  getSubjectsForSelection,
+  trKey,
+  trText,
+  useExamStore,
+} from './store/useExamStore';
 import { SubjectData } from './types';
 import { AuthModal, ExamVerseLogo, QuizRunnerModal, SettingsModal } from './components/ModalsAndQuiz';
 import { ExtraFeaturesView } from './components/ExtraFeatures';
 
-/* =====================================================================
-   SUBJECT COLOR PALETTE & SUBTLE CORNER ILLUSTRATIONS
-   ===================================================================== */
 const SUBJECT_STYLE_MAP: Record<string, { rgb: string; badgeEn: string; badgeBn: string }> = {
-  physics: { rgb: '79, 70, 229', badgeEn: 'Mechanics & Waves', badgeBn: 'বলবিদ্যা ও তরঙ্গ' },
-  chemistry: { rgb: '5, 150, 105', badgeEn: 'Reactions & Lab', badgeBn: 'বিক্রিয়া ও ল্যাব' },
+  phys: { rgb: '79, 70, 229', badgeEn: 'Mechanics & Waves', badgeBn: 'বলবিদ্যা ও তরঙ্গ' },
+  chem: { rgb: '5, 150, 105', badgeEn: 'Reactions & Lab', badgeBn: 'বিক্রিয়া ও ল্যাব' },
   math: { rgb: '217, 119, 6', badgeEn: 'Calculus & Algebra', badgeBn: 'ক্যালকুলাস ও বীজগণিত' },
-  biology: { rgb: '225, 29, 72', badgeEn: 'Cell & Genetics', badgeBn: 'কোষ ও জিনতত্ত্ব' },
+  bio: { rgb: '225, 29, 72', badgeEn: 'Cell & Genetics', badgeBn: 'কোষ ও জিনতত্ত্ব' },
   ict: { rgb: '2, 132, 199', badgeEn: 'Code & Logic', badgeBn: 'প্রোগ্রামিং ও লজিক' },
-  english: { rgb: '124, 58, 237', badgeEn: 'Grammar & Reading', badgeBn: 'গ্রামার ও রিডিং' },
-  bangla: { rgb: '13, 148, 136', badgeEn: 'Literature & Prose', badgeBn: 'সাহিত্য ও ব্যাকরণ' },
+  eng: { rgb: '124, 58, 237', badgeEn: 'Grammar & Reading', badgeBn: 'গ্রামার ও রিডিং' },
+  ban: { rgb: '13, 148, 136', badgeEn: 'Literature & Prose', badgeBn: 'সাহিত্য ও ব্যাকরণ' },
 };
 
 const SubjectCornerSketch: React.FC<{ subjectId: string }> = ({ subjectId }) => {
   const id = subjectId.toLowerCase();
-  if (id.includes('phys')) {
+  if (id.includes('phy')) {
     return (
       <svg className="ev-subj-sketch" viewBox="0 0 64 64" fill="none" stroke="currentColor" strokeWidth="2.2">
         <ellipse cx="32" cy="32" rx="24" ry="10" transform="rotate(30 32 32)" />
@@ -90,12 +94,9 @@ export function App() {
   const isBn = language !== 'en';
   const rank = getRankInfo();
 
-  const classList = Object.keys(SYLLABUS_DB);
-  const groupList = Object.keys(SYLLABUS_DB[selectedClass] || SYLLABUS_DB.HSC || {});
-  const subjects: SubjectData[] =
-    SYLLABUS_DB[selectedClass]?.[selectedGroup] ||
-    SYLLABUS_DB.HSC?.Science ||
-    [];
+  const classList = getAvailableClasses();
+  const groupList = getAvailableGroups(selectedClass);
+  const subjects: SubjectData[] = getSubjectsForSelection(selectedClass, selectedGroup);
 
   const pendingMistakesCount = mistakes.filter((m) => !m.mastered).length;
 
@@ -116,7 +117,11 @@ export function App() {
     { id: 'community', icon: '💬', labelKey: 'nav_community' },
   ];
 
-  const handleLaunchSubjectPractice = (subj: SubjectData, chapterIdx = 0, examType: 'mcq' | 'cq' = 'mcq') => {
+  const handleLaunchSubjectPractice = (
+    subj: SubjectData,
+    chapterIdx = 0,
+    examType: 'mcq' | 'cq' = 'mcq'
+  ) => {
     const chap = subj.chapters[chapterIdx] || subj.chapters[0];
     if (!chap) return;
     startQuiz({
@@ -135,9 +140,6 @@ export function App() {
 
   return (
     <div className="ev-shell">
-      {/* =========================================================
-          CLEAN DESKTOP SIDEBAR
-          ========================================================= */}
       <aside className="ev-sidebar">
         <div className="ev-brand">
           <ExamVerseLogo size={40} />
@@ -182,7 +184,6 @@ export function App() {
           ))}
         </div>
 
-        {/* Sidebar Compact Personal Rank Box */}
         <div className="ev-sidebar-rank">
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
             <span style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--ink-3)' }}>
@@ -208,11 +209,7 @@ export function App() {
         </div>
       </aside>
 
-      {/* =========================================================
-          MAIN VIEWPORT (Compact Header + Content)
-          ========================================================= */}
       <div className="ev-main-col">
-        {/* Compact Clutter-Free Header */}
         <header className="ev-topbar">
           <div className="ev-topbar-left">
             <div className="ev-mobile-logo">
@@ -264,14 +261,10 @@ export function App() {
           </div>
         </header>
 
-        {/* Main Content Container */}
         <main className="ev-content">
           {activeTab !== 'dashboard' && activeTab !== 'subjects' ? (
             <ExtraFeaturesView />
           ) : selectedSubject ? (
-            /* =========================================================
-               SELECTED SUBJECT CHAPTER LIST VIEW
-               ========================================================= */
             <div className="ev-card">
               <div className="ev-section-head">
                 <div>
@@ -340,13 +333,9 @@ export function App() {
               </div>
             </div>
           ) : (
-            /* =========================================================
-               DASHBOARD & 2-COLUMN MOBILE SUBJECT GRID
-               ========================================================= */
             <>
               {activeTab === 'dashboard' && (
                 <div className="ev-hero-grid">
-                  {/* Left Hero Action Card */}
                   <div className="ev-hero-card">
                     <div>
                       <div
@@ -395,12 +384,11 @@ export function App() {
                         🚀 {trKey('quick_mock', language)}
                       </button>
 
-                      {/* Class & Group Selector Pills */}
                       <select
                         value={selectedClass}
                         onChange={(e) => {
                           const nextCls = e.target.value;
-                          const firstGrp = Object.keys(SYLLABUS_DB[nextCls] || {})[0] || 'Science';
+                          const firstGrp = getAvailableGroups(nextCls)[0] || 'Science';
                           setClassAndGroup(nextCls, firstGrp);
                         }}
                         style={{
@@ -442,7 +430,6 @@ export function App() {
                     </div>
                   </div>
 
-                  {/* Right Multi-Factor Rank Progression Card (Replaces old Level card) */}
                   <div className="ev-rank-card">
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
                       <div>
@@ -502,7 +489,6 @@ export function App() {
                 </div>
               )}
 
-              {/* Subject Grid Section (2-Column on Mobile, Unique Color + Subtle Sketch) */}
               <div>
                 <div className="ev-section-head">
                   <div>
@@ -578,9 +564,6 @@ export function App() {
         </main>
       </div>
 
-      {/* =========================================================
-          CONSISTENT MOBILE BOTTOM NAVIGATION + MORE SHEET
-          ========================================================= */}
       <nav className="ev-bottom-nav">
         <button
           className={`ev-bnav-item ${activeTab === 'dashboard' ? 'active' : ''}`}
@@ -626,16 +609,12 @@ export function App() {
           <span>{trKey('nav_mistakes', language)}</span>
         </button>
 
-        <button
-          className="ev-bnav-item"
-          onClick={() => setMobileMoreOpen(true)}
-        >
+        <button className="ev-bnav-item" onClick={() => setMobileMoreOpen(true)}>
           <span style={{ fontSize: 18 }}>☰</span>
           <span>{trKey('nav_more', language)}</span>
         </button>
       </nav>
 
-      {/* Mobile "More" Drawer Sheet */}
       {mobileMoreOpen && (
         <div className="ev-sheet-backdrop" onClick={() => setMobileMoreOpen(false)}>
           <div className="ev-bottom-sheet" onClick={(e) => e.stopPropagation()}>
@@ -671,7 +650,6 @@ export function App() {
         </div>
       )}
 
-      {/* Global Modals */}
       <AuthModal />
       <SettingsModal />
       <QuizRunnerModal />
