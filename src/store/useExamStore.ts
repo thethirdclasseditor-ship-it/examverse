@@ -1,37 +1,70 @@
-import React, { useSyncExternalStore } from 'react';
-import * as RawSupabase from '../lib/supabase';
-import {
-  ActiveQuizConfig,
-  ChapterData,
-  ChapterFormula,
-  CommunityPost,
-  CQQuestion,
-  ExamHistoryItem,
-  FlashcardItem,
-  LanguageMode,
-  LocalizedText,
-  MCQQuestion,
-  MistakeItem,
-  RankProgressInfo,
-  StudyTask,
-  SubjectData,
-} from '../types';
+import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
+import { supabase } from '../lib/supabase';
+import { HSC_ACCOUNTING_2ND_PAPER_CHAPTERS } from '../data/syllabusData';
 
-export type NavTabId =
-  | 'dashboard'
-  | 'subjects'
-  | 'Analytics'
-  | 'mistakes'
-  | 'flashcards'
-  | 'formulas'
-  | 'planner'
-  | 'battle'
-  | 'community'
-  | 'leaderboard'
-  | 'achievements'
-  | 'admin';
+export type AcademicLevel = 'SSC' | 'HSC' | 'Admission' | 'Job/BCS';
+export type AcademicGroup = 'Science' | 'Business Studies' | 'Humanities';
+export type ThemeMode = 'light' | 'dark' | 'sepia';
+export type FontSize = 'small' | 'medium' | 'large';
 
-export interface QuestionReportItem {
+export interface MCQ {
+  id: string;
+  question: string;
+  options: [string, string, string, string];
+  correctIndex: number;
+  explanation: string;
+  board?: string;
+}
+
+export interface CQ {
+  id: string;
+  stem: string;
+  board?: string;
+  qA: string; ansA: string;
+  qB: string; ansB: string;
+  qC: string; ansC: string;
+  qD: string; ansD: string;
+}
+
+export interface Chapter {
+  id: string;
+  name: string;
+  mcqs: MCQ[];
+  cqs: CQ[];
+  formulas?: string[];
+}
+
+export interface Subject {
+  id: string;
+  code: string;
+  name: string;
+  paper: string;
+  level: AcademicLevel;
+  group: AcademicGroup | 'Common';
+  icon: string;
+  color: string;
+  chapters: Chapter[];
+}
+
+export interface ExamHistoryItem {
+  id: string;
+  date: string;
+  timestamp?: number;
+  subjectId?: string;
+  subjectName: string;
+  chapterName: string;
+  mode: 'Practice' | 'Exam' | 'Mistakes' | 'Bookmarks' | 'DailySprint' | 'Battle1v1';
+  totalQuestions: number;
+  correct: number;
+  wrong: number;
+  skipped: number;
+  score: number;
+  timeTakenSec: number;
+  wrongQuestionIds: string[];
+}
+
+export interface QuestionErrorReport {
   id: string;
   questionId: string;
   subjectId: string;
@@ -39,1620 +72,805 @@ export interface QuestionReportItem {
   chapterId: string;
   chapterName: string;
   questionText: string;
-  options: string[];
-  currentAns: number;
-  issueType: string;
-  comment: string;
   reportedBy: string;
+  reason: string;
+  suggestedCorrectIndex?: number;
+  status: 'pending' | 'resolved' | 'dismissed';
   createdAt: string;
-  status: 'pending' | 'resolved';
 }
 
-export interface AdminUserRecord {
+export interface RegisteredUserSummary {
   id: string;
   name: string;
   email: string;
-  targetClass: string;
-  targetGroup: string;
+  institution: string;
+  level: AcademicLevel;
+  group: AcademicGroup;
   xp: number;
-  streak: number;
-  accuracy: number;
-  status: 'active' | 'banned';
+  totalExams: number;
   joinedAt: string;
+  isBanned?: boolean;
 }
 
-/* Required by src/lib/supabase.ts line 3 */
-export function getLevelProgress(xp: number) {
-  const safeXp = Math.max(0, Number(xp) || 0);
-  const level = Math.floor(safeXp / 250) + 1;
-  const currentLevelXp = safeXp % 250;
-  const xpForNextLevel = 250;
-  const progressPercent = Math.min(100, Math.round((currentLevelXp / xpForNextLevel) * 100));
-  return { level, currentLevelXp, xpForNextLevel, progressPercent };
-}
-
-/* Multi-Factor Rank Progression Engine (Bronze -> Silver -> Gold -> Platinum -> Elite) */
-export function calculateUserRank(params: {
-  xp: number;
-  accuracyPct: number;
-  masteredChaptersCount: number;
-  totalChaptersCount?: number;
-  streakDays: number;
-  examsCompleted: number;
-}): RankProgressInfo {
-  const { xp, accuracyPct, masteredChaptersCount, totalChaptersCount = 20, streakDays, examsCompleted } = params;
-  const xpComponent = Math.min(400, Math.round((xp / 4000) * 400));
-  const accWeight = examsCompleted > 0 ? Math.min(1, examsCompleted / 5) : 0;
-  const accuracyComponent = Math.round((Math.min(100, accuracyPct) / 100) * 250 * accWeight);
-  const masteryPct = Math.min(100, Math.round((masteredChaptersCount / Math.max(1, totalChaptersCount)) * 100));
-  const masteryComponent = Math.round((masteryPct / 100) * 200);
-  const consistencyPct = Math.min(100, Math.round((streakDays / 14) * 100));
-  const consistencyComponent = Math.round((consistencyPct / 100) * 150);
-  const rankScore = xpComponent + accuracyComponent + masteryComponent + consistencyComponent;
-
-  const tiers: {
-    id: RankProgressInfo['tierId'];
-    en: string;
-    bn: string;
-    min: number;
-    max: number;
-    colorHex: string;
-    bgSoft: string;
-  }[] = [
-    { id: 'bronze', en: 'Bronze', bn: 'ব্রোঞ্জ', min: 0, max: 199, colorHex: '#B45309', bgSoft: 'rgba(180, 83, 9, 0.13)' },
-    { id: 'silver', en: 'Silver', bn: 'সিলভার', min: 200, max: 399, colorHex: '#475569', bgSoft: 'rgba(71, 85, 105, 0.14)' },
-    { id: 'gold', en: 'Gold', bn: 'গোল্ড', min: 400, max: 649, colorHex: '#D97706', bgSoft: 'rgba(217, 119, 6, 0.15)' },
-    { id: 'platinum', en: 'Platinum', bn: 'প্লাটিনাম', min: 650, max: 849, colorHex: '#0284C7', bgSoft: 'rgba(2, 132, 199, 0.14)' },
-    { id: 'elite', en: 'Elite', bn: 'এলিট', min: 850, max: 1000, colorHex: '#7C3AED', bgSoft: 'rgba(124, 58, 237, 0.15)' },
-  ];
-
-  const current = tiers.find((t) => rankScore >= t.min && rankScore <= t.max) || tiers[tiers.length - 1];
-  const span = Math.max(1, current.max - current.min);
-  const within = Math.max(0, rankScore - current.min);
-  const progressPct = current.id === 'elite' && rankScore >= 1000 ? 100 : Math.min(99, Math.round((within / span) * 100));
-
-  let division: RankProgressInfo['division'] = 'I';
-  if (current.id === 'elite' && progressPct >= 95) division = 'MAX';
-  else if (progressPct >= 67) division = 'III';
-  else if (progressPct >= 34) division = 'II';
-
-  return {
-    tierId: current.id,
-    tierNameEn: current.en,
-    tierNameBn: current.bn,
-    division,
-    fullTitleEn: division === 'MAX' ? `${current.en} Grandmaster` : `${current.en} ${division}`,
-    fullTitleBn: division === 'MAX' ? `${current.bn} গ্র্যান্ডমাস্টার` : `${current.bn} ${division}`,
-    rankScore,
-    nextTierScore: current.max + 1,
-    progressPct,
-    colorHex: current.colorHex,
-    bgSoft: current.bgSoft,
-    xpScore: xp,
-    accuracyPct: Math.round(accuracyPct),
-    masteryPct,
-    consistencyPct,
-  };
-}
-
-function makeChap(
-  id: string,
-  bn: string,
-  en: string,
-  formulas: [string, string, string][],
-  mcqs: MCQQuestion[] = [],
-  cqs: CQQuestion[] = []
-): ChapterData {
-  return {
-    id,
-    name: { bn, en },
-    mcqs,
-    cqs,
-    formulas: formulas.map(([titleBn, eq, noteBn], idx): ChapterFormula => ({
-      id: `${id}-f-${idx + 1}`,
-      title: { bn: titleBn, en: titleBn },
-      formula: eq,
-      note: { bn: noteBn, en: noteBn },
-    })),
-  };
-}
-
-function makeMcq(id: string, qBn: string, optsBn: string[], ans: number, board?: string, expBn?: string): MCQQuestion {
-  return {
-    id,
-    q: { bn: qBn, en: qBn },
-    options: { bn: optsBn, en: optsBn },
-    ans,
-    boardTag: board,
-    explanation: expBn ? { bn: expBn, en: expBn } : undefined,
-  };
-}
-
-/* HSC -> Business Studies -> Accounting 2nd Paper (10 Chapters from Uploaded Excel) */
-const HSC_ACCOUNTING_2ND_PAPER: SubjectData = {
-  id: 'hsc-acc-2',
-  name: { bn: 'হিসাববিজ্ঞান ২য় পত্র', en: 'Accounting 2nd Paper' },
-  icon: '📊',
-  color: '#4D7C0F',
-  rgb: '77, 124, 15',
-  chapters: [
-    makeChap(
-      'acc2-ch1',
-      'অধ্যায় ১: অব্যবসায়ী প্রতিষ্ঠানের হিসাব',
-      'Ch 1: Non-Trading Concerns',
-      [
-        ['প্রারম্ভিক মূলধন তহবিল', 'মূলধন তহবিল = প্রারম্ভিক মোট সম্পদ - প্রারম্ভিক মোট দায়', 'প্রারম্ভিক হাতে নগদ, বকেয়া চাঁদা ও স্থায়ী সম্পদ যোগ করে প্রারম্ভিক দায় বাদ দিতে হয়।'],
-        ['চলতি বছরের নিট চাঁদা আয়', 'চাঁদা আয় = প্রাপ্ত চাঁদা + চলতি বকেয়া + বিগত অগ্রিম - বিগত বকেয়া - পরবর্তী অগ্রিম', 'আয়-ব্যয় বিবরণীর ক্রেডিট দিকে বসে।'],
-        ['ব্যয়াতিরিক্ত আয় (Surplus)', 'উদ্বৃত্ত = মোট মুনাফাজাতীয় আয় - মোট মুনাফাজাতীয় ব্যয়', 'উদ্বৃত্ত মূলধন তহবিলের সাথে যোগ হয়।'],
-      ],
-      [
-        makeMcq('ACC2-001', 'অব্যবসায়ী প্রতিষ্ঠানসমূহের আয়ের প্রধান উৎস কোনটি?', ['পণ্য বিক্রয়', 'সেবা প্রদান', 'চাঁদা', 'অনুদান'], 2, "য. বো. '১৯", 'অব্যবসায়ী প্রতিষ্ঠানের প্রধান আয়ের উৎস সদস্যদের চাঁদা।'),
-        makeMcq('ACC2-002', 'অব্যবসায়ী প্রতিষ্ঠানের উদ্দেশ্য কোনটি?', ['পণ্য ক্রয়-বিক্রয়', 'পণ্য উৎপাদন', 'সদস্যদের সেবা ও জনকল্যাণমূলক কাজ', 'শেয়ার ক্রয়-বিক্রয়'], 2, "দি. বো. '১৭", 'অব্যবসায়ী প্রতিষ্ঠান সদস্য ও সমাজের কল্যাণে পরিচালিত হয়।'),
-        makeMcq('ACC2-005', 'প্রাপ্তি ও প্রদান হিসাবের উদ্বৃত্তকে কী বলা হয়?', ['আয়', 'খরচ', 'দায়', 'সম্পদ'], 3, "সকল বোর্ড '১৮", 'প্রাপ্তি ও প্রদান হিসাবের সমাপনী উদ্বৃত্ত সমাপনী হাতে নগদ বা ব্যাংক জের নির্দেশ করে, যা সম্পদ।'),
-        makeMcq('ACC2-006', 'চলতি বছরের বকেয়া বেতন ৫,০০০ টাকা এবং বিগত বছরের বকেয়া বেতন ২,৫০০ টাকা সমন্বয়ের পর আয়-ব্যয় হিসাবে বেতন ১৮,০০০ টাকা দেখানো হলে প্রদত্ত বেতন কত ছিল?', ['১২,৫০০ টাকা', '১৩,০০০ টাকা', '১৫,৫০০ টাকা', '২০,৫০০ টাকা'], 2, 'বোর্ড প্রশ্ন', 'প্রদত্ত বেতন = ১৮,০০০ - ৫,০০০ + ২,৫০০ = ১৫,৫০০ টাকা।'),
-        makeMcq('ACC2-012', 'নয় মাসের অফিস ভাড়া প্রদত্ত হয়েছে ২৯,২৫০ টাকা। এক বছরে বকেয়া ভাড়ার পরিমাণ কত?', ['৮,৪৫০ টাকা', '৯,৫৫০ টাকা', '৯,৭৫০ টাকা', '১০,২৫০ টাকা'], 2, "রা. বো. '১৭", 'মাসিক ভাড়া = ২৯,২৫০ ÷ ৯ = ৩,২৫০ টাকা; ৩ মাসের বকেয়া = ৯,৭৫০ টাকা।'),
-        makeMcq('ACC2-013', 'পরবর্তী বছরের চাঁদা চলতি বছর পাওয়া গেলে অব্যবসায়ী প্রতিষ্ঠানের কাছে কী হিসাবে বিবেচিত হয়?', ['আয়', 'ব্যয়', 'সম্পদ', 'দায়'], 3, "য. বো. '১৭", 'অগ্রিম প্রাপ্ত চাঁদা চলতি দায়।'),
-      ]
-    ),
-    makeChap(
-      'acc2-ch2',
-      'অধ্যায় ২: অংশীদারি ব্যবসায়ের হিসাব',
-      'Ch 2: Partnership Accounts',
-      [
-        ['প্রতি মাসের শুরুতে উত্তোলনের সুদ', 'সুদ = মাসিক উত্তোলন × সুদের হার × ৬.৫/১২', 'মাসের প্রথম তারিখে উত্তোলন করলে গড়ে ৬.৫ মাসের সুদ ধার্য হয়।'],
-        ['প্রতি মাসের মাঝামাঝি ও শেষে উত্তোলনের সুদ', 'মাঝামাঝি = মাসিক উত্তোলন × হার × ৬/১২ | শেষে = মাসিক উত্তোলন × হার × ৫.৫/১২', 'চুক্তির অবর্তমানে অংশীদারের প্রদত্ত ঋণের ওপর ৬% হারে সুদ প্রদেয়।'],
-      ],
-      [
-        makeMcq('ACC2-029', 'চুক্তির অবর্তমানে অংশীদারের প্রদত্ত ঋণের ওপর কত হারে সুদ ধার্য হয়?', ['৫%', '৬%', '৮%', '১০%'], 1, "ঢা. বো. '১৯", '১৯৩২ সালের অংশীদারি আইন অনুযায়ী ঋণের ওপর ৬% সুদ প্রদেয়।'),
-        makeMcq('ACC2-030', 'প্রতি মাসের প্রথম তারিখে ১,০০০ টাকা করে উত্তোলন করলে ১০% হারে বার্ষিক উত্তোলনের সুদ কত?', ['৫৫০ টাকা', '৬০০ টাকা', '৬৫০ টাকা', '১,২০০ টাকা'], 2, "চ. বো. '১৯", '১,০০০ × ১০% × ৬.৫ = ৬৫০ টাকা।'),
-      ]
-    ),
-    makeChap(
-      'acc2-ch3',
-      'অধ্যায় ৩: নগদ প্রবাহ বিবরণী',
-      'Ch 3: Cash Flow Statement',
-      [
-        ['পরিচালন কার্যক্রম হতে নিট নগদ প্রবাহ', 'নিট আয় + অবচয় + স্থায়ী সম্পদ বিক্রয় ক্ষতি - বিক্রয় লাভ - চলতি সম্পদ বৃদ্ধি + চলতি দায় বৃদ্ধি', 'IAS-7 অনুযায়ী নগদ প্রবাহ বিবরণীতে ৩টি খাত থাকে: পরিচালন, বিনিয়োগ ও অর্থায়ন।'],
-      ],
-      [
-        makeMcq('ACC2-062', 'নগদ প্রবাহ বিবরণীতে কয়টি খাতের নগদ প্রবাহ দেখানো হয়?', ['২টি', '৩টি', '৪টি', '৫টি'], 1, "ঢা. বো. '১৯", 'পরিচালন, বিনিয়োগ ও অর্থায়ন কার্যক্রম।'),
-        makeMcq('ACC2-063', 'অবচয় নগদ প্রবাহ বিবরণীর কোন কার্যক্রমে সমন্বয় করা হয়?', ['পরিচালন', 'বিনিয়োগ', 'অর্থায়ন', 'নগদ সমতুল্য'], 0, "রা. বো. '১৯", 'অবচয় অনগদ ব্যয় হওয়ায় পরিচালন কার্যক্রমে যোগ হয়।'),
-      ]
-    ),
-    makeChap(
-      'acc2-ch4',
-      'অধ্যায় ৪: যৌথমূলধনী কোম্পানির মূলধন',
-      'Ch 4: Share Capital',
-      [
-        ['শেয়ার অধিহার ও অবহার বিধি', 'কোম্পানি আইন ১৯৯৪ এর ১৫৩ ধারা মতে সর্বোচ্চ ১০% অবহারে শেয়ার ইস্যু করা যায়', 'বাজেয়াপ্ত শেয়ারের অবশিষ্ট লাভ মূলধন সঞ্চিতি হিসাবে স্থানান্তরিত হয়।'],
-      ],
-      [
-        makeMcq('ACC2-096', 'বাংলাদেশে প্রচলিত কোম্পানি আইন কত সালের?', ['১৯১৩ সালের', '১৯৩২ সালের', '১৯৯৪ সালের', '২০০৪ সালের'], 2, "ঢা. বো. '১৯", 'বাংলাদেশে ১৯৯৪ সালের কোম্পানি আইন প্রচলিত।'),
-        makeMcq('ACC2-098', 'বাজেয়াপ্ত শেয়ার পুনঃইস্যুর পর অবশিষ্ট উদ্বৃত্ত কোন হিসাবে স্থানান্তরিত হয়?', ['সাধারণ সঞ্চিতি', 'মূলধন সঞ্চিতি', 'শেয়ার অধিহার', 'লাভ-লোকসান হিসাব'], 1, "সকল বোর্ড '১৮", 'মূলধন সঞ্চিতি হিসাবে স্থানান্তরিত হয়।'),
-      ]
-    ),
-    makeChap(
-      'acc2-ch5',
-      'অধ্যায় ৫: যৌথমূলধনী কোম্পানির আর্থিক বিবরণী',
-      'Ch 5: Company Financial Statements',
-      [
-        ['মোট মুনাফা ও কার্যকরী মূলধন', 'মোট মুনাফা = নিট বিক্রয় - বিক্রীত পণ্যের ব্যয় | কার্যকরী মূলধন = চলতি সম্পদ - চলতি দায়', '১৯৯৪ সালের কোম্পানি আইনের ১৮৫ ধারা মোতাবেক আর্থিক বিবরণী প্রস্তুত হয়।'],
-      ],
-      [
-        makeMcq('ACC2-127', 'দাবিহীন লভ্যাংশ আর্থিক অবস্থার বিবরণীতে কোন খাতে দেখানো হয়?', ['চলতি সম্পদ', 'চলতি দায়', 'সঞ্চিতি ও উদ্বৃত্ত', 'ভুয়া সম্পত্তি'], 1, "রা. বো. '১৯", 'দাবিহীন লভ্যাংশ কোম্পানির একটি চলতি দায়।'),
-      ]
-    ),
-    makeChap(
-      'acc2-ch6',
-      'অধ্যায় ৬: আর্থিক বিবরণী বিশ্লেষণ',
-      'Ch 6: Financial Statement Analysis',
-      [
-        ['চলতি অনুপাত ও তড়িৎ অনুপাত', 'চলতি অনুপাত = চলতি সম্পদ ÷ চলতি দায় (আদর্শ ২:১) | তড়িৎ অনুপাত = তড়িৎ সম্পদ ÷ চলতি দায় (আদর্শ ১:১)', 'তড়িৎ সম্পদ = চলতি সম্পদ - সমাপনী মজুদ - অগ্রিম খরচ।'],
-        ['মজুদ আবর্তন ও লাভ অনুপাত', 'মজুদ আবর্তন = বিক্রীত পণ্যের ব্যয় ÷ গড় মজুদ (আদর্শ ৮ বার) | মোট লাভ অনুপাত = (মোট লাভ ÷ নিট বিক্রয়) × ১০০', 'গড় মজুদ = (প্রারম্ভিক মজুদ + সমাপনী মজুদ) ÷ ২।'],
-      ],
-      [
-        makeMcq('ACC2-157', 'চলতি অনুপাতের আদর্শ মান কোনটি?', ['১ : ১', '২ : ১', '১ : ২', '৩ : ১'], 1, "সকল বোর্ড '১৮", 'চলতি অনুপাতের আদর্শ মান ২ : ১।'),
-        makeMcq('ACC2-158', 'তড়িৎ অনুপাতের আদর্শ মান কত?', ['১ : ১', '২ : ১', '১.৫ : ১', '০.৫ : ১'], 0, "ঢা. বো. '১৯", 'তড়িৎ অনুপাতের আদর্শ মান ১ : ১।'),
-      ]
-    ),
-    makeChap(
-      'acc2-ch7',
-      'অধ্যায় ৭: উৎপাদন ব্যয় হিসাব',
-      'Ch 7: Cost Accounting',
-      [
-        ['উৎপাদন ব্যয় বিবরণীর স্তরসমূহ', 'মুখ্য ব্যয় = প্রত্যক্ষ কাঁচামাল + প্রত্যক্ষ মজুরি + প্রত্যক্ষ খরচ | উৎপাদন ব্যয় = মুখ্য ব্যয় + কারখানা উপরি ব্যয়', 'মোট ব্যয় = উৎপাদন ব্যয় + প্রশাসনিক উপরি ব্যয় + বিক্রয় উপরি ব্যয়।'],
-      ],
-      [
-        makeMcq('ACC2-187', 'প্রত্যক্ষ কাঁচামাল, প্রত্যক্ষ শ্রম ও প্রত্যক্ষ খরচের সমষ্টিকে কী বলে?', ['কারখানা ব্যয়', 'মুখ্য ব্যয়', 'উৎপাদন ব্যয়', 'মোট ব্যয়'], 1, "ঢা. বো. '১৯", 'সকল প্রত্যক্ষ ব্যয়ের সমষ্টি মুখ্য ব্যয় (Prime Cost)।'),
-      ]
-    ),
-    makeChap(
-      'acc2-ch8',
-      'অধ্যায় ৮: মজুদ পণ্যর হিসাবরক্ষণ পদ্ধতি',
-      'Ch 8: Inventory Accounting',
-      [
-        ['FIFO ও ভারযুক্ত গড় পদ্ধতি', 'ভারযুক্ত গড় একক দর = উদ্বৃত্ত মালের মোট মূল্য ÷ উদ্বৃত্ত মালের মোট একক | পুনঃফরমায়েশ স্তর = সর্বোচ্চ ব্যবহার × সর্বোচ্চ লিড টাইম', 'বিন কার্ডে শুধুমাত্র মালের পরিমাণের হিসাব রাখা হয়।'],
-      ],
-      [
-        makeMcq('ACC2-218', 'মূল্যস্ফীতির সময় কোন পদ্ধতিতে সমাপনী মজুদের মূল্য সর্বাধিক হয়?', ['LIFO পদ্ধতি', 'FIFO পদ্ধতি', 'ভারযুক্ত গড় পদ্ধতি', 'সরল গড় পদ্ধতি'], 1, "ঢা. বো. '১৭", 'FIFO পদ্ধতিতে সমাপনী মজুদ সাম্প্রতিক মূল্যে মূল্যায়িত হয়।'),
-      ]
-    ),
-    makeChap(
-      'acc2-ch9',
-      'অধ্যায় ৯: ব্যয় ও ব্যয়ের শ্রেণিবিভাগ',
-      'Ch 9: Classification of Cost',
-      [
-        ['রূপান্তর ব্যয় (Conversion Cost)', 'রূপান্তর ব্যয় = প্রত্যক্ষ মজুরি + কারখানা উপরি ব্যয়', 'উৎপাদন বৃদ্ধির সাথে একক প্রতি স্থির ব্যয় হ্রাস পায় কিন্তু মোট স্থির ব্যয় অপরিবর্তিত থাকে।'],
-      ],
-      [
-        makeMcq('ACC2-254', 'রূপান্তর ব্যয়ের সূত্র কোনটি?', ['প্রত্যক্ষ মাল + প্রত্যক্ষ মজুরি', 'প্রত্যক্ষ মজুরি + কারখানা উপরি ব্যয়', 'মুখ্য ব্যয় + প্রশাসনিক ব্যয়', 'কারখানা ব্যয় + বিক্রয় ব্যয়'], 1, "সকল বোর্ড '১৮", 'রূপান্তর ব্যয় = প্রত্যক্ষ শ্রম + কারখানা উপরি ব্যয়।'),
-      ]
-    ),
-    makeChap(
-      'acc2-ch10',
-      'অধ্যায় ১০: ব্যবস্থাপনা হিসাববিজ্ঞান পরিচিতি',
-      'Ch 10: Management Accounting',
-      [
-        ['সমচ্ছেদ বিন্দু (Break-Even Point) ও নিরাপত্তা প্রান্ত', 'BEP (একক) = স্থির ব্যয় ÷ একক প্রতি দত্তাংশ | দত্তাংশ = বিক্রয় - পরিবর্তনশীল ব্যয় | নিরাপত্তা প্রান্ত = প্রকৃত বিক্রয় - সমচ্ছেদ বিক্রয়', 'সমচ্ছেদ বিন্দুতে প্রতিষ্ঠানের লাভ বা ক্ষতি শূন্য (০) হয়।'],
-      ],
-      [
-        makeMcq('ACC2-277', 'সমচ্ছেদ বিন্দুতে প্রতিষ্ঠানের মুনাফার পরিমাণ কত থাকে?', ['সর্বোচ্চ মুনাফা', 'সর্বনিম্ন মুনাফা', 'লাভ-ক্ষতি শূন্য (০)', 'স্থির ব্যয়ের সমান'], 2, "ঢা. বো. '১৯", 'সমচ্ছেদ বিন্দুতে মোট আয় ও মোট ব্যয় সমান হওয়ায় লাভ-ক্ষতি শূন্য থাকে।'),
-      ]
-    ),
-  ],
-};
-
-/* Common Compulsory Subjects for HSC (Bangla 1st & 2nd, English 1st & 2nd, and SINGLE ICT) */
-const COMMON_HSC_SUBJECTS: SubjectData[] = [
-  {
-    id: 'hsc-ban-1',
-    name: { bn: 'বাংলা ১ম পত্র', en: 'Bangla 1st Paper' },
-    icon: '📖',
-    color: '#B91C1C',
-    rgb: '185, 28, 28',
-    chapters: [
-      makeChap('ban1-ch1', 'গদ্য: অপরিচিতা, বিলাসী, আমার পথ, মাসি-পিসি, বায়ান্নর দিনগুলো, রেইনকোট', 'Selected Prose', [
-        ['অপরিচিতা ও বিলাসী তথ্যসূত্র', 'অপরিচিতা (১৯১৪, সবুজপত্র): অনুপম (২৭), কল্যাণী (১৫) | বিলাসী (১৯১৮, ভারতী): ন্যাড়া ও মৃত্যুঞ্জয়', 'রেইনকোট (১৯৯৫, আখতারুজ্জামান ইলিয়াস): নুরুল হুদা ও আবদুস সাত্তার মৃধা।'],
-      ]),
-      makeChap('ban1-ch2', 'পদ্য ও সহপাঠ: সোনার তরী, বিদ্রোহী, আঠারো বছর বয়স, লালসালু ও সিরাজউদ্দৌলা', 'Poetry, Novel & Drama', [
-        ['ছন্দ ও প্রকাশকাল', 'সোনার তরী (মাত্রাবৃত্ত ছন্দ, ১৮৯৪) | বিদ্রোহী (অগ্নিবীণা, ১৯২২) | আঠারো বছর বয়স (ছাড়পত্র, ১৯৪৮, ৬ মাত্রার মাত্রাবৃত্ত)', 'লালসালু (১৯৪৮, মহব্বতনগর) ও সিরাজউদ্দৌলা নাটক (১৯৬৫, ৪ অঙ্ক ১২ দৃশ্য)।'],
-      ]),
-    ],
-  },
-  {
-    id: 'hsc-ban-2',
-    name: { bn: 'বাংলা ২য় পত্র', en: 'Bangla 2nd Paper' },
-    icon: '✍️',
-    color: '#DC2626',
-    rgb: '220, 38, 38',
-    chapters: [
-      makeChap('ban2-ch1', 'অধ্যায় ১: বাংলা উচ্চারণ ও প্রমিত বাংলা বানানের নিয়ম', 'Pronunciation & Orthography Rules', [
-        ['আদ্য ‘অ’ সংবৃত উচ্চারণ ও বানান বিধি', 'শব্দের শুরুতে ‘অ’-এর পরে ই/ঈ/উ/ঊ/য-ফলা/ক্ষ/জ্ঞ থাকলে ‘অ’ → ‘ও’ উচ্চারিত হয় (অতি → ওতি, দক্ষ → দোক্খো)', 'সকল অতৎসম শব্দে এবং -আলি/-অলি প্রত্যয়ে হ্রস্ব ই-কার (ি) বসে (বাড়ি, পাখি, সোনালি, গীতাঞ্জলি)।'],
-      ]),
-      makeChap('ban2-ch2', 'অধ্যায় ২: ব্যাকরণিক শব্দশ্রেণি, উপসর্গ, প্রত্যয়, সমাস ও বাক্যতত্ত্ব', 'Grammar, Samas & Syntax', [
-        ['সমাস ও উপসর্গের মূল সূত্র', 'দ্বন্দ্ব (উভয় পদ প্রধান) | কর্মধারয় (পরপদ প্রধান) | বহুব্রীহি (অন্য পদ প্রধান) | দ্বিগু (সংখ্যাবাচক পূর্বপদ)', 'খাঁটি বাংলা উপসর্গ ২১টি এবং তৎসম উপসর্গ ২০টি (স, সু, বি, নি উভয়তেই আছে)।'],
-      ]),
-    ],
-  },
-  {
-    id: 'hsc-eng-1',
-    name: { bn: 'ইংরেজি ১ম পত্র (English 1st Paper)', en: 'English 1st Paper' },
-    icon: '🇬🇧',
-    color: '#BE185D',
-    rgb: '190, 24, 93',
-    chapters: [
-      makeChap('eng1-ch1', 'Comprehension, Flow Chart, Summary & Cloze Test Rules', 'EFT Comprehension & Writing Rules', [
-        ['Flow Chart ও Summary লেখার নিয়ম', 'Flow Chart-এ কখনোই পূর্ণ বাক্য লেখা যাবে না (Verb+ing / To+V1 / Noun Phrase ব্যবহার করতে হবে)', 'Summary মূল প্যাসেজের ১/৩ অংশে (৫০–৬০ শব্দে) নিজের ভাষায় ১ প্যারায় লিখতে হবে।'],
-      ]),
-    ],
-  },
-  {
-    id: 'hsc-eng-2',
-    name: { bn: 'ইংরেজি ২য় পত্র (English 2nd Paper)', en: 'English 2nd Paper' },
-    icon: '📝',
-    color: '#9D174D',
-    rgb: '157, 23, 77',
-    chapters: [
-      makeChap('eng2-ch1', 'Right Form of Verbs, Conditionals, Modifiers & Connectors', 'HSC Grammar Rules', [
-        ['3 Conditional Structures', '1st: If + Present, S + will + V1 | 2nd: If + Past, S + would + V1 | 3rd: If + had + V3, S + would have + V3', 'It is high time + S + V2 | With a view to / look forward to + Verb+ing | Lest + S + should + V1।'],
-      ]),
-    ],
-  },
-  {
-    id: 'hsc-ict',
-    name: { bn: 'তথ্য ও যোগাযোগ প্রযুক্তি (ICT)', en: 'ICT (Single Paper)' },
-    icon: '💻',
-    color: '#0369A1',
-    rgb: '3, 105, 161',
-    chapters: [
-      makeChap('ict-ch1', 'অধ্যায় ১ ও ২: বিশ্ব ও বাংলাদেশ প্রেক্ষিত এবং কমিউনিকেশন সিস্টেমস ও নেটওয়ার্কিং', 'Ch 1 & 2: ICT & Networking', [
-        ['নেটওয়ার্ক মোড ও টপোলজি সূত্র', 'Simplex (রেডিও) | Half-Duplex (ওয়াকিটকি) | Full-Duplex (মোবাইল) | Mesh টপোলজিতে তারের সংখ্যা = n(n - 1) / 2', 'অপটিক্যাল ফাইবারে পূর্ণ অভ্যন্তরীণ প্রতিফলন নীতি ব্যবহৃত হয়; ন্যানোটেকনোলজি পাল্লা: 1 – 100 nm।'],
-      ]),
-      makeChap('ict-ch3', 'অধ্যায় ৩: সংখ্যা পদ্ধতি ও ডিজিটাল ডিভাইস', 'Ch 3: Number Systems & Logic Gates', [
-        ['ডি-মরগ্যানের উপপাদ্য ও লজিক গেইট', '(A + B)′ = A′ · B′  এবং  (A · B)′ = A′ + B′  |  XOR: A ⊕ B = A′B + AB′  |  Half Adder: S = A ⊕ B, C = AB', 'NAND ও NOR সার্বজনীন গেইট; ২-এর পরিপূরক = ১-এর পরিপূরক + ১।'],
-      ]),
-      makeChap('ict-ch4', 'অধ্যায় ৪, ৫ ও ৬: HTML, C প্রোগ্রামিং এবং ডেটাবেজ (SQL)', 'Ch 4–6: HTML, C & DBMS', [
-        ['HTML, C ও SQL মৌলিক সিনট্যাক্স', 'HTML লিংক: <a href="url">Text</a> | C লিপ ইয়ার: (y%400==0)||(y%4==0 && y%100!=0) | SQL: SELECT * FROM table WHERE cond;', 'C ভাষায় int (%d), float (%f), double (%lf), char (%c) ফরম্যাট স্পেসিফায়ার ব্যবহৃত হয়।'],
-      ]),
-    ],
-  },
-];
-
-export const BUILTIN_SYLLABUS: Record<string, Record<string, SubjectData[]>> = {
-  HSC: {
-    Science: [
-      {
-        id: 'hsc-phy-1',
-        name: { bn: 'পদার্থবিজ্ঞান ১ম পত্র', en: 'Physics 1st Paper' },
-        icon: '⚛️',
-        color: '#1D4ED8',
-        rgb: '29, 78, 216',
-        chapters: [
-          makeChap('phy1-ch1', 'অধ্যায় ১ ও ২: ভৌত জগৎ ও পরিমাপ এবং ভেক্টর', 'Ch 1 & 2: Measurement & Vectors', [
-            ['ভেক্টর লব্ধি ও ডট/ক্রস গুণন', 'R = √(P² + Q² + 2PQ cosα) | tanθ = (Q sinα)/(P + Q cosα) | A·B = AB cosθ | |A×B| = AB sinθ', 'লম্ব হলে A·B = 0; সমান্তরাল হলে A×B = 0; গোলকের আয়তনে শতকরা ত্রুটি = 3 × ব্যাসার্ধের ত্রুটি।'],
-          ]),
-          makeChap('phy1-ch3', 'অধ্যায় ৩ ও ৪: গতিবিদ্যা ও নিউটনীয় বলবিদ্যা', 'Ch 3 & 4: Dynamics & Newtonian Mechanics', [
-            ['প্রাসের গতি ও ব্যাংকিং কোণ', 'H = (u² sin²α)/(2g) | T = (2u sinα)/g | R = (u² sin2α)/g | ব্যাংকিং কোণ tanθ = v²/(rg) = h/d', 'কেন্দ্রমুখী বল F = mv²/r = mω²r; কৌণিক ভরবেগ L = Iω এবং টর্ক τ = Iα।'],
-          ]),
-          makeChap('phy1-ch5', 'অধ্যায় ৫, ৬ ও ৭: কাজ-শক্তি-ক্ষমতা, মহাকর্ষ ও পদার্থের গাঠনিক ধর্ম', 'Ch 5–7: Work, Gravitation & Matter', [
-            ['শক্তি, মুক্তিবেগ ও স্থিতিস্থাপকতা', 'E_k = ½mv² = p²/(2m) | মুক্তিবেগ v_e = √(2gR) = 11.2 km/s | ইয়ং গুণাঙ্ক Y = (FL)/(Al) | কৈশিক উচ্চতা h = (2T cosθ)/(rρg)', 'h উচ্চতায় অভিকর্ষজ ত্বরণ g′ = g(1 - 2h/R) এবং d গভীরতায় g′ = g(1 - d/R)।'],
-          ]),
-          makeChap('phy1-ch8', 'অধ্যায় ৮, ৯ ও ১০: পর্যাবৃত্ত গতি, তরঙ্গ এবং আদর্শ গ্যাস', 'Ch 8–10: Periodic Motion, Waves & Ideal Gas', [
-            ['সরল দোলক, বিট, তীব্রতা লেভেল ও গ্যাসের গতিতত্ত্ব', 'T = 2π√(L/g) | v = ω√(A² - x²) | β = 10 log₁₀(I/I₀) dB | PV = nRT = (1/3)mNc² | c_rms = √(3RT/M)', 'সেকেন্ড দোলকের দোলনকাল 2s (L ≈ 0.993m); গ্যাসের গতিশক্তি E = (3/2)nRT।'],
-          ]),
-        ],
-      },
-      {
-        id: 'hsc-phy-2',
-        name: { bn: 'পদার্থবিজ্ঞান ২য় পত্র', en: 'Physics 2nd Paper' },
-        icon: '⚡',
-        color: '#2563EB',
-        rgb: '37, 99, 235',
-        chapters: [
-          makeChap('phy2-ch1', 'অধ্যায় ১, ২ ও ৩: তাপগতিবিদ্যা, স্থির তড়িৎ ও চল তড়িৎ', 'Ch 1–3: Thermodynamics & Electricity', [
-            ['কার্নো ইঞ্জিন, কুলম্ব, ধারকত্ব ও শান্ট', 'η = (1 - T₂/T₁)×100% | PV^γ = ধ্রুবক | C = ε₀A/d | U = ½CV² | I = E/(R + r) | শান্ট S = G/(n - 1)', 'রুদ্ধতাপীয় প্রক্রিয়ায় কাজ W = nR(T₁ - T₂)/(γ - 1) এবং এনট্রপি dS = dQ/T।'],
-          ]),
-          makeChap('phy2-ch4', 'অধ্যায় ৪–৭: চৌম্বক ক্রিয়া, আবেশ এবং জ্যামিতিক ও ভৌত আলোকবিজ্ঞান', 'Ch 4–7: Magnetism & Optics', [
-            ['চৌম্বক বল, ট্রান্সফরমার, লেন্স ও ব্যতিচার', 'F = qvB sinθ | ε = -N(dΦ/dt) | E_p/E_s = N_p/N_s = I_s/I_p | 1/f = (μ - 1)(1/r₁ - 1/r₂) | ডোরা ব্যবধান Δx = λD/a', 'লেন্সের ক্ষমতা P = 1/f (ডায়োপ্টার)।'],
-          ]),
-          makeChap('phy2-ch8', 'অধ্যায় ৮–১০: আধুনিক পদার্থবিজ্ঞান, নিউক্লিয়ার ও সেমিকন্ডাক্টর', 'Ch 8–10: Modern, Nuclear & Semiconductor', [
-            ['ফটোতড়িৎ, তেজস্ক্রিয় অর্ধায়ু ও ট্রানজিস্টর', 'E = mc² | hf = hf₀ + ½mv_max² | T_½ = 0.693 / λ | I_E = I_B + I_C | β = I_C / I_B', 'তেজস্ক্রিয় ক্ষয় সূত্র N = N₀ e^(-λt)।'],
-          ]),
-        ],
-      },
-      {
-        id: 'hsc-chem-1',
-        name: { bn: 'রসায়ন ১ম পত্র', en: 'Chemistry 1st Paper' },
-        icon: '🧪',
-        color: '#0F766E',
-        rgb: '15, 118, 110',
-        chapters: [
-          makeChap('chem1-ch2', 'অধ্যায় ২, ৩ ও ৪: গুণগত রসায়ন, পর্যায়বৃত্ত ধর্ম ও রাসায়নিক পরিবর্তন', 'Qualitative, Periodic & Chemical Changes', [
-            ['দ্রাব্যতা গুণফল, সংকরায়ন, Kp-Kc ও বাফার pH', '1/λ = R_H(1/n₁² - 1/n₂²) | K_p = K_c(RT)^Δn | pH = -log[H⁺] | pH = pK_a + log([লবণ]/[অম্ল])', 'সংকরায়ন সংখ্যা X = ½[যোজ্যতা ইলেকট্রন + একযোজী পরমাণু - ক্যাটায়ন + অ্যানায়ন]।'],
-          ]),
-        ],
-      },
-      {
-        id: 'hsc-chem-2',
-        name: { bn: 'রসায়ন ২য় পত্র', en: 'Chemistry 2nd Paper' },
-        icon: '⚗️',
-        color: '#059669',
-        rgb: '5, 150, 105',
-        chapters: [
-          makeChap('chem2-ch1', 'অধ্যায় ১, ৩ ও ৪: পরিবেশ রসায়ন, পরিমাণগত রসায়ন ও তড়িৎ রসায়ন', 'Environmental, Quantitative & Electrochemistry', [
-            ['ব্যাপন, মোলারিটি, ফ্যারাডে ও নার্নস্ট সমীকরণ', 'r₁/r₂ = √(M₂/M₁) | S = (1000×w)/(M×V) | V₁S₁e₁ = V₂S₂e₂ | W = (MIt)/(nF) | E_cell = E°_cell - (RT/nF)lnQ', 'শতকরা ঘনমাত্রা থেকে মোলারিটি S = (10 × x% × d) / M; 1F = 96500 C।'],
-          ]),
-        ],
-      },
-      {
-        id: 'hsc-math-1',
-        name: { bn: 'উচ্চতর গণিত ১ম পত্র', en: 'Higher Math 1st Paper' },
-        icon: '📐',
-        color: '#6D28D9',
-        rgb: '109, 40, 217',
-        chapters: [
-          makeChap('math1-ch1', 'ম্যাট্রিক্স, ভেক্টর, সরলরেখা, বৃত্ত, বিন্যাস-সমাবেশ ও ত্রিকোণমিতি', 'Algebra, Geometry & Trigonometry', [
-            ['সরলরেখা, বৃত্ত ও সমাবেশ সূত্র', 'A⁻¹ = adj(A)/|A| | লম্ব দূরত্ব d = |ax₁+by₁+c|/√(a²+b²) | বৃত্তের ব্যাসার্ধ r = √(g²+f²-c) | ⁿC_r + ⁿC_(r-1) = ⁿ⁺¹C_r', 'লম্ব রেখার শর্ত m₁m₂ = -1; 1 + cos2A = 2cos²A এবং 1 - cos2A = 2sin²A।'],
-          ]),
-          makeChap('math1-ch9', 'অধ্যায় ৯ ও ১০: অন্তরীকরণ ও যোগজীকরণ (Calculus)', 'Differentiation & Integration', [
-            ['ক্যালকুলাসের মৌলিক সূত্রাবলি', 'd/dx(xⁿ) = nx^(n-1) | d/dx(ln x) = 1/x | lim(x→0)(sin x)/x = 1 | ∫xⁿdx = x^(n+1)/(n+1)+c | ∫[f′(x)/f(x)]dx = ln|f(x)|+c', '∫u v dx = u∫v dx - ∫[du/dx ∫v dx]dx।'],
-          ]),
-        ],
-      },
-      {
-        id: 'hsc-math-2',
-        name: { bn: 'উচ্চতর গণিত ২য় পত্র', en: 'Higher Math 2nd Paper' },
-        icon: '♾️',
-        color: '#7C3AED',
-        rgb: '124, 58, 237',
-        chapters: [
-          makeChap('math2-ch1', 'জটিল সংখ্যা, বহুপদী, কণিক, বিপরীত ত্রিকোণমিতি, স্থিতিবিদ্যা ও গতিবিদ্যা', 'Complex Numbers, Conics & Mechanics', [
-            ['এককের ঘনমূল, বহুপদী, কণিক ও লামির সূত্র', '1 + ω + ω² = 0, ω³ = 1 | α+β = -b/a, αβ = c/a | উপবৃত্তের উৎকেন্দ্রিকতা e = √(1 - b²/a²) | P/sinα = Q/sinβ = R/sinγ', 'tan⁻¹x + tan⁻¹y = tan⁻¹[(x+y)/(1-xy)] এবং sin⁻¹x + cos⁻¹x = π/2।'],
-          ]),
-        ],
-      },
-      {
-        id: 'hsc-bio-1',
-        name: { bn: 'জীববিজ্ঞান ১ম পত্র', en: 'Biology 1st Paper' },
-        icon: '🌿',
-        color: '#15803D',
-        rgb: '21, 128, 61',
-        chapters: [
-          makeChap('bio1-ch1', 'কোষের গঠন, কোষ বিভাজন, অণুজীব ও উদ্ভিদ শারীরতত্ত্ব', 'Botany Core Formulas & Ratios', [
-            ['শ্বসন, সালোকসংশ্লেষণ ও RQ সূত্র', 'সবাত শ্বসনে ১ অণু গ্লুকোজ থেকে ৩৬/৩৮টি ATP উৎপন্ন হয় | শ্বসনিক হার RQ = নির্গত CO₂ ÷ গৃহীত O₂ (গ্লুকোজের RQ = 1)', 'গ্লাইকোলাইসিসে নিট ২টি ATP এবং ক্রেবস চক্রে ২৪টি ATP উৎপন্ন হয়।'],
-          ]),
-        ],
-      },
-      {
-        id: 'hsc-bio-2',
-        name: { bn: 'জীববিজ্ঞান ২য় পত্র', en: 'Biology 2nd Paper' },
-        icon: '🧬',
-        color: '#16A34A',
-        rgb: '22, 163, 74',
-        chapters: [
-          makeChap('bio2-ch1', 'পরিপাক, রক্ত সংবহন, শ্বসন এবং জিনতত্ত্ব ও বিবর্তন', 'Zoology & Genetics Ratios', [
-            ['BMI, দন্ত সংকেত ও মেন্ডেলের জেনেটিক অনুপাত', 'BMI = ওজন (kg) ÷ [উচ্চতা (m)]² | ১ম সূত্র: 3:1 (লিথাল জিন 2:1, অসম্পূর্ণ প্রকটতা 1:2:1) | ২য় সূত্র: 9:3:3:1 (পরিপূরক জিন 9:7, এপিস্ট্যাসিস 13:3)', 'পূর্ণবয়স্ক মানুষের দন্ত সংকেত: I₂C₁P₂M₃ / I₂C₁P₂M₃ × 2 = 32।'],
-          ]),
-        ],
-      },
-      ...COMMON_HSC_SUBJECTS,
-    ],
-
-    'Business Studies': [
-      {
-        id: 'hsc-acc-1',
-        name: { bn: 'হিসাববিজ্ঞান ১ম পত্র', en: 'Accounting 1st Paper' },
-        icon: '📒',
-        color: '#65A30D',
-        rgb: '101, 163, 13',
-        chapters: [
-          makeChap('acc1-ch1', 'হিসাব সমীকরণ, ব্যাংক সমন্বয় বিবরণী, রেওয়ামিল ও অবচয়', 'Accounting 1st Paper Formulas', [
-            ['বর্ধিত হিসাব সমীকরণ ও অবচয় সূত্র', 'A = L + (C + R - E - D) | সরলরৈখিক অবচয় = (সম্পত্তির ক্রয়মূল্য - ভগ্নাবশেষ মূল্য) ÷ আয়ুষ্কাল | ক্রমহ্রাসমান হার = (১০০% ÷ আয়ুষ্কাল) × ২', 'সমাপনী মজুদ পণ্য এবং প্রারম্ভিক হাতে নগদ/ব্যাংক জের সাধারণত রেওয়ামিলে বসে না।'],
-          ]),
-        ],
-      },
-      HSC_ACCOUNTING_2ND_PAPER,
-      {
-        id: 'hsc-fin-1',
-        name: { bn: 'ফিন্যান্স, ব্যাংকিং ও বিমা ১ম পত্র', en: 'Finance, Banking & Insurance 1st Paper' },
-        icon: '💰',
-        color: '#D97706',
-        rgb: '217, 119, 6',
-        chapters: [
-          makeChap('fin1-ch1', 'অর্থের সময়মূল্য, মূলধন ব্যয় (CAPM), মূলধন বাজেটিং ও ঝুঁকি', 'Finance 1st Paper Formulas', [
-            ['FV, PV, EAR, CAPM, CV ও NPV সূত্র', 'FV = PV(1 + i/m)^(n×m) | EAR = (1 + i/m)ᵐ - 1 | CAPM: K_e = R_f + β(R_m - R_f) | বিভেদাঙ্ক CV = (σ / R̄) × 100', 'পে-ব্যাক সময় PBP = বিনিয়োগ ÷ বার্ষিক নগদ আন্তঃপ্রবাহ; গড় মুনাফার হার ARR = (গড় নিট মুনাফা ÷ গড় বিনিয়োগ) × ১০০।'],
-          ]),
-        ],
-      },
-      {
-        id: 'hsc-fin-2',
-        name: { bn: 'ফিন্যান্স, ব্যাংকিং ও বিমা ২য় পত্র', en: 'Finance, Banking & Insurance 2nd Paper' },
-        icon: '🏦',
-        color: '#B45309',
-        rgb: '180, 83, 9',
-        chapters: [
-          makeChap('fin2-ch1', 'কেন্দ্রীয় ব্যাংক, বাণিজ্যিক ব্যাংক, ই-ব্যাংকিং ও বিমার মূলনীতি', 'Banking & Insurance Rules', [
-            ['ঋণ নিয়ন্ত্রণ ও বিমার নীতিমালা', 'কেন্দ্রীয় ব্যাংকের ঋণ নিয়ন্ত্রণ: ব্যাংক হার নীতি, খোলা বাজার নীতি, জমার হার পরিবর্তন (CRR ও SLR)', 'জীবন বিমা "নিশ্চয়তার চুক্তি" এবং নৌ/অগ্নি বিমা "ক্ষতিপূরণের চুক্তি"।'],
-          ]),
-        ],
-      },
-      {
-        id: 'hsc-bom-1',
-        name: { bn: 'ব্যবসায় সংগঠন ও ব্যবস্থাপনা ১ম পত্র', en: 'Business Org. & Mgmt 1st Paper' },
-        icon: '🏢',
-        color: '#0284C7',
-        rgb: '2, 132, 199',
-        chapters: [
-          makeChap('bom1-ch1', 'একমালিকানা, অংশীদারি, যৌথমূলধনী কোম্পানি ও সমবায় সমিতি', 'Business Organization Rules & Laws', [
-            ['সদস্য সংখ্যা ও প্রযোজ্য আইন', 'অংশীদারি (১৯৩২ আইন): সাধারণ ২–২০ জন, ব্যাংকিং ২–১০ জন | প্রাইভেট লি.: ২–৫০ জন | পাবলিক লি.: ৭–শেয়ার সংখ্যা দ্বারা সীমাবদ্ধ | সমবায় (২০০১ আইন): ন্যূনতম ২০ জন', 'ব্যবসায় = শিল্প + বাণিজ্য + প্রত্যক্ষ সেবা।'],
-          ]),
-        ],
-      },
-      {
-        id: 'hsc-bom-2',
-        name: { bn: 'ব্যবসায় সংগঠন ও ব্যবস্থাপনা ২য় পত্র', en: 'Business Org. & Mgmt 2nd Paper' },
-        icon: '📋',
-        color: '#0369A1',
-        rgb: '3, 105, 161',
-        chapters: [
-          makeChap('bom2-ch1', 'ব্যবস্থাপনার নীতি, পরিকল্পনা, সংগঠন, নেতৃত্ব, প্রেষণা ও নিয়ন্ত্রণ', 'Management Principles & Theories', [
-            ['হেনরি ফেয়লের ১৪ নীতি ও মাসলোর চাহিদা সোপান', 'POSDCORB | মাসলোর ৫টি চাহিদা: জৈবিক → নিরাপত্তা → সামাজিক → আত্মতৃপ্তি → আত্মপ্রতিষ্ঠা', 'আধুনিক ব্যবস্থাপনার জনক হেনরি ফেয়ল এবং বৈজ্ঞানিক ব্যবস্থাপনার জনক এফ. ডব্লিউ. টেইলর।'],
-          ]),
-        ],
-      },
-      {
-        id: 'hsc-pmm-1',
-        name: { bn: 'উৎপাদন ব্যবস্থাপনা ও বিপণন ১ম পত্র', en: 'Production Mgmt & Marketing 1st Paper' },
-        icon: '🏭',
-        color: '#4F46E5',
-        rgb: '79, 70, 229',
-        chapters: [
-          makeChap('pmm1-ch1', 'উৎপাদন, উৎপাদনশীলতা ও উৎপাদনের উপকরণ', 'Production & Productivity Formulas', [
-            ['উৎপাদনশীলতার সূত্রাবলি', 'মোট উৎপাদনশীলতা = মোট উৎপাদনের মূল্য ÷ মোট উপকরণের মূল্য | শ্রমের উৎপাদনশীলতা = মোট উৎপাদন ÷ মোট শ্রমঘণ্টা', 'উৎপাদনের ৪টি উপকরণ: ভূমি, শ্রম, মূলধন ও সংগঠন।'],
-          ]),
-        ],
-      },
-      {
-        id: 'hsc-pmm-2',
-        name: { bn: 'উৎপাদন ব্যবস্থাপনা ও বিপণন ২য় পত্র', en: 'Production Mgmt & Marketing 2nd Paper' },
-        icon: '🛍️',
-        color: '#6366F1',
-        rgb: '99, 102, 241',
-        chapters: [
-          makeChap('pmm2-ch1', 'বিপণন পরিচিতি, বিপণন কার্যাবলি ও বিপণন মিশ্রণ (4Ps)', 'Marketing Mix & Functions', [
-            ['বিপণন মিশ্রণ (4Ps)', 'Product (পণ্য) | Price (মূল্য) | Place (স্থান/বণ্টন) | Promotion (প্রসার)', 'ই. জেরোম ম্যাককার্থি বিপণন মিশ্রণের 4P ধারণা প্রদান করেন।'],
-          ]),
-        ],
-      },
-      ...COMMON_HSC_SUBJECTS,
-    ],
-
-    Humanities: [
-      {
-        id: 'hsc-eco-1',
-        name: { bn: 'অর্থনীতি ১ম পত্র', en: 'Economics 1st Paper' },
-        icon: '📈',
-        color: '#A21CAF',
-        rgb: '162, 28, 175',
-        chapters: [
-          makeChap('eco1-ch1', 'চাহিদা, যোগান, স্থিতিস্থাপকতা, উৎপাদন ব্যয় ও জাতীয় আয়', 'Micro & Macroeconomics Formulas', [
-            ['চাহিদা সমীকরণ, স্থিতিস্থাপকতা ও জাতীয় আয়', 'Q_d = a - bP | Q_s = c + dP | E_d = -(ΔQ/ΔP)×(P/Q) | GDP = C + I + G + (X - M) | গুণক k = 1/(1 - MPC)', 'MPC + MPS = 1 এবং NNP = GNP - অবচয় (CCA)।'],
-          ]),
-        ],
-      },
-      {
-        id: 'hsc-eco-2',
-        name: { bn: 'অর্থনীতি ২য় পত্র', en: 'Economics 2nd Paper' },
-        icon: '🌏',
-        color: '#86198F',
-        rgb: '134, 25, 143',
-        chapters: [
-          makeChap('eco2-ch1', 'জনসংখ্যা তত্ত্ব, কৃষি, শিল্প ও মুদ্রাস্ফীতি', 'Bangladesh Economy Formulas', [
-            ['জনসংখ্যার ঘনত্ব ও মুদ্রাস্ফীতির হার', 'জনসংখ্যার ঘনত্ব = মোট জনসংখ্যা ÷ মোট ক্ষেত্রফল | মুদ্রাস্ফীতির হার = [(CPI₂ - CPI₁) ÷ CPI₁] × 100%', 'ম্যালথাসের মতে জনসংখ্যা জ্যামিতিক হারে (১, ২, ৪, ৮) এবং খাদ্য গাণিতিক হারে (১, ২, ৩, ৪) বাড়ে।'],
-          ]),
-        ],
-      },
-      {
-        id: 'hsc-civ-1',
-        name: { bn: 'পৌরনীতি ও সুশাসন ১ম পত্র', en: 'Civics & Good Governance 1st Paper' },
-        icon: '⚖️',
-        color: '#0F766E',
-        rgb: '15, 118, 110',
-        chapters: [
-          makeChap('civ1-ch1', 'পৌরনীতি, সুশাসন, আইন, স্বাধীনতা, সংবিধান ও সরকারের অঙ্গসমূহ', 'Civics 1st Paper Core Rules', [
-            ['উৎপত্তি ও ক্ষমতা স্বতন্ত্রীকরণ নীতি', 'Civics শব্দটি ল্যাটিন Civis ও Civitas থেকে এসেছে | মন্টেস্কুর ক্ষমতা স্বতন্ত্রীকরণ নীতি (১৭৪৮)', 'বিশ্বব্যাংক ১৯৮৯ সালে সর্বপ্রথম সুশাসন (Good Governance) ধারণাটি প্রবর্তন করে।'],
-          ]),
-        ],
-      },
-      {
-        id: 'hsc-civ-2',
-        name: { bn: 'পৌরনীতি ও সুশাসন ২য় পত্র', en: 'Civics & Good Governance 2nd Paper' },
-        icon: '🏛️',
-        color: '#115E59',
-        rgb: '17, 94, 89',
-        chapters: [
-          makeChap('civ2-ch1', 'ব্রিটিশ ভারত, ভাষা আন্দোলন, মুক্তিযুদ্ধ ও বাংলাদেশের সংবিধান', 'Civics 2nd Paper Milestones', [
-            ['ঐতিহাসিক সনদ ও সংবিধান', 'লাহোর প্রস্তাব: ১৯৪০ | ৬ দফা: ১৯৬৬ | সংবিধান গৃহীত: ৪ নভেম্বর ১৯৭২ (কার্যকর: ১৬ ডিসেম্বর ১৯৭২)', 'বাংলাদেশের সংবিধানে ১১টি ভাগ, ১৫৩টি অনুচ্ছেদ ও ৭টি তফসিল আছে।'],
-          ]),
-        ],
-      },
-      ...COMMON_HSC_SUBJECTS,
-    ],
-  },
-
-  SSC: {
-    Science: [
-      {
-        id: 'ssc-phy',
-        name: { bn: 'পদার্থবিজ্ঞান (Physics)', en: 'Physics' },
-        icon: '⚛️',
-        color: '#1D4ED8',
-        rgb: '29, 78, 216',
-        chapters: [
-          makeChap('ssc-phy-1', 'গতি, বল, কাজ-ক্ষমতা-শক্তি, চাপ, তাপ, তরঙ্গ, আলো ও চল তড়িৎ', 'SSC Physics All Formulas', [
-            ['গতি, বল, তাপ, আলো ও তড়িৎ সূত্র', 'v = u + at | s = ut + ½at² | v² = u² + 2as | F = ma | P = hρg | C/5 = (F-32)/9 | 1/u + 1/v = 1/f | V = IR', 'বৈদ্যুতিক ইউনিট BOT = (P × t) / 1000 kWh।'],
-          ]),
-        ],
-      },
-      {
-        id: 'ssc-chem',
-        name: { bn: 'রসায়ন (Chemistry)', en: 'Chemistry' },
-        icon: '🧪',
-        color: '#059669',
-        rgb: '5, 150, 105',
-        chapters: [
-          makeChap('ssc-chem-1', 'পদার্থের গঠন, মোলের ধারণা ও রাসায়নিক গণনা', 'SSC Chemistry Formulas', [
-            ['মোল ও মোলারিটি সূত্র', 'n = w / M = V / 22.4 L | S = (1000 × w) / (M × V) | কক্ষপথে সর্বোচ্চ ইলেকট্রন = 2n²', 'শতকরা সংযুতি = (পারমাণবিক ভর × পরমাণু সংখ্যা × ১০০) ÷ আণবিক ভর।'],
-          ]),
-        ],
-      },
-      {
-        id: 'ssc-math',
-        name: { bn: 'গণিত (General Math)', en: 'General Mathematics' },
-        icon: '📐',
-        color: '#D97706',
-        rgb: '217, 119, 6',
-        chapters: [
-          makeChap('ssc-math-1', 'বীজগণিত, ধারা, ত্রিকোণমিতি ও পরিমিতি', 'SSC General Math Formulas', [
-            ['ধারা, মুনাফা ও ত্রিকোণমিতি', 'সমান্তর সমষ্টি S_n = (n/2)[2a + (n-1)d] | সরল মুনাফা I = Pnr | চক্রবৃদ্ধি মূলধন C = P(1+r)ⁿ | sin²θ + cos²θ = 1', 'সমবাহু ত্রিভুজের ক্ষেত্রফল = (√3 / 4)a²।'],
-          ]),
-        ],
-      },
-      {
-        id: 'ssc-hmath',
-        name: { bn: 'উচ্চতর গণিত (Higher Math)', en: 'Higher Mathematics' },
-        icon: '♾️',
-        color: '#7C3AED',
-        rgb: '124, 58, 237',
-        chapters: [
-          makeChap('ssc-hmath-1', 'ফাংশন, দ্বিপদী বিস্তৃতি, স্থানাঙ্ক জ্যামিতি ও সম্ভাবনা', 'SSC Higher Math Formulas', [
-            ['দ্বিপদী ও সম্ভাবনা সূত্র', 'T_(r+1) = ⁿC_r xʳ | ঢাল m = (y₂ - y₁)/(x₂ - x₁) | সম্ভাবনা P(A) = অনুকূল ফলাফল ÷ মোট ফলাফল', '0 ≤ P(A) ≤ 1 এবং P(A) + P(A′) = 1।'],
-          ]),
-        ],
-      },
-      {
-        id: 'ssc-bio',
-        name: { bn: 'জীববিজ্ঞান (Biology)', en: 'Biology' },
-        icon: '🧬',
-        color: '#16A34A',
-        rgb: '22, 163, 74',
-        chapters: [
-          makeChap('ssc-bio-1', 'জীবনীশক্তি, খাদ্য ও পুষ্টি (BMI ও BMR) এবং বংশগতি', 'SSC Biology Formulas', [
-            ['BMI ও BMR সূত্র', 'BMI = ওজন (kg) ÷ [উচ্চতা (m)]² | পুরুষ BMR = 66 + (13.7×ওজন) + (5×উচ্চতা cm) - (6.8×বয়স)', 'নারী BMR = 655 + (9.6×ওজন) + (1.8×উচ্চতা cm) - (4.7×বয়স)।'],
-          ]),
-        ],
-      },
-      {
-        id: 'ssc-ict',
-        name: { bn: 'তথ্য ও যোগাযোগ প্রযুক্তি (ICT)', en: 'ICT (Single Paper)' },
-        icon: '💻',
-        color: '#0369A1',
-        rgb: '3, 105, 161',
-        chapters: [
-          makeChap('ssc-ict-1', 'ই-লার্নিং, কম্পিউটার রক্ষণাবেক্ষণ ও স্প্রেডশিট', 'SSC ICT Formulas', [
-            ['স্প্রেডশিট সূত্রাবলি', 'যোগফল: =SUM(A1:A10) | গড়: =AVERAGE(A1:A10) | গুণফল: =PRODUCT(A1:B1)', 'সকল ফর্মুলার শুরুতে সমান (=) চিহ্ন দিতে হয়।'],
-          ]),
-        ],
-      },
-    ],
-
-    'Business Studies': [
-      {
-        id: 'ssc-acc',
-        name: { bn: 'হিসাববিজ্ঞান (Accounting)', en: 'Accounting' },
-        icon: '📊',
-        color: '#4D7C0F',
-        rgb: '77, 124, 15',
-        chapters: [
-          makeChap('ssc-acc-1', 'লেনদেন, দুতরফা দাখিলা, রেওয়ামিল ও আর্থিক বিবরণী', 'SSC Accounting Formulas', [
-            ['হিসাব সমীকরণ', 'A = L + E  |  E = C + R - Ex - D', 'সম্পদ ও ব্যয় বৃদ্ধি পেলে ডেবিট; আয়, দায় ও মালিকানা স্বত্ব বৃদ্ধি পেলে ক্রেডিট।'],
-          ]),
-        ],
-      },
-      {
-        id: 'ssc-fin',
-        name: { bn: 'ফিন্যান্স ও ব্যাংকিং', en: 'Finance & Banking' },
-        icon: '💰',
-        color: '#D97706',
-        rgb: '217, 119, 6',
-        chapters: [
-          makeChap('ssc-fin-1', 'অর্থের সময়মূল্য, ঝুঁকি ও মূলধন বাজেটিং', 'SSC Finance Formulas', [
-            ['সময়মূল্য ও গড় মুনাফার হার', 'FV = PV(1 + i)ⁿ | PV = FV / (1 + i)ⁿ | গড় মুনাফার হার = (গড় নিট মুনাফা ÷ গড় বিনিয়োগ) × ১০০', 'পে-ব্যাক সময় = বিনিয়োগ ÷ বার্ষিক নগদ আন্তঃপ্রবাহ।'],
-          ]),
-        ],
-      },
-    ],
-
-    Humanities: [
-      {
-        id: 'ssc-eco',
-        name: { bn: 'অর্থনীতি ও পৌরনীতি', en: 'Economics & Civics' },
-        icon: '📈',
-        color: '#A21CAF',
-        rgb: '162, 28, 175',
-        chapters: [
-          makeChap('ssc-eco-1', 'চাহিদা, যোগান, জাতীয় আয় ও নাগরিকতা', 'SSC Humanities Formulas', [
-            ['জাতীয় আয় ও চাহিদা বিধি', 'GDP = C + I + G + (X - M) | NNP = GNP - অবচয়', 'দাম বাড়লে চাহিদা কমে এবং দাম কমলে চাহিদা বাড়ে।'],
-          ]),
-        ],
-      },
-    ],
-  },
-};
-
-export function getAvailableClasses(): string[] {
-  return ['HSC', 'SSC'];
-}
-
-export function getAvailableGroups(selectedClass: string): string[] {
-  const cls = BUILTIN_SYLLABUS[selectedClass] || BUILTIN_SYLLABUS.HSC;
-  return Object.keys(cls);
-}
-
-export function getSubjectsForSelection(selectedClass: string, selectedGroup: string): SubjectData[] {
-  const clsObj = BUILTIN_SYLLABUS[selectedClass] || BUILTIN_SYLLABUS.HSC;
-  const baseSubjects = clsObj[selectedGroup] || clsObj.Science || [];
-
-  const customMap = storeState?.customSubjects?.[selectedClass]?.[selectedGroup] || [];
-  if (customMap.length === 0) return baseSubjects;
-
-  const merged = baseSubjects.map((b) => {
-    const customMatch = customMap.find((c) => c.id === b.id);
-    if (!customMatch) return b;
-    return {
-      ...b,
-      chapters: customMatch.chapters.length > 0 ? customMatch.chapters : b.chapters,
-    };
-  });
-
-  customMap.forEach((c) => {
-    if (!merged.some((m) => m.id === c.id)) {
-      merged.push(c);
-    }
-  });
-
-  return merged;
-}
-
-export async function signInOrSignUpUser(params: {
-  mode: 'signin' | 'signup';
+export interface UserProfile {
+  id?: string;
   name: string;
   email: string;
-  password: string;
-}): Promise<{ id: string; name: string; email: string }> {
-  const supaMod = RawSupabase as any;
-  const client = supaMod?.supabase;
-
-  if (client?.auth) {
-    if (params.mode === 'signup') {
-      const { data, error } = await client.auth.signUp({
-        email: params.email,
-        password: params.password,
-        options: { data: { full_name: params.name || params.email.split('@')[0] } },
-      });
-      if (error) throw error;
-      return {
-        id: data?.user?.id || `user-${Date.now()}`,
-        name: params.name || data?.user?.user_metadata?.full_name || params.email.split('@')[0],
-        email: params.email,
-      };
-    } else {
-      const { data, error } = await client.auth.signInWithPassword({
-        email: params.email,
-        password: params.password,
-      });
-      if (error) throw error;
-      if (data?.user) {
-        return {
-          id: data.user.id,
-          name: data.user.user_metadata?.full_name || params.email.split('@')[0],
-          email: params.email,
-        };
-      }
-    }
-  }
-
-  return {
-    id: `user-${Date.now()}`,
-    name: params.name || params.email.split('@')[0],
-    email: params.email,
-  };
-}
-
-export const UI_DICT: Record<string, { en: string; bn: string }> = {
-  nav_dashboard: { en: 'Dashboard', bn: 'হোম ড্যাশবোর্ড' },
-  nav_subjects: { en: 'Subjects', bn: 'বিষয়সমূহ' },
-  nav_analytics: { en: 'Analytics', bn: 'পারফরম্যান্স' },
-  nav_mistakes: { en: 'Mistake Bank', bn: 'ভুলের খাতা' },
-  nav_flashcards: { en: 'Flashcards', bn: 'ফ্ল্যাশকার্ড' },
-  nav_formulas: { en: 'Formula Sheet', bn: 'সূত্রসমূহ' },
-  nav_planner: { en: 'Study Planner', bn: 'পড়ার রুটিন' },
-  nav_battle: { en: '1v1 Battle', bn: '১v১ কুইজ ব্যাটল' },
-  nav_community: { en: 'Doubt Forum', bn: 'প্রশ্নোত্তর ফোরাম' },
-  nav_leaderboard: { en: 'Leaderboard', bn: 'লিডারবোর্ড' },
-  nav_achievements: { en: 'Rank & Badges', bn: 'র‍্যাঙ্ক ও ব্যাজ' },
-  nav_more: { en: 'More', bn: 'আরও' },
-
-  welcome_back: { en: 'Welcome', bn: 'স্বাগতম' },
-  sign_in: { en: 'Sign In', bn: 'সাইন ইন' },
-  sign_out: { en: 'Sign Out', bn: 'লগ আউট' },
-  streak_days: { en: 'Day Streak', bn: 'দিনের স্ট্রিক' },
-  personal_rank: { en: 'Personal Rank', bn: 'ব্যক্তিগত র‍্যাঙ্ক' },
-  leaderboard_pos: { en: 'Leaderboard Position', bn: 'লিডারবোর্ড অবস্থান' },
-
-  choose_class_group: { en: 'Class & Group', bn: 'শ্রেণি ও বিভাগ' },
-  all_subjects: { en: 'Your Subjects', bn: 'তোমার বিষয়সমূহ' },
-  chapters_count: { en: 'Chapters', bn: 'অধ্যায়' },
-  questions_count: { en: 'MCQs', bn: 'প্রশ্ন' },
-  start_practice: { en: 'Start Practice', bn: 'অনুশীলন শুরু' },
-  daily_challenge: { en: 'Daily Merit Sprint', bn: 'ডেইলি মেরিট স্প্রিন্ট' },
-  quick_mock: { en: 'Quick Mock Exam', bn: 'কুইক মক টেস্ট' },
-  mastery: { en: 'Mastery', bn: 'দক্ষতা' },
-  accuracy: { en: 'Accuracy', bn: 'সঠিকতা' },
-  consistency: { en: 'Consistency', bn: 'ধারাবাহিকতা' },
-  rank_points: { en: 'Rank Score', bn: 'র‍্যাঙ্ক স্কোর' },
-
-  question: { en: 'Question', bn: 'প্রশ্ন' },
-  time_left: { en: 'Time Left', bn: 'বাকি সময়' },
-  question_palette: { en: 'Question Navigator', bn: 'প্রশ্ন নেভিগেটর' },
-  submit_exam: { en: 'Submit Exam', bn: 'জমা দাও' },
-  prev_q: { en: 'Previous', bn: 'পূর্ববর্তী' },
-  next_q: { en: 'Next', bn: 'পরবর্তী' },
-  flag_q: { en: 'Mark', bn: 'মার্ক' },
-  answered: { en: 'Answered', bn: 'উত্তরকৃত' },
-  unanswered: { en: 'Unanswered', bn: 'বাকি' },
-
-  global_ranking: { en: 'Global', bn: 'সর্বজনীন' },
-  friends_ranking: { en: 'Friends', bn: 'বন্ধু তালিকা' },
-  subject_ranking: { en: 'Subject-wise', bn: 'বিষয়ভিত্তিক' },
-  filter_today: { en: 'Today', bn: 'আজ' },
-  filter_weekly: { en: 'Weekly', bn: 'সাপ্তাহিক' },
-  filter_monthly: { en: 'Monthly', bn: 'মাসিক' },
-  filter_alltime: { en: 'All-Time', bn: 'সর্বমোট' },
-};
-
-export function trKey(key: keyof typeof UI_DICT, lang: LanguageMode): string {
-  const item = UI_DICT[key];
-  if (!item) return String(key);
-  if (lang === 'bn') return item.bn;
-  if (lang === 'bilingual') return `${item.bn} (${item.en})`;
-  return item.en;
-}
-
-export function trText(text: LocalizedText | string | undefined, lang: LanguageMode): string {
-  if (!text) return '';
-  if (typeof text === 'string') return text;
-  if (lang === 'bn') return text.bn || text.en;
-  if (lang === 'bilingual') {
-    return text.bn && text.en && text.bn !== text.en ? `${text.bn} • ${text.en}` : text.bn || text.en;
-  }
-  return text.en || text.bn;
-}
-
-export interface ExamStoreState {
-  userId: string | null;
-  userName: string;
-  userEmail: string;
-  userAvatar: string;
-  isAuthenticated: boolean;
-
-  language: LanguageMode;
-  darkMode: boolean;
-  selectedClass: string;
-  selectedGroup: string;
-  activeTab: NavTabId;
-
+  phone?: string;
+  institution: string;
+  targetGoal: string;
+  bio: string;
+  level: AcademicLevel;
+  group: AcademicGroup;
   xp: number;
   streak: number;
-  lastActiveDate: string;
-  examHistory: ExamHistoryItem[];
-  mistakes: MistakeItem[];
-  flashcards: FlashcardItem[];
-  studyTasks: StudyTask[];
-  communityPosts: CommunityPost[];
-  bookmarks: string[];
-  chapterMastery: Record<string, number>;
-  friendsList: string[];
-
-  adminPin: string;
-  isAdminUnlocked: boolean;
-  customSubjects: Record<string, Record<string, SubjectData[]>>;
-  questionReports: QuestionReportItem[];
-  adminUsersList: AdminUserRecord[];
-
-  isAuthModalOpen: boolean;
-  isSettingsModalOpen: boolean;
-  activeQuiz: ActiveQuizConfig | null;
-
-  setLanguage: (lang: LanguageMode) => void;
-  toggleDarkMode: () => void;
-  setClassAndGroup: (cls: string, grp: string) => void;
-  setActiveTab: (tab: NavTabId) => void;
-  setAuthModalOpen: (open: boolean) => void;
-  setSettingsModalOpen: (open: boolean) => void;
-  setUserProfile: (profile: {
-    id?: string | null;
-    name?: string;
-    email?: string;
-    avatar?: string;
-    isAuthenticated?: boolean;
-  }) => void;
-  startQuiz: (config: ActiveQuizConfig) => void;
-  closeQuiz: () => void;
-  recordExamResult: (result: Omit<ExamHistoryItem, 'id' | 'date'>, newMistakes: MistakeItem[]) => void;
-  markMistakeMastered: (id: string) => void;
-  addFlashcard: (frontBn: string, backBn: string, subjectId?: string) => void;
-  deleteFlashcard: (id: string) => void;
-  addStudyTask: (task: Omit<StudyTask, 'id' | 'completed'>) => void;
-  toggleStudyTask: (id: string) => void;
-  deleteStudyTask: (id: string) => void;
-  addCommunityPost: (post: Omit<CommunityPost, 'id' | 'createdAt' | 'likes' | 'solved' | 'replies'>) => void;
-  addCommunityReply: (postId: string, authorName: string, text: string) => void;
-  togglePostLike: (postId: string) => void;
-  addFriendByCode: (friendName: string) => void;
-  getRankInfo: () => RankProgressInfo;
-
-  submitQuestionReport: (payload: Omit<QuestionReportItem, 'id' | 'createdAt' | 'status'>) => void;
-  resolveQuestionReport: (reportId: string) => void;
-  deleteQuestionReport: (reportId: string) => void;
-
-  unlockAdmin: (pin: string) => boolean;
-  lockAdmin: () => void;
-  setAdminPin: (newPin: string) => void;
-  importBulkMcqs: (params: {
-    targetClass: string;
-    targetGroup: string;
-    subjectId: string;
-    subjectNameBn: string;
-    subjectNameEn: string;
-    icon?: string;
-    color?: string;
-    rawText: string;
-  }) => { addedQuestions: number; addedChapters: number };
-  addSingleCustomMcq: (params: {
-    targetClass: string;
-    targetGroup: string;
-    subjectId: string;
-    subjectNameBn: string;
-    subjectNameEn: string;
-    chapterNameBn: string;
-    questionBn: string;
-    optionsBn: [string, string, string, string];
-    ansIndex: number;
-    boardTag?: string;
-    explanationBn?: string;
-  }) => void;
-  updateCustomMcqAnswer: (
-    targetClass: string,
-    targetGroup: string,
-    subjectId: string,
-    chapterId: string,
-    questionId: string,
-    newAnsIndex: number
-  ) => void;
-  editCustomMcqFull: (params: {
-    targetClass: string;
-    targetGroup: string;
-    subjectId: string;
-    chapterId: string;
-    questionId: string;
-    questionBn: string;
-    optionsBn: string[];
-    ansIndex: number;
-    explanationBn?: string;
-  }) => void;
-  deleteCustomMcq: (
-    targetClass: string,
-    targetGroup: string,
-    subjectId: string,
-    chapterId: string,
-    questionId: string
-  ) => void;
-  deleteCustomSubject: (targetClass: string, targetGroup: string, subjectId: string) => void;
-  updateAdminUserRecord: (userId: string, updates: Partial<AdminUserRecord>) => void;
-  exportProjectSyllabusCode: () => string;
-  resetAllDemoAndProgress: () => void;
+  lastActiveDate?: string;
+  isLoggedIn: boolean;
+  isAdmin?: boolean;
 }
 
-const STORAGE_KEY = 'examverse-v4-clean-storage';
-const listeners = new Set<() => void>();
+// 100% RealHSC Accounting 2nd Paper with all 297 MCQs across 10 chapters
+const HSC_ACCOUNTING_2ND_PAPER: Subject = {
+  id: 'acc-2',
+  code: '254',
+  name: 'হিসাববিজ্ঞান ২য় পত্র',
+  paper: '2nd Paper',
+  level: 'HSC',
+  group: 'Business Studies',
+  icon: '📊',
+  color: 'amber',
+  chapters: HSC_ACCOUNTING_2ND_PAPER_CHAPTERS,
+};
 
-function loadPersisted(): Partial<ExamStoreState> {
-  if (typeof window === 'undefined') return {};
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return {};
-    return JSON.parse(raw) || {};
-  } catch {
-    return {};
+// Complete Paper-Separated Subject Structure across SSC & HSC (Common, Science, Business Studies, Humanities)
+const INITIAL_SUBJECTS: Subject[] = [
+  // ================= HSC COMMON =================
+  {
+    id: 'hsc-bn-1', code: '101', name: 'বাংলা ১ম পত্র', paper: '1st Paper', level: 'HSC', group: 'Common', icon: '📖', color: 'emerald',
+    chapters: [
+      { id: 'h-bn1-c1', name: 'গদ্য: অপরিচিতা, বিলাসী, আমার পথ, মানব-কল্যাণ, মাসি-পিসি, বায়ান্নর দিনগুলো, রেইনকোট', mcqs: [], cqs: [], formulas: ['অপরিচিতা — রবীন্দ্রনাথ ঠাকুর (সবুজপত্র পত্রিকা, ১৯১৪; অনুপম মামার চেয়ে ৬ বছরের ছোট; বিয়ের সময় বয়স ২৭ বছর; কল্যাণীর বয়স ১৫ বছর)', 'বিলাসী — শরৎচন্দ্র চট্টোপাধ্যায় (ভারতী পত্রিকা, ১৯১৮; ন্যাড়ার মাদুলি ও সাপুড়ে জীবন)', 'বায়ান্নর দিনগুলো — শেখ মুজিবুর রহমান (অসমাপ্ত আত্মজীবনী; ১৬ ফেব্রুয়ারি অনশন শুরু)'] },
+      { id: 'h-bn1-c2', name: 'পদ্য: সোনার তরী, বিদ্রোহী, প্রতিদান, তাহারেই পড়ে মনে, আঠারো বছর বয়স, ফেব্রুয়ারি ১৯৬৯, আমি কিংবদন্তির কথা বলছি', mcqs: [], cqs: [], formulas: ['সোনার তরী — মাত্রাবৃত্ত ছন্দ (৮+৫ মাত্রা, রবীন্দ্রনাথ ঠাকুর, কাব্যগ্রন্থ: সোনার তরী ১৮৯৪)', 'বিদ্রোহী — কাজী নজরুল ইসলাম (অগ্নিবীণা কাব্যগ্রন্থ ১৯২২, বিজলী পত্রিকা)', 'আঠারো বছর বয়স — সুকান্ত ভট্টাচার্য (ছাড়পত্র কাব্যগ্রন্থ ১৯৪৮, মাত্রাবৃত্ত ছন্দ)'] },
+      { id: 'h-bn1-c3', name: 'উপন্যাস (লালসালু) ও নাটক (সিরাজউদ্দৌলা)', mcqs: [], cqs: [], formulas: ['লালসালু — সৈয়দ ওয়ালীউল্লাহ (১৯৪৮; মজিদ, জমিলা, রহিমা, খালেক ব্যাপারী, মহব্বতনগর গ্রাম)', 'সিরাজউদ্দৌলা — সিকান্‌দার আবু জাফর (১৯৬৫; ৪টি অঙ্ক ও ১২টি দৃশ্য; ২৩ জুন ১৭৫৭ পলাশীর যুদ্ধ)'] }
+    ]
+  },
+  {
+    id: 'hsc-bn-2', code: '102', name: 'বাংলা ২য় পত্র', paper: '2nd Paper', level: 'HSC', group: 'Common', icon: '✍️', color: 'emerald',
+    chapters: [
+      { id: 'h-bn2-c1', name: 'বাংলা উচ্চারণের নিয়ম ও বানানের নিয়ম', mcqs: [], cqs: [], formulas: ['অ-ধ্বনির সংবৃত উচ্চারণ: শব্দের আদিতে অ-এর পরে ই/ঈ/উ/ঊ থাকলে অ-এর উচ্চারণ ও-কারের মতো হয় (যেমন: অতি -> ওতি, নদী -> নোদি)', 'ণ-ত্ব বিধান: ঋ, র, ষ-এর পরে মূর্ধন্য ণ হয় (যেমন: ঋণ, তৃণ, বর্ণ, উষ্ণ)'] },
+      { id: 'h-bn2-c2', name: 'ব্যাকরণিক শব্দশ্রেণি, শব্দ গঠন (উপসর্গ, সমাস, প্রকৃতি-প্রত্যয়) ও বাক্যতত্ত্ব', mcqs: [], cqs: [], formulas: ['বাংলা উপসর্গ ২১টি (অ, অঘা, অজ, অনা, আ, আড়, আন, আব, ইতি, ঊন, কদ, কু, নি, পাতি, বি, ভর, রাম, স, সা, সু, হা)', 'তৎসম উপসর্গ ২০টি (প্র, পরা, অপ, সম, নি, অব, অনু, নির, দুর, বি, অধি, সু, উৎ, পরি, প্রতি, অভি, অতি, অপি, উপ, আ)'] }
+    ]
+  },
+  {
+    id: 'hsc-en-1', code: '107', name: 'English 1st Paper', paper: '1st Paper', level: 'HSC', group: 'Common', icon: '🌐', color: 'blue',
+    chapters: [
+      { id: 'h-en1-c1', name: 'Seen Comprehension, Flow Chart & Summary Writing', mcqs: [], cqs: [], formulas: ['Flow Chart Rule: Start each box with a Capital letter using Infinitive (To + V1), Gerund (V1+ing), or Noun Phrase — never write full sentences.'] }
+    ]
+  },
+  {
+    id: 'hsc-en-2', code: '108', name: 'English 2nd Paper', paper: '2nd Paper', level: 'HSC', group: 'Common', icon: '🔤', color: 'blue',
+    chapters: [
+      { id: 'h-en2-c1', name: 'Right Form of Verbs, Prepositions, Modifiers, Connectors & Narration', mcqs: [], cqs: [], formulas: ['3rd Conditional: If + Past Perfect (had + V3) -> would/could/might + have + V3', '2nd Conditional: If + Past Indefinite (V2/were) -> would/could/might + V1', '1st Conditional: If + Present Indefinite -> will/can/may + V1', 'Lest + Subject + should/might + V1', 'It is high time / It is time + Subject + V2 (Past Indefinite)'] }
+    ]
+  },
+  {
+    id: 'hsc-ict', code: '275', name: 'তথ্য ও যোগাযোগ প্রযুক্তি (ICT)', paper: 'Single Paper', level: 'HSC', group: 'Common', icon: '💻', color: 'indigo',
+    chapters: [
+      { id: 'h-ict-c1', name: '১ম অধ্যায়: বিশ্ব ও বাংলাদেশ প্রেক্ষিত', mcqs: [], cqs: [], formulas: ['ভার্চুয়াল রিয়েলিটি (VR): ত্রিমাত্রিক (3D) সিমুলেশন পরিবেশ', 'ক্রায়োসার্জারি: হিমাঙ্ক তাপমাত্রায় (-41°C থেকে -196°C) তরল নাইট্রোজেন/আর্গন গ্যাস দিয়ে টিউমার ধ্বংস', 'ন্যানোটেকনোলজি: 1 nm = 10⁻⁹ m (1 থেকে 100 nm স্কেল)'] },
+      { id: 'h-ict-c2', name: '২য় অধ্যায়: কমিউনিকেশন সিস্টেমস ও নেটওয়ার্কিং', mcqs: [], cqs: [], formulas: ['ডেটা ট্রান্সমিশন মোড: সিমপ্লেক্স (একমুখী: রেডিও/টিভি), হাফ-ডুপ্লেক্স (ওয়াকিটকি), ফুল-ডুপ্লেক্স (মোবাইল/টেলিফোন)', 'টপোলজি: Mesh সংযোগ সংখ্যা = n(n - 1) / 2', 'অপটিক্যাল ফাইবার: পূর্ণ অভ্যন্তরীণ প্রতিফলন নীতিতে আলোর গতিতে ডেটা স্থানান্তর'] },
+      { id: 'h-ict-c3', name: '৩য় অধ্যায়: সংখ্যা পদ্ধতি ও ডিজিটাল ডিভাইস', mcqs: [], cqs: [], formulas: ['De Morgan’s Law 1: (A + B)\' = A\' · B\'', 'De Morgan’s Law 2: (A · B)\' = A\' + B\'', 'XOR Gate: Y = A ⊕ B = A\'B + AB\'', 'XNOR Gate: Y = (A ⊕ B)\' = AB + A\'B\'', 'Half Adder: Sum S = A ⊕ B, Carry C = A · B', 'Full Adder: Sum S = A ⊕ B ⊕ Cin, Carry Cout = AB + BCin + ACin', '2\'s Complement = 1\'s Complement + 1'] },
+      { id: 'h-ict-c4', name: '৪র্থ অধ্যায়: ওয়েব ডিজাইন পরিচিতি এবং HTML', mcqs: [], cqs: [], formulas: ['হাইপারলিংক ট্যাগ: <a href="url" target="_blank">Link Text</a>', 'ইমেজ ট্যাগ (Empty Tag): <img src="pic.jpg" alt="text" width="200" height="150" />', 'সাবস্ক্রিপ্ট ও সুপারস্ক্রিপ্ট: H<sub>2</sub>O এবং (a+b)<sup>2</sup>'] },
+      { id: 'h-ict-c5', name: '৫ম অধ্যায়: প্রোগ্রামিং ভাষা (C Programming)', mcqs: [], cqs: [], formulas: ['1 + 2 + 3 + ... + n = n(n + 1) / 2', 'ত্রিভুজের ক্ষেত্রফল: Area = 0.5 * base * height বা sqrt(s*(s-a)*(s-b)*(s-c))', 'লিপ ইয়ার শর্ত: (year % 400 == 0) || (year % 4 == 0 && year % 100 != 0)', 'ফরম্যাট স্পেসিফায়ার: int -> %d, float -> %f, double -> %lf, char -> %c, string -> %s'] },
+      { id: 'h-ict-c6', name: '৬ষ্ঠ অধ্যায়: ডেটাবেজ ম্যানেজমেন্ট সিস্টেম (DBMS)', mcqs: [], cqs: [], formulas: ['সিলেক্ট কুয়েরি: SELECT * FROM student WHERE gpa = 5.00 ORDER BY roll ASC;', 'ডেটা আপডেট: UPDATE student SET gpa = 5.00 WHERE roll = 101;', 'ডেটা ডিলিট: DELETE FROM student WHERE roll = 101;'] }
+    ]
+  },
+
+  // ================= HSC SCIENCE =================
+  {
+    id: 'hsc-phy-1', code: '174', name: 'পদার্থবিজ্ঞান ১ম পত্র', paper: '1st Paper', level: 'HSC', group: 'Science', icon: '⚛️', color: 'violet',
+    chapters: [
+      { id: 'h-phy1-c2', name: '২য় অধ্যায়: ভেক্টর', mcqs: [], cqs: [], formulas: ['ভেক্টর লব্ধির মান: R = √(P² + Q² + 2PQ cosα)', 'লব্ধির দিক: tanθ = (Q sinα) / (P + Q cosα)', 'ডট গুণন (স্কেলার গুণন): A · B = AB cosθ', 'ক্রস গুণন (ভেক্টর গুণন): |A × B| = AB sinθ'] },
+      { id: 'h-phy1-c4', name: '৪র্থ অধ্যায়: নিউটনীয় বলবিদ্যা', mcqs: [], cqs: [], formulas: ['রৈখিক ভরবেগ ও বল: F = dp/dt = ma', 'কৌণিক ভরবেগ: L = Iω = r × p', 'টর্ক: τ = Iα = rF sinθ', 'কেন্দ্রমুখী বল: Fc = mv² / r = mω²r', 'ব্যাংকিং কোণ: tanθ = v² / rg'] },
+      { id: 'h-phy1-c5', name: '৫ম অধ্যায়: কাজ, শক্তি ও ক্ষমতা', mcqs: [], cqs: [], formulas: ['কাজ: W = F · s = Fs cosθ', 'গতিশক্তি: Ek = ½ mv² = p² / 2m', 'স্প্রিংয়ের বিভব শক্তি: Ep = ½ kx²', 'ক্ষমতা ও কর্মদক্ষতা: P = W / t = Fv এবং η = (কার্যকর ক্ষমতা / প্রদত্ত ক্ষমতা) × 100%'] },
+      { id: 'h-phy1-c6', name: '৬ষ্ঠ অধ্যায়: মহাকর্ষ ও অভিকর্ষ', mcqs: [], cqs: [], formulas: ['নিউটনের মহাকর্ষ সূত্র: F = G m₁m₂ / r²', 'উচ্চতায় অভিকর্ষজ ত্বরণ: gh = g (R / (R + h))²', 'গভীরতায় অভিকর্ষজ ত্বরণ: gd = g (1 - d / R)', 'মুক্তিবেগ: ve = √(2gR) = √(2GM / R) ≈ 11.2 km/s'] },
+      { id: 'h-phy1-c8', name: '৮ম অধ্যায়: পর্যায়বৃত্ত গতি', mcqs: [], cqs: [], formulas: ['সরল ছন্দিত গতির বেগ: v = ω √(A² - x²)', 'ত্বরণ: a = -ω²x', 'সরল দোলকের দোলনকাল: T = 2π √(L / g)'] },
+      { id: 'h-phy1-c10', name: '১০ম অধ্যায়: আদর্শ গ্যাস ও গ্যাসের গতিতত্ত্ব', mcqs: [], cqs: [], formulas: ['আদর্শ গ্যাস সমীকরণ: PV = nRT', 'মূল গড় বর্গবেগ (RMS Speed): c = √(3RT / M) = √(3P / ρ)', 'গড় গতিশক্তি: E = (3/2) nRT (প্রতি অণুর জন্য (3/2) kT)'] }
+    ]
+  },
+  {
+    id: 'hsc-phy-2', code: '175', name: 'পদার্থবিজ্ঞান ২য় পত্র', paper: '2nd Paper', level: 'HSC', group: 'Science', icon: '⚡', color: 'violet',
+    chapters: [
+      { id: 'h-phy2-c1', name: '১ম অধ্যায়: তাপগতিবিদ্যা', mcqs: [], cqs: [], formulas: ['তাপগতিবিদ্যার ১ম সূত্র: dQ = dU + dW = dU + P dV', 'রুদ্ধতাপীয় প্রক্রিয়া: PV^γ = ধ্রুবক এবং TV^(γ-1) = ধ্রুবক', 'কার্নো ইঞ্জিনের কর্মদক্ষতা: η = (1 - T₂ / T₁) × 100%', 'এনট্রপির পরিবর্তন: dS = dQ / T'] },
+      { id: 'h-phy2-c2', name: '২য় অধ্যায়: স্থির তড়িৎ', mcqs: [], cqs: [], formulas: ['কুলম্বের সূত্র: F = (1 / 4πε₀) · (q₁q₂ / r²)', 'তড়িৎ বিভব: V = (1 / 4πε₀) · (q / r)', 'ধারকের সঞ্চিত শক্তি: U = ½ CV² = ½ QV = Q² / 2C'] },
+      { id: 'h-phy2-c3', name: '৩য় অধ্যায়: চল তড়িৎ', mcqs: [], cqs: [], formulas: ['ওহমের সূত্র: V = IR', 'জুলের তাপীয় ক্রিয়া: H = I²Rt', 'শান্টের তড়িৎ প্রবাহ: Is = I · G / (G + S)', 'হুইটস্টোন ব্রিজের সাম্যাবস্থা: P / Q = R / S'] },
+      { id: 'h-phy2-c8', name: '৮ম অধ্যায়: আধুনিক পদার্থবিজ্ঞানের সূচনা', mcqs: [], cqs: [], formulas: ['কাল দীর্ঘায়ন: t = t₀ / √(1 - v²/c²)', 'ভর-শক্তি সমীকরণ: E = mc²', 'আইনস্টাইনের আলোক তড়িৎ সমীকরণ: hf = hf₀ + Ek(max)', 'ডি ব্রগলি তরঙ্গদৈর্ঘ্য: λ = h / p = h / mv'] }
+    ]
+  },
+  {
+    id: 'hsc-chem-1', code: '176', name: 'রসায়ন ১ম পত্র', paper: '1st Paper', level: 'HSC', group: 'Science', icon: '🧪', color: 'teal',
+    chapters: [
+      { id: 'h-ch1-c2', name: '২য় অধ্যায়: গুণগত রসায়ন', mcqs: [], cqs: [], formulas: ['বোর কক্ষপথের কৌণিক ভরবেগ: mvr = nh / 2π', 'রিডবার্গ সমীকরণ: 1/λ = R_H · Z² · (1/n₁² - 1/n₂²) (R_H = 109678 cm⁻¹)', 'দ্রাব্যতা গুণফল: Ksp = [A^y+]^x · [B^x-]^y (যেমন Ag₂CrO₄ এর জন্য Ksp = 4S³)'] },
+      { id: 'h-ch1-c3', name: '৩য় অধ্যায়: মৌলের পর্যায়বৃত্ত ধর্ম ও রাসায়নিক বন্ধন', mcqs: [], cqs: [], formulas: ['সংকরায়ন নির্ণয় সূত্র: H = ½ [যোজ্যতা ইলেকট্রন + একযোজী পরমাণু - ক্যাটায়ন চার্জ + অ্যানায়ন চার্জ] (H=2 -> sp, H=3 -> sp², H=4 -> sp³)'] },
+      { id: 'h-ch1-c4', name: '৪র্থ অধ্যায়: রাসায়নিক পরিবর্তন', mcqs: [], cqs: [], formulas: ['সাম্যধ্রুবক সম্পর্ক: Kp = Kc (RT)^Δn', 'পানির আয়নিক গুণফল (25°C): Kw = [H⁺][OH⁻] = 10⁻¹⁴ এবং pH + pOH = 14', 'হেন্ডারসন-হ্যাসেলবালখ সমীকরণ (অম্লীয় বাফার): pH = pKa + log([লবণ] / [অম্ল])'] }
+    ]
+  },
+  {
+    id: 'hsc-chem-2', code: '177', name: 'রসায়ন ২য় পত্র', paper: '2nd Paper', level: 'HSC', group: 'Science', icon: '⚗️', color: 'teal',
+    chapters: [
+      { id: 'h-ch2-c1', name: '১ম অধ্যায়: পরিবেশ রসায়ন', mcqs: [], cqs: [], formulas: ['বয়েলের সূত্র: P₁V₁ = P₂V₂', 'সমন্বয় সূত্র: P₁V₁ / T₁ = P₂V₂ / T₂', 'ডাল্টনের আংশিক চাপ সূত্র: P_A = X_A · P_total', 'গ্রাহামের ব্যাপন সূত্র: r₁ / r₂ = √(M₂ / M₁) = √(d₂ / d₁)', 'বাস্তব গ্যাসের ভ্যানডার ওয়ালস সমীকরণ: (P + n²a/V²)(V - nb) = nRT'] },
+      { id: 'h-ch2-c3', name: '৩য় অধ্যায়: পরিমাণগত রসায়ন', mcqs: [], cqs: [], formulas: ['মোলারিটি: S = (w × 1000) / (M × V_mL)', 'শতকরা ঘনমাত্রা থেকে মোলারিটি: S = (10 × x% × d) / M', 'প্রশমন/টাইট্রেশন সমীকরণ: e₁ V₁ S₁ = e₂ V₂ S₂', 'বিয়ার-ল্যাম্বার্ট সূত্র: A = log(I₀ / I) = ε c l'] },
+      { id: 'h-ch2-c4', name: '৪র্থ অধ্যায়: তড়িৎ রসায়ন', mcqs: [], cqs: [], formulas: ['ফ্যারাডের ১ম সূত্র: W = ZIt = (M · I · t) / (n · F) (এখানে F = 96500 C)', 'কোষ বিভব: E°_cell = E°_anode(ox) + E°_cathode(red)', 'নার্নস্ট সমীকরণ (25°C): E_cell = E°_cell - (0.0592 / n) log Q'] }
+    ]
+  },
+  {
+    id: 'hsc-math-1', code: '265', name: 'উচ্চতর গণিত ১ম পত্র', paper: '1st Paper', level: 'HSC', group: 'Science', icon: '📐', color: 'rose',
+    chapters: [
+      { id: 'h-m1-c1', name: '১ম অধ্যায়: ম্যাট্রিক্স ও নির্ণায়ক', mcqs: [], cqs: [], formulas: ['2×2 বিপরীত ম্যাট্রিক্স: A⁻¹ = (1 / (ad - bc)) · [d, -b; -c, a]', 'ব্যতিক্রমী ম্যাট্রিক্সের শর্ত: |A| = 0'] },
+      { id: 'h-m1-c3', name: '৩য় অধ্যায়: সরলরেখা', mcqs: [], cqs: [], formulas: ['দুই বিন্দুর দূরত্ব: d = √((x₁-x₂)² + (y₁-y₂)²)', 'ঢাল: m = tanθ = (y₂ - y₁) / (x₂ - x₁)', 'বিন্দু হতে রেখার লম্ব দূরত্ব: d = |ax₁ + by₁ + c| / √(a² + b²)'] },
+      { id: 'h-m1-c4', name: '৪র্থ অধ্যায়: বৃত্ত', mcqs: [], cqs: [], formulas: ['সাধারণ সমীকরণ x² + y² + 2gx + 2fy + c = 0 এর কেন্দ্র (-g, -f) এবং ব্যাসার্ধ r = √(g² + f² - c)', 'x-অক্ষের খণ্ডিতাংশ = 2√(g² - c) এবং y-অক্ষের খণ্ডিতাংশ = 2√(f² - c)'] },
+      { id: 'h-m1-c9', name: '৯ম ও ১০ম অধ্যায়: অন্তরীকরণ ও যোগজীকরণ (Calculus)', mcqs: [], cqs: [], formulas: ['lim(x→0) (sin x / x) = 1', 'd/dx (xⁿ) = n xⁿ⁻¹', 'd/dx (eˣ) = eˣ এবং d/dx (ln x) = 1/x', 'd/dx (uv) = u dv/dx + v du/dx', '∫ xⁿ dx = xⁿ⁺¹ / (n + 1) + c (n ≠ -1)', '∫ u v dx = u ∫v dx - ∫ [ (du/dx) ∫v dx ] dx'] }
+    ]
+  },
+  {
+    id: 'hsc-math-2', code: '266', name: 'উচ্চতর গণিত ২য় পত্র', paper: '2nd Paper', level: 'HSC', group: 'Science', icon: '♾️', color: 'rose',
+    chapters: [
+      { id: 'h-m2-c3', name: '৩য় অধ্যায়: জটিল সংখ্যা', mcqs: [], cqs: [], formulas: ['z = x + iy হলে মডুলাস r = |z| = √(x² + y²) এবং আর্গুমেন্ট θ = tan⁻¹(y/x)', 'এককের ঘনমূল ω এর ধর্ম: 1 + ω + ω² = 0 এবং ω³ = 1'] },
+      { id: 'h-m2-c4', name: '৪র্থ অধ্যায়: বহুপদী ও বহুপদী সমীকরণ', mcqs: [], cqs: [], formulas: ['ax² + bx + c = 0 সমীকরণের মূল α, β হলে: α + β = -b/a এবং αβ = c/a', 'নিশ্চায়ক D = b² - 4ac (D = 0 হলে মূলদ্বয় বাস্তব ও সমান)'] },
+      { id: 'h-m2-c6', name: '৬ষ্ঠ অধ্যায়: কণিক (পরাবৃত্ত, উপবৃত্ত, অধিবৃত্ত)', mcqs: [], cqs: [], formulas: ['পরাবৃত্ত y² = 4ax এর উপকেন্দ্র (a, 0), নিয়ামক x = -a, উপকেন্দ্রিক লম্বের দৈর্ঘ্য = 4a', 'উপবৃত্ত x²/a² + y²/b² = 1 (a>b) এর উৎকেন্দ্রিকতা e = √(1 - b²/a²), উপকেন্দ্র (±ae, 0)'] },
+      { id: 'h-m2-c8', name: '৮ম ও ৯ম অধ্যায়: স্থিতিবিদ্যা ও সমতলে বস্তুকণার গতি', mcqs: [], cqs: [], formulas: ['লামির উপপাদ্য: P / sinα = Q / sinβ = R / sinγ', 'প্রাসের সর্বাধিক উচ্চতা: H = (u² sin²α) / 2g', 'প্রাসের অনুভূমিক পাল্লা: R = (u² sin 2α) / g (সর্বাধিক পাল্লা R_max = u²/g যখন α = 45°)', 'উড্ডয়নকাল: T = (2u sinα) / g'] }
+    ]
+  },
+  {
+    id: 'hsc-bio-1', code: '178', name: 'জীববিজ্ঞান ১ম পত্র (উদ্ভিদবিজ্ঞান)', paper: '1st Paper', level: 'HSC', group: 'Science', icon: '🌿', color: 'emerald',
+    chapters: [
+      { id: 'h-bio1-c1', name: 'কোষ ও এর গঠন, কোষ বিভাজন ও উদ্ভিদ শারীরতত্ত্ব', mcqs: [], cqs: [], formulas: ['শ্বসনিক হার (RQ) = নির্গত CO₂ এর আয়তন / গৃহীত O₂ এর আয়তন (গ্লুকোজের RQ = 1)', 'সবাত শ্বসনে ১ অণু গ্লুকোজ থেকে নীট ৩৬ বা ৩৮টি ATP উৎপন্ন হয়'] }
+    ]
+  },
+  {
+    id: 'hsc-bio-2', code: '179', name: 'জীববিজ্ঞান ২য় পত্র (প্রাণিবিজ্ঞান)', paper: '2nd Paper', level: 'HSC', group: 'Science', icon: '🧬', color: 'emerald',
+    chapters: [
+      { id: 'h-bio2-c1', name: 'প্রাণীর বিভিন্নতা ও শ্রেণিবিন্যাস, মানব শারীরতত্ত্ব ও জিনতত্ত্ব', mcqs: [], cqs: [], formulas: ['BMI (Body Mass Index) = ওজন (kg) / [উচ্চতা (m)]² (স্বাভাবিক: 18.5 – 24.9 kg/m²)', 'মেন্ডেলের ১ম সূত্রের ফিনোটাইপিক অনুপাত = 3 : 1 (অসম্পূর্ণ প্রকটতায় 1 : 2 : 1)', 'মেন্ডেলের ২য় সূত্রের অনুপাত = 9 : 3 : 3 : 1'] }
+    ]
+  },
+
+  // ================= HSC BUSINESS STUDIES =================
+  {
+    id: 'acc-1', code: '253', name: 'হিসাববিজ্ঞান ১ম পত্র', paper: '1st Paper', level: 'HSC', group: 'Business Studies', icon: '📒', color: 'amber',
+    chapters: [
+      { id: 'acc1-c1', name: 'হিসাববিজ্ঞান পরিচিতি ও হিসাবের বইসমূহ', mcqs: [], cqs: [], formulas: ['মৌলিক হিসাব সমীকরণ: A = L + OE', 'বর্ধিত হিসাব সমীকরণ: A = L + (C + R - E - D)', 'ডেবিট-ক্রেডিট সূত্র: সম্পদ ও ব্যয় বৃদ্ধি পেলে ডেবিট; দায়, মালিকানাস্বত্ব ও আয় বৃদ্ধি পেলে ক্রেডিট'] },
+      { id: 'acc1-c2', name: 'ব্যাংক সমন্বয় বিবরণী, রেওয়ামিল ও দৃশ্যমান সম্পদের হিসাবরক্ষণ', mcqs: [], cqs: [], formulas: ['সরলরৈখিক বার্ষিক অবচয় = (সম্পত্তির মোট মূল্য - ভগ্নাবশেষ মূল্য) / আনুমানিক আয়ুষ্কাল', 'অবচয়ের হার = (১০০% / আনুমানিক আয়ুষ্কাল)', 'ক্রমহ্রাসমান জের পদ্ধতিতে অবচয়ের হার = সরলরৈখিক হার × ২'] }
+    ]
+  },
+  // HSC Accounting 2nd Paper (297 MCQs across 10 chapters from user Excel)
+  HSC_ACCOUNTING_2ND_PAPER,
+  {
+    id: 'bom-1', code: '277', name: 'ব্যবসায় সংগঠন ও ব্যবস্থাপনা ১ম পত্র', paper: '1st Paper', level: 'HSC', group: 'Business Studies', icon: '🏢', color: 'amber',
+    chapters: [
+      { id: 'bom1-c1', name: 'ব্যবসায়ের মৌলিক ধারণা, একমালিকানা, অংশীদারি ও যৌথমূলধনী ব্যবসায়', mcqs: [], cqs: [], formulas: ['ব্যবসায় সমীকরণ: ΣB = ΣI + ΣT + ΣAT (শিল্প + বাণিজ্য + প্রত্যক্ষ সেবা)', 'সমবায় সমিতি আইন: ২০০১ (সংশোধিত ২০০২ ও ২০১৩), সর্বনিম্ন সদস্য ২০ জন'] }
+    ]
+  },
+  {
+    id: 'bom-2', code: '278', name: 'ব্যবসায় সংগঠন ও ব্যবস্থাপনা ২য় পত্র', paper: '2nd Paper', level: 'HSC', group: 'Business Studies', icon: '📋', color: 'amber',
+    chapters: [
+      { id: 'bom2-c1', name: 'ব্যবস্থাপনার ধারণা, নীতি, পরিকল্পনা, সংগঠন, কর্মিসংস্থান, নেতৃত্ব ও নিয়ন্ত্রণ', mcqs: [], cqs: [], formulas: ['আধুনিক ব্যবস্থাপনার জনক — হেনরি ফেয়ল (১৪টি নীতি)', 'বৈজ্ঞানিক ব্যবস্থাপনার জনক — এফ. ডব্লিউ. টেইলর', 'ব্যবস্থাপনার কার্যাবলি (POSDCORB): Planning, Organizing, Staffing, Directing, Coordinating, Reporting, Budgeting'] }
+    ]
+  },
+  {
+    id: 'fin-1', code: '292', name: 'ফিন্যান্স, ব্যাংকিং ও বিমা ১ম পত্র', paper: '1st Paper', level: 'HSC', group: 'Business Studies', icon: '💰', color: 'amber',
+    chapters: [
+      { id: 'fin1-c3', name: 'অর্থের সময়মূল্য (Time Value of Money)', mcqs: [], cqs: [], formulas: ['ভবিষ্যৎ মূল্য (বার্ষিক চক্রবৃদ্ধি): FV = PV (1 + i)ⁿ', 'একাধিকবার চক্রবৃদ্ধি: FV = PV (1 + i/m)^(n×m)', 'বর্তমান মূল্য: PV = FV / (1 + i)ⁿ', 'কার্যকরী সুদের হার (EAR) = (1 + i/m)^m - 1', 'Rule of 72 (বিনিয়োগ দ্বিগুণ হওয়ার সময়): n = 72 / সুদের হার (%)'] },
+      { id: 'fin1-c6', name: 'দীর্ঘমেয়াদি অর্থায়ন, মূলধন ব্যয় ও মূলধন বাজেটিং ও ঝুঁকি', mcqs: [], cqs: [], formulas: ['করের পর ঋণ মূলধন ব্যয়: Kd = Ki (1 - t)', 'সাধারণ শেয়ার মূলধন ব্যয় (স্থির লভ্যাংশ বৃদ্ধি): Ke = (D₁ / P₀) + g', 'CAPM মডেল: Ke = Rf + β (Rm - Rf)', 'পে-ব্যাক সময় (সমান নগদ আন্তঃপ্রবাহ): PBP = প্রাথমিক বিনিয়োগ (NCO) / বার্ষিক নগদ আন্তঃপ্রবাহ (NCB)'] }
+    ]
+  },
+  {
+    id: 'fin-2', code: '293', name: 'ফিন্যান্স, ব্যাংকিং ও বিমা ২য় পত্র', paper: '2nd Paper', level: 'HSC', group: 'Business Studies', icon: '🏦', color: 'amber',
+    chapters: [
+      { id: 'fin2-c1', name: 'ব্যাংক ব্যবস্থার প্রাথমিক ধারণা, কেন্দ্রীয় ব্যাংক ও বিমা', mcqs: [], cqs: [], formulas: ['বাংলাদেশ ব্যাংক আদেশ: ১৯৭২ সালের রাষ্ট্রপতির ১২৭ নং আদেশ (বর্তমানে তফসিলি ব্যাংক ৬১টি)', 'বিমা চুক্তির অপরিহার্য উপাদান: চূড়ান্ত সদ্বিশ্বাস (Utmost Good Faith) ও বিমাযোগ্য স্বার্থ'] }
+    ]
+  },
+  {
+    id: 'mkt-1', code: '286', name: 'উৎপাদন ব্যবস্থাপনা ও বিপণন ১ম পত্র', paper: '1st Paper', level: 'HSC', group: 'Business Studies', icon: '🏭', color: 'amber',
+    chapters: [
+      { id: 'mkt1-c1', name: 'উৎপাদন, উৎপাদনশীলতা ও উপযোগ', mcqs: [], cqs: [], formulas: ['মোট উৎপাদনশীলতা = মোট উৎপাদনের মূল্য / মোট উপাদানের মূল্য', 'শ্রম উৎপাদনশীলতা = মোট উৎপাদন একক / মোট শ্রম ঘণ্টা', 'যন্ত্রের উৎপাদনশীলতা = মোট উৎপাদন মূল্য / মোট যন্ত্র সময়'] }
+    ]
+  },
+  {
+    id: 'mkt-2', code: '287', name: 'উৎপাদন ব্যবস্থাপনা ও বিপণন ২য় পত্র', paper: '2nd Paper', level: 'HSC', group: 'Business Studies', icon: '🛒', color: 'amber',
+    chapters: [
+      { id: 'mkt2-c1', name: 'বিপণন পরিচিতি, বিপণন পরিবেশ ও বিপণন মিশ্রণ (4Ps)', mcqs: [], cqs: [], formulas: ['বিপণন মিশ্রণ (4Ps — E. Jerome McCarthy): Product (পণ্য), Price (মূল্য), Place (স্থান/বণ্টন), Promotion (প্রসার)'] }
+    ]
+  },
+
+  // ================= HSC HUMANITIES =================
+  {
+    id: 'eco-1', code: '109', name: 'অর্থনীতি ১ম পত্র', paper: '1st Paper', level: 'HSC', group: 'Humanities', icon: '📈', color: 'indigo',
+    chapters: [
+      { id: 'eco1-c2', name: 'ভোক্তা ও উৎপাদকের আচরণ (চাহিদা ও যোগান)', mcqs: [], cqs: [], formulas: ['চাহিদা সমীকরণ: Qd = a - bP এবং যোগান সমীকরণ: Qs = c + dP (ভারসাম্যে Qd = Qs)', 'চাহিদার দাম স্থিতিস্থাপকতা: Ed = (ΔQ / ΔP) × (P / Q)', 'মোট আয় ও গড় আয়: TR = P × Q, AR = TR / Q = P, MR = ΔTR / ΔQ', 'জাতীয় আয় (বদ্ধ অর্থনীতি): Y = C + I + G এবং মুক্ত অর্থনীতি: GDP = C + I + G + (X - M)'] }
+    ]
+  },
+  {
+    id: 'eco-2', code: '110', name: 'অর্থনীতি ২য় পত্র', paper: '2nd Paper', level: 'HSC', group: 'Humanities', icon: '🌍', color: 'indigo',
+    chapters: [
+      { id: 'eco2-c1', name: 'বাংলাদেশের অর্থনীতি, জনসংখ্যা ও মুদ্রাস্ফীতি', mcqs: [], cqs: [], formulas: ['জনসংখ্যার ঘনত্ব = মোট জনসংখ্যা / মোট ভূমির পরিমাণ (বর্গ কিমি)', 'মুদ্রাস্ফীতির হার = [(চলতি বছরের দাম সূচক - ভিত্তি বছরের দাম সূচক) / ভিত্তি বছরের দাম সূচক] × ১০০'] }
+    ]
+  },
+  {
+    id: 'civ-1', code: '269', name: 'পৌরনীতি ও সুশাসন ১ম পত্র', paper: '1st Paper', level: 'HSC', group: 'Humanities', icon: '⚖️', color: 'indigo',
+    chapters: [
+      { id: 'civ1-c1', name: 'পৌরনীতি ও সুশাসন পরিচিতি, রাষ্ট্র, সংবিধান ও নাগরিক অধিকার', mcqs: [], cqs: [], formulas: ['Civics শব্দটি এসেছে ল্যাটিন শব্দ Civis (নাগরিক) এবং Civitas (নগররাষ্ট্র) থেকে।'] }
+    ]
+  },
+  {
+    id: 'civ-2', code: '270', name: 'পৌরনীতি ও সুশাসন ২য় পত্র', paper: '2nd Paper', level: 'HSC', group: 'Humanities', icon: '🏛️', color: 'indigo',
+    chapters: [
+      { id: 'civ2-c1', name: 'ব্রিটিশ ভারতে প্রতিনিধিত্বশীল সরকারের বিকাশ ও বাংলাদেশের সংবিধান', mcqs: [], cqs: [], formulas: ['বাংলাদেশের সংবিধান গৃহীত হয়: ৪ নভেম্বর ১৯৭২; কার্যকর হয়: ১৬ ডিসেম্বর ১৯৭২ (১১টি ভাগ, ১৫৩টি অনুচ্ছেদ, ৭টি তফসিল)'] }
+    ]
+  },
+  {
+    id: 'his-1', code: '304', name: 'ইতিহাস ১ম পত্র', paper: '1st Paper', level: 'HSC', group: 'Humanities', icon: '🏺', color: 'indigo',
+    chapters: [
+      { id: 'his1-c1', name: 'ভারতবর্ষে ইউরোপীয়দের আগমন হতে ১৯৭১-এর মহান মুক্তিযুদ্ধ', mcqs: [], cqs: [], formulas: ['১৭৫৭: পলাশীর যুদ্ধ | ১৯০৫: বঙ্গভঙ্গ | ১৯৫২: ভাষা আন্দোলন | ১৯৬৬: ছয় দফা | ১৯৭১: মহান মুক্তিযুদ্ধ'] }
+    ]
+  },
+  {
+    id: 'his-2', code: '305', name: 'ইতিহাস ২য় পত্র', paper: '2nd Paper', level: 'HSC', group: 'Humanities', icon: '📜', color: 'indigo',
+    chapters: [
+      { id: 'his2-c1', name: 'শিল্প বিপ্লব, ফরাসি বিপ্লব, ১ম ও ২য় বিশ্বযুদ্ধ এবং জাতিসংঘ', mcqs: [], cqs: [], formulas: ['ফরাসি বিপ্লব: ১৪ জুলাই ১৭৮৯ (মূলমন্ত্র: স্বাধীনতা, সাম্য ও ভ্রাতৃত্ব) | জাতিসংঘ প্রতিষ্ঠা: ২৪ অক্টোবর ১৯৪৫'] }
+    ]
+  },
+  {
+    id: 'log-1', code: '121', name: 'যুক্তিবিদ্যা ১ম পত্র', paper: '1st Paper', level: 'HSC', group: 'Humanities', icon: '🧠', color: 'indigo',
+    chapters: [
+      { id: 'log1-c1', name: 'যুক্তিবিদ্যা পরিচিতি, পদ, যুক্তিবাক্য ও সহানুমান', mcqs: [], cqs: [], formulas: ['যুক্তিবাক্যের ৪টি আকার: A (সকল S হয় P), E (কোনো S নয় P), I (কিছু S হয় P), O (কিছু S নয় P)'] }
+    ]
+  },
+  {
+    id: 'log-2', code: '122', name: 'যুক্তিবিদ্যা ২য় পত্র', paper: '2nd Paper', level: 'HSC', group: 'Humanities', icon: '🔍', color: 'indigo',
+    chapters: [
+      { id: 'log2-c1', name: 'যৌক্তিক সংজ্ঞা, যৌক্তিক বিভাগ, আরোহ ও প্রকল্প', mcqs: [], cqs: [], formulas: ['যৌক্তিক সংজ্ঞা = আসন্নতম জাতি (Proximate Genus) + বিভেদক লক্ষণ (Differentia)'] }
+    ]
+  },
+
+  // ================= SSC COMMON & GROUPS =================
+  {
+    id: 'ssc-bn-1', code: '101', name: 'বাংলা ১ম পত্র (SSC)', paper: '1st Paper', level: 'SSC', group: 'Common', icon: '📖', color: 'emerald',
+    chapters: [{ id: 's-bn1-c1', name: 'গদ্য ও পদ্য (সুভা, বই পড়া, মানুষ মুহম্মদ (স.), বঙ্গবাণী, কপোতাক্ষ নদ)', mcqs: [], cqs: [], formulas: ['কপোতাক্ষ নদ — মাইকেল মধুসূদন দত্ত (চতুর্দশপদী কবিতাবলি, অষ্টক ও ষষ্টক, মিলবিন্যাস: কখকখ কখখক গঘগঘ গঘ)'] }]
+  },
+  {
+    id: 'ssc-bn-2', code: '102', name: 'বাংলা ২য় পত্র (SSC)', paper: '2nd Paper', level: 'SSC', group: 'Common', icon: '✍️', color: 'emerald',
+    chapters: [{ id: 's-bn2-c1', name: 'ধ্বনিতত্ত্ব, সন্ধি, সমাস, কারক ও বিভক্তি, বাচ্য ও উক্তি', mcqs: [], cqs: [], formulas: ['মৌলিক স্বরধ্বনি ৭টি (অ, আ, ই, উ, এ, ও, অ্যা); স্বরবর্ণ ১১টি, ব্যঞ্জনবর্ণ ৩৯টি'] }]
+  },
+  {
+    id: 'ssc-en-1', code: '107', name: 'English 1st Paper (SSC)', paper: '1st Paper', level: 'SSC', group: 'Common', icon: '🌐', color: 'blue',
+    chapters: [{ id: 's-en1-c1', name: 'Seen Passage, Unseen Passage & Writing', mcqs: [], cqs: [], formulas: ['Summary Writing: Keep within 1/3 of the passage length in your own words.'] }]
+  },
+  {
+    id: 'ssc-en-2', code: '108', name: 'English 2nd Paper (SSC)', paper: '2nd Paper', level: 'SSC', group: 'Common', icon: '🔤', color: 'blue',
+    chapters: [{ id: 's-en2-c1', name: 'Grammar (Tag Questions, Completing Sentences, Suffix-Prefix, Voice)', mcqs: [], cqs: [], formulas: ['Tag Question: Let’s / Let us -> shall we? | Imperative sentence -> will you / won’t you?'] }]
+  },
+  {
+    id: 'ssc-math', code: '109', name: 'সাধারণ গণিত (SSC)', paper: 'Single Paper', level: 'SSC', group: 'Common', icon: '📏', color: 'rose',
+    chapters: [{ id: 's-math-c1', name: 'বীজগণিত, ত্রিকোণমিতি, পরিমিতি ও জ্যামিতি', mcqs: [], cqs: [], formulas: ['(a + b)² = a² + 2ab + b² = (a - b)² + 4ab', 'a³ + b³ = (a + b)³ - 3ab(a + b)', 'sin²θ + cos²θ = 1, sec²θ - tan²θ = 1, cosec²θ - cot²θ = 1', 'সমান্তর ধারার n-তম পদ = a + (n - 1)d এবং সমষ্টি Sn = (n/2) [2a + (n - 1)d]'] }]
+  },
+  {
+    id: 'ssc-ict', code: '154', name: 'তথ্য ও যোগাযোগ প্রযুক্তি (SSC)', paper: 'Single Paper', level: 'SSC', group: 'Common', icon: '💻', color: 'indigo',
+    chapters: [{ id: 's-ict-c1', name: 'তথ্য ও যোগাযোগ প্রযুক্তি এবং আমাদের বাংলাদেশ', mcqs: [], cqs: [], formulas: ['ই-লার্নিং, ই-গভর্ন্যান্স, ই-সার্ভিস, ই-কমার্স ও কম্পিউটার ট্রাবলশুটিং'] }]
+  },
+  {
+    id: 'ssc-phy', code: '136', name: 'পদার্থবিজ্ঞান (SSC)', paper: 'Single Paper', level: 'SSC', group: 'Science', icon: '⚛️', color: 'violet',
+    chapters: [{ id: 's-phy-c1', name: 'গতি, বল, কাজ-ক্ষমতা-শক্তি, আলোর প্রতিফলন ও প্রতিসরণ, চল তড়িৎ', mcqs: [], cqs: [], formulas: ['গতির সমীকরণ: v = u + at, s = ut + ½at², v² = u² + 2as', 'দর্পণ ও লেন্সের সমীকরণ: 1/u + 1/v = 1/f এবং ক্ষমতা P = 1/f (ডায়াপ্টার)'] }]
+  },
+  {
+    id: 'ssc-chem', code: '137', name: 'রসায়ন (SSC)', paper: 'Single Paper', level: 'SSC', group: 'Science', icon: '🧪', color: 'teal',
+    chapters: [{ id: 's-chem-c1', name: 'পদার্থের গঠন, পর্যায় সারণি, রাসায়নিক বন্ধন, মোলের ধারণা ও রাসায়নিক গণনা', mcqs: [], cqs: [], formulas: ['মোল সংখ্যা n = w / M = V(L) / 22.4 = N / (6.023 × 10²³)'] }]
+  },
+  {
+    id: 'ssc-bio', code: '138', name: 'জীববিজ্ঞান (SSC)', paper: 'Single Paper', level: 'SSC', group: 'Science', icon: '🌿', color: 'emerald',
+    chapters: [{ id: 's-bio-c1', name: 'জীবন পাঠ, কোষ ও টিস্যু, জীবনীশক্তি, খাদ্য ও পরিপাক', mcqs: [], cqs: [], formulas: ['সালোকসংশ্লেষণ: 6CO₂ + 12H₂O → C₆H₁₂O₆ + 6O₂ + 6H₂O (সূর্যালোক ও ক্লোরোফিল)'] }]
+  },
+  {
+    id: 'ssc-hmath', code: '126', name: 'উচ্চতর গণিত (SSC)', paper: 'Single Paper', level: 'SSC', group: 'Science', icon: '📐', color: 'rose',
+    chapters: [{ id: 's-hm-c1', name: 'সেট ও ফাংশন, দ্বিপদী বিস্তৃতি, স্থানাঙ্ক জ্যামিতি ও সম্ভাবনা', mcqs: [], cqs: [], formulas: ['সম্ভাবনা P(A) = অনুকূল ফলাফল / সমগ্র সম্ভাব্য ফলাফল (0 ≤ P(A) ≤ 1)'] }]
+  },
+  {
+    id: 'ssc-acc', code: '146', name: 'হিসাববিজ্ঞান (SSC)', paper: 'Single Paper', level: 'SSC', group: 'Business Studies', icon: '📊', color: 'amber',
+    chapters: [{ id: 's-acc-c1', name: 'লেনদেন, দুতরফা দাখিলা পদ্ধতি, জাবেদা, খতিয়ান, রেওয়ামিল ও আর্থিক বিবরণী', mcqs: [], cqs: [], formulas: ['সম্পদ (A) = দায় (L) + মালিকানাস্বত্ব (OE)'] }]
+  },
+  {
+    id: 'ssc-fin', code: '152', name: 'ফিন্যান্স ও ব্যাংকিং (SSC)', paper: 'Single Paper', level: 'SSC', group: 'Business Studies', icon: '🏦', color: 'amber',
+    chapters: [{ id: 's-fin-c1', name: 'অর্থায়ন ও ব্যবসায় অর্থায়ন, অর্থের সময়মূল্য, মূলধন বাজেটিং ও ব্যাংকিং', mcqs: [], cqs: [], formulas: ['ভবিষ্যৎ মূল্য FV = PV (1 + i)ⁿ'] }]
+  },
+  {
+    id: 'ssc-ent', code: '143', name: 'ব্যবসায় উদ্যোগ (SSC)', paper: 'Single Paper', level: 'SSC', group: 'Business Studies', icon: '💼', color: 'amber',
+    chapters: [{ id: 's-ent-c1', name: 'ব্যবসায় পরিচিতি, আত্মকর্মসংস্থান, ব্যবসায়ের আইনগত দিক ও বিপণন', mcqs: [], cqs: [], formulas: ['অংশীদারি আইন ১৯৩২, কোম্পানি আইন ১৯৯৪, পেটেন্ট ও ট্রেডমার্ক'] }]
+  },
+  {
+    id: 'ssc-his', code: '153', name: 'বাংলাদেশের ইতিহাস ও বিশ্বসভ্যতা (SSC)', paper: 'Single Paper', level: 'SSC', group: 'Humanities', icon: '🏺', color: 'indigo',
+    chapters: [{ id: 's-his-c1', name: 'প্রাচীন বাংলার জনপদ, মধ্যযুগ, ব্রিটিশ শাসন, ভাষা আন্দোলন ও মুক্তিযুদ্ধ', mcqs: [], cqs: [], formulas: ['প্রাচীন জনপদ: পুণ্ড্র (মহাস্থানগড়/বগুড়া), বঙ্গ, সমতট (কুমিল্লা-নোয়াখালী), হরিকেল, গৌড়'] }]
+  },
+  {
+    id: 'ssc-geo', code: '110', name: 'ভূগোল ও পরিবেশ (SSC)', paper: 'Single Paper', level: 'SSC', group: 'Humanities', icon: '🌍', color: 'indigo',
+    chapters: [{ id: 's-geo-c1', name: 'মহাবিশ্ব ও আমাদের পৃথিবী, পৃথিবীর অভ্যন্তরীণ ও বাহ্যিক গঠন, বায়ুমণ্ডল ও বারিমণ্ডল', mcqs: [], cqs: [], formulas: ['১ ডিগ্রি দ্রাঘিমার পার্থক্যে সময়ের পার্থক্য ৪ মিনিট (১৫ ডিগ্রিতে ১ ঘণ্টা)'] }]
+  },
+  {
+    id: 'ssc-civ', code: '140', name: 'পৌরনীতি ও নাগরিকতা (SSC)', paper: 'Single Paper', level: 'SSC', group: 'Humanities', icon: '⚖️', color: 'indigo',
+    chapters: [{ id: 's-civ-c1', name: 'নাগরিক ও নাগরিকতা, আইন, স্বাধীনতা ও সাম্য, রাষ্ট্র ও সরকার ব্যবস্থা', mcqs: [], cqs: [], formulas: ['রাষ্ট্রের ৪টি উপাদান: নির্দিষ্ট ভূখণ্ড, জনসমষ্টি, সরকার এবং সার্বভৌমত্ব'] }]
+  },
+
+  // ================= ADMISSION & JOB/BCS =================
+  {
+    id: 'adm-gk', code: 'ADM-01', name: 'Admission: সাধারণ জ্ঞান, বাংলা ও ইংরেজি', paper: 'Combined', level: 'Admission', group: 'Common', icon: '🎓', color: 'indigo',
+    chapters: [{ id: 'adm-c1', name: 'ঢাকা বিশ্ববিদ্যালয়, গুচ্ছ ও মেডিকেল ভর্তি প্রস্তুতি', mcqs: [], cqs: [], formulas: ['মেডিকেল ভর্তি পরীক্ষা: জীববিজ্ঞান ৩০, রসায়ন ২৫, পদার্থবিজ্ঞান ২০, ইংরেজি ১৫, সাধারণ জ্ঞান ১০ = ১০০ নম্বর'] }]
+  },
+  {
+    id: 'bcs-preli', code: 'BCS-01', name: 'BCS Preliminary & Bank Job Master', paper: 'Combined', level: 'Job/BCS', group: 'Common', icon: '🏆', color: 'amber',
+    chapters: [{ id: 'bcs-c1', name: 'বাংলাদেশ ও আন্তর্জাতিক বিষয়াবলি, গাণিতিক যুক্তি ও মানসিক দক্ষতা', mcqs: [], cqs: [], formulas: ['বিসিএস প্রিলিমিনারি ২০০ নম্বর (প্রতি ভুল উত্তরের জন্য ০.৫০ নম্বর কর্তন)'] }]
   }
+];
+
+interface ExamStoreState {
+  profile: UserProfile;
+  theme: ThemeMode;
+  fontSize: FontSize;
+  subjects: Subject[];
+  bookmarks: string[];
+  wrongQuestionIds: string[];
+  history: ExamHistoryItem[];
+  questionReports: QuestionErrorReport[];
+  registeredUsers: RegisteredUserSummary[];
+
+  updateProfile: (partial: Partial<UserProfile>) => void;
+  loginUser: (data: { id?: string; name: string; email: string; phone?: string; institution: string; level: AcademicLevel; group: AcademicGroup }) => void;
+  logoutUser: () => void;
+  setAcademicFilter: (level: AcademicLevel, group: AcademicGroup) => void;
+  setTheme: (theme: ThemeMode) => void;
+  setFontSize: (size: FontSize) => void;
+  toggleBookmark: (qId: string) => void;
+  recordExamResult: (result: Omit<ExamHistoryItem, 'id' | 'date'>) => void;
+  addCustomMCQ: (subjectId: string, chapterId: string, mcq: Omit<MCQ, 'id'>) => void;
+  bulkAddMCQs: (target: { level: AcademicLevel; group: AcademicGroup | 'Common'; subjectName: string; paper: string; code?: string }, chapterItems: { chapterName: string; mcq: Omit<MCQ, 'id'> }[]) => number;
+  updateMCQAnswer: (subjectId: string, chapterId: string, questionId: string, newCorrectIndex: number, newExplanation?: string, newQuestionText?: string, newOptions?: [string, string, string, string]) => void;
+  deleteMCQ: (subjectId: string, chapterId: string, questionId: string) => void;
+  reportQuestionError: (report: Omit<QuestionErrorReport, 'id' | 'createdAt' | 'status'>) => void;
+  resolveQuestionReport: (reportId: string, status: 'resolved' | 'dismissed', newCorrectIndex?: number) => void;
+  addFormulaToChapter: (subjectId: string, chapterId: string, formula: string) => void;
+  clearMistakes: () => void;
+  syncCloudSubjectData: () => Promise<void>;
 }
 
-function savePersisted(state: ExamStoreState) {
-  if (typeof window === 'undefined') return;
-  try {
-    const subset = {
-      userId: state.userId,
-      userName: state.userName,
-      userEmail: state.userEmail,
-      userAvatar: state.userAvatar,
-      isAuthenticated: state.isAuthenticated,
-      language: state.language,
-      darkMode: state.darkMode,
-      selectedClass: state.selectedClass,
-      selectedGroup: state.selectedGroup,
-      xp: state.xp,
-      streak: state.streak,
-      lastActiveDate: state.lastActiveDate,
-      examHistory: state.examHistory,
-      mistakes: state.mistakes,
-      flashcards: state.flashcards,
-      studyTasks: state.studyTasks,
-      communityPosts: state.communityPosts,
-      bookmarks: state.bookmarks,
-      chapterMastery: state.chapterMastery,
-      friendsList: state.friendsList,
-      adminPin: state.adminPin,
-      isAdminUnlocked: state.isAdminUnlocked,
-      customSubjects: state.customSubjects,
-      questionReports: state.questionReports,
-      adminUsersList: state.adminUsersList,
-    };
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(subset));
-  } catch {}
-}
-
-async function syncCustomSubjectsToCloud(customSubjects: Record<string, Record<string, SubjectData[]>>) {
-  try {
-    const supaMod = RawSupabase as any;
-    const client = supaMod?.supabase;
-    if (!client) return;
-    await client.from('app_config').upsert({
-      key: 'custom_syllabus_v4',
-      value_json: customSubjects,
-      updated_at: new Date().toISOString(),
-    });
-  } catch {}
-}
-
-const saved = loadPersisted();
-
-let storeState: ExamStoreState = {
-  userId: saved.userId ?? null,
-  userName: saved.userName ?? 'শিক্ষার্থী',
-  userEmail: saved.userEmail ?? '',
-  userAvatar: saved.userAvatar ?? '🎓',
-  isAuthenticated: saved.isAuthenticated ?? false,
-
-  language: saved.language ?? 'bn',
-  darkMode: saved.darkMode ?? false,
-  selectedClass: saved.selectedClass ?? 'HSC',
-  selectedGroup: saved.selectedGroup ?? 'Science',
-  activeTab: typeof window !== 'undefined' && window.location.hash === '#admin' ? 'admin' : 'dashboard',
-
-  /* ZERO DEMO DATA BY DEFAULT */
-  xp: saved.xp ?? 0,
-  streak: saved.streak ?? 0,
-  lastActiveDate: saved.lastActiveDate ?? '',
-  examHistory: saved.examHistory ?? [],
-  mistakes: saved.mistakes ?? [],
-  flashcards: saved.flashcards ?? [],
-  studyTasks: saved.studyTasks ?? [],
-  communityPosts: saved.communityPosts ?? [],
-  bookmarks: saved.bookmarks ?? [],
-  chapterMastery: saved.chapterMastery ?? {},
-  friendsList: saved.friendsList ?? [],
-
-  adminPin: saved.adminPin ?? 'admin2026',
-  isAdminUnlocked: saved.isAdminUnlocked ?? false,
-  customSubjects: saved.customSubjects ?? {},
-  questionReports: saved.questionReports ?? [],
-  adminUsersList: saved.adminUsersList ?? [],
-
-  isAuthModalOpen: false,
-  isSettingsModalOpen: false,
-  activeQuiz: null,
-
-  setLanguage: (language) => setState({ language }),
-  toggleDarkMode: () => {
-    const next = !storeState.darkMode;
-    if (typeof document !== 'undefined') {
-      document.documentElement.classList.toggle('dark', next);
-    }
-    setState({ darkMode: next });
-  },
-  setClassAndGroup: (selectedClass, selectedGroup) => setState({ selectedClass, selectedGroup }),
-  setActiveTab: (activeTab) => setState({ activeTab }),
-  setAuthModalOpen: (isAuthModalOpen) => setState({ isAuthModalOpen }),
-  setSettingsModalOpen: (isSettingsModalOpen) => setState({ isSettingsModalOpen }),
-  setUserProfile: (profile) =>
-    setState({
-      userId: profile.id !== undefined ? profile.id : storeState.userId,
-      userName: profile.name ?? storeState.userName,
-      userEmail: profile.email ?? storeState.userEmail,
-      userAvatar: profile.avatar ?? storeState.userAvatar,
-      isAuthenticated: profile.isAuthenticated ?? storeState.isAuthenticated,
-    }),
-
-  startQuiz: (activeQuiz) => setState({ activeQuiz }),
-  closeQuiz: () => setState({ activeQuiz: null }),
-
-  recordExamResult: (result, newMistakes) => {
-    const today = new Date().toISOString().slice(0, 10);
-    const streakIncrement = storeState.lastActiveDate !== today && result.total > 0 ? 1 : 0;
-    const item: ExamHistoryItem = {
-      ...result,
-      id: `exam-${Date.now()}`,
-      date: new Date().toISOString(),
-    };
-    const updatedMastery = { ...storeState.chapterMastery };
-    if (result.chapterId) {
-      const prev = updatedMastery[result.chapterId] || 0;
-      updatedMastery[result.chapterId] = Math.max(prev, result.accuracy);
-    }
-    setState({
-      xp: storeState.xp + result.xpEarned,
-      streak: storeState.streak + streakIncrement,
-      lastActiveDate: today,
-      examHistory: [item, ...storeState.examHistory],
-      mistakes: [...newMistakes, ...storeState.mistakes],
-      chapterMastery: updatedMastery,
-    });
-  },
-
-  markMistakeMastered: (id) =>
-    setState({
-      mistakes: storeState.mistakes.map((m) => (m.id === id ? { ...m, mastered: true } : m)),
-    }),
-
-  addFlashcard: (frontBn, backBn, subjectId = 'general') =>
-    setState({
-      flashcards: [
-        {
-          id: `fc-${Date.now()}`,
-          subjectId,
-          front: { bn: frontBn, en: frontBn },
-          back: { bn: backBn, en: backBn },
-          box: 1,
-          nextReviewDate: new Date().toISOString().slice(0, 10),
-        },
-        ...storeState.flashcards,
-      ],
-    }),
-
-  deleteFlashcard: (id) =>
-    setState({
-      flashcards: storeState.flashcards.filter((f) => f.id !== id),
-    }),
-
-  addStudyTask: (task) =>
-    setState({
-      studyTasks: [{ ...task, id: `task-${Date.now()}`, completed: false }, ...storeState.studyTasks],
-    }),
-
-  toggleStudyTask: (id) =>
-    setState({
-      studyTasks: storeState.studyTasks.map((t) => (t.id === id ? { ...t, completed: !t.completed } : t)),
-    }),
-
-  deleteStudyTask: (id) =>
-    setState({
-      studyTasks: storeState.studyTasks.filter((t) => t.id !== id),
-    }),
-
-  addCommunityPost: (post) =>
-    setState({
-      communityPosts: [
-        {
-          ...post,
-          id: `post-${Date.now()}`,
-          createdAt: new Date().toLocaleDateString('bn-BD'),
-          likes: 0,
-          solved: false,
-          replies: [],
-        },
-        ...storeState.communityPosts,
-      ],
-    }),
-
-  addCommunityReply: (postId, authorName, text) =>
-    setState({
-      communityPosts: storeState.communityPosts.map((p) =>
-        p.id === postId
-          ? {
-              ...p,
-              replies: [
-                ...p.replies,
-                { id: `rep-${Date.now()}`, authorName, text, createdAt: new Date().toLocaleDateString('bn-BD') },
-              ],
-            }
-          : p
-      ),
-    }),
-
-  togglePostLike: (postId) =>
-    setState({
-      communityPosts: storeState.communityPosts.map((p) => (p.id === postId ? { ...p, likes: p.likes + 1 } : p)),
-    }),
-
-  addFriendByCode: (friendName) => {
-    const clean = friendName.trim();
-    if (!clean || storeState.friendsList.includes(clean)) return;
-    setState({ friendsList: [...storeState.friendsList, clean] });
-  },
-
-  getRankInfo: () => {
-    const history = storeState.examHistory;
-    const avgAccuracy = history.length > 0 ? history.reduce((sum, h) => sum + h.accuracy, 0) / history.length : 0;
-    const masteredCount = Object.values(storeState.chapterMastery).filter((v) => v >= 75).length;
-
-    return calculateUserRank({
-      xp: storeState.xp,
-      accuracyPct: avgAccuracy,
-      masteredChaptersCount: masteredCount,
-      streakDays: storeState.streak,
-      examsCompleted: history.length,
-    });
-  },
-
-  submitQuestionReport: (payload) => {
-    const report: QuestionReportItem = {
-      ...payload,
-      id: `rep-${Date.now()}`,
-      createdAt: new Date().toISOString().slice(0, 10),
-      status: 'pending',
-    };
-    setState({ questionReports: [report, ...storeState.questionReports] });
-    try {
-      const supaMod = RawSupabase as any;
-      supaMod?.supabase?.from('question_reports')?.insert({
-        question_id: payload.questionId,
-        subject_id: payload.subjectId,
-        issue_type: payload.issueType,
-        details: payload.comment,
-        reported_by: payload.reportedBy,
-      });
-    } catch {}
-  },
-
-  resolveQuestionReport: (reportId) =>
-    setState({
-      questionReports: storeState.questionReports.map((r) => (r.id === reportId ? { ...r, status: 'resolved' } : r)),
-    }),
-
-  deleteQuestionReport: (reportId) =>
-    setState({
-      questionReports: storeState.questionReports.filter((r) => r.id !== reportId),
-    }),
-
-  unlockAdmin: (pin) => {
-    if (pin.trim() === storeState.adminPin) {
-      setState({ isAdminUnlocked: true });
-      return true;
-    }
-    return false;
-  },
-
-  lockAdmin: () => setState({ isAdminUnlocked: false, activeTab: 'dashboard' }),
-
-  setAdminPin: (newPin) => {
-    if (newPin.trim().length >= 4) {
-      setState({ adminPin: newPin.trim() });
-    }
-  },
-
-  importBulkMcqs: ({
-    targetClass,
-    targetGroup,
-    subjectId,
-    subjectNameBn,
-    subjectNameEn,
-    icon = '📘',
-    color = '#4F46E5',
-    rawText,
-  }) => {
-    const lines = rawText
-      .split(/\r?\n/)
-      .map((l) => l.trim())
-      .filter(Boolean);
-
-    const optMap: Record<string, number> = {
-      ক: 0, খ: 1, গ: 2, ঘ: 3,
-      a: 0, b: 1, c: 2, d: 3,
-      '1': 0, '2': 1, '3': 2, '4': 3,
-    };
-
-    const parsedByChapter: Record<string, MCQQuestion[]> = {};
-    let addedQuestions = 0;
-
-    lines.forEach((line, idx) => {
-      const cols = line.includes('\t')
-        ? line.split('\t').map((c) => c.trim())
-        : line.split(',').map((c) => c.replace(/^"|"$/g, '').trim());
-
-      if (cols.length < 6) return;
-      const firstLower = cols[0].toLowerCase();
-      if (firstLower === 'question_id' || firstLower === 'chapter' || firstLower === 'অধ্যায়') return;
-
-      let chName = '';
-      let qText = '';
-      let optA = '';
-      let optB = '';
-      let optC = '';
-      let optD = '';
-      let ansRaw = '';
-      let boardTag = '';
-      let expText = '';
-
-      if (cols.length >= 9 && (cols[0].includes('-') || /^\d+$/.test(cols[1]))) {
-        chName = cols[2] || 'অধ্যায় ১';
-        qText = cols[3] || '';
-        optA = cols[4] || '';
-        optB = cols[5] || '';
-        optC = cols[6] || '';
-        optD = cols[7] || '';
-        ansRaw = (cols[8] || '').toLowerCase();
-        boardTag = cols[10] || '';
-      } else {
-        chName = cols[0] || 'অধ্যায় ১';
-        qText = cols[1] || '';
-        optA = cols[2] || '';
-        optB = cols[3] || '';
-        optC = cols[4] || '';
-        optD = cols[5] || '';
-        ansRaw = (cols[6] || '').toLowerCase();
-        boardTag = cols[7] || '';
-        expText = cols[8] || '';
-      }
-
-      if (!qText || !optA) return;
-      const ans = optMap[ansRaw] ?? 0;
-
-      if (!parsedByChapter[chName]) parsedByChapter[chName] = [];
-      parsedByChapter[chName].push({
-        id: `${subjectId}-q-${Date.now()}-${idx}`,
-        q: { bn: qText, en: qText },
-        options: { bn: [optA, optB, optC, optD], en: [optA, optB, optC, optD] },
-        ans,
-        boardTag: boardTag || undefined,
-        explanation: expText ? { bn: expText, en: expText } : undefined,
-      });
-      addedQuestions++;
-    });
-
-    const chapterKeys = Object.keys(parsedByChapter);
-    if (chapterKeys.length === 0) return { addedQuestions: 0, addedChapters: 0 };
-
-    const nextCustom = { ...storeState.customSubjects };
-    if (!nextCustom[targetClass]) nextCustom[targetClass] = {};
-    const groupList = [...(nextCustom[targetClass][targetGroup] || [])];
-
-    const existingSubjIdx = groupList.findIndex((s) => s.id === subjectId);
-    const builtinSubj = (BUILTIN_SYLLABUS[targetClass]?.[targetGroup] || []).find((s) => s.id === subjectId);
-
-    const baseChapters: ChapterData[] =
-      existingSubjIdx >= 0
-        ? [...groupList[existingSubjIdx].chapters]
-        : builtinSubj
-        ? builtinSubj.chapters.map((c) => ({ ...c, mcqs: [...c.mcqs] }))
-        : [];
-
-    chapterKeys.forEach((cName, cIdx) => {
-      const foundChIdx = baseChapters.findIndex((c) => c.name.bn === cName || c.name.en === cName);
-      if (foundChIdx >= 0) {
-        baseChapters[foundChIdx] = {
-          ...baseChapters[foundChIdx],
-          mcqs: [...baseChapters[foundChIdx].mcqs, ...parsedByChapter[cName]],
-        };
-      } else {
-        baseChapters.push({
-          id: `${subjectId}-ch-${Date.now()}-${cIdx}`,
-          name: { bn: cName, en: cName },
-          mcqs: parsedByChapter[cName],
-          cqs: [],
-          formulas: [],
-        });
-      }
-    });
-
-    const newSubjectObj: SubjectData = {
-      id: subjectId,
-      name: { bn: subjectNameBn, en: subjectNameEn || subjectNameBn },
-      icon: builtinSubj?.icon || icon,
-      color: builtinSubj?.color || color,
-      chapters: baseChapters,
-    };
-
-    if (existingSubjIdx >= 0) groupList[existingSubjIdx] = newSubjectObj;
-    else groupList.push(newSubjectObj);
-
-    nextCustom[targetClass][targetGroup] = groupList;
-    setState({ customSubjects: nextCustom });
-    syncCustomSubjectsToCloud(nextCustom);
-
-    return { addedQuestions, addedChapters: chapterKeys.length };
-  },
-
-  addSingleCustomMcq: ({
-    targetClass,
-    targetGroup,
-    subjectId,
-    subjectNameBn,
-    subjectNameEn,
-    chapterNameBn,
-    questionBn,
-    optionsBn,
-    ansIndex,
-    boardTag,
-    explanationBn,
-  }) => {
-    const rawLine = [
-      chapterNameBn,
-      questionBn,
-      optionsBn[0],
-      optionsBn[1],
-      optionsBn[2],
-      optionsBn[3],
-      ['ক', 'খ', 'গ', 'ঘ'][ansIndex] || 'ক',
-      boardTag || '',
-      explanationBn || '',
-    ].join('\t');
-
-    storeState.importBulkMcqs({
-      targetClass,
-      targetGroup,
-      subjectId,
-      subjectNameBn,
-      subjectNameEn,
-      rawText: rawLine,
-    });
-  },
-
-  updateCustomMcqAnswer: (targetClass, targetGroup, subjectId, chapterId, questionId, newAnsIndex) => {
-    const nextCustom = { ...storeState.customSubjects };
-    if (!nextCustom[targetClass]) nextCustom[targetClass] = {};
-    let groupList = [...(nextCustom[targetClass][targetGroup] || [])];
-
-    if (!groupList.some((s) => s.id === subjectId)) {
-      const builtin = (BUILTIN_SYLLABUS[targetClass]?.[targetGroup] || []).find((s) => s.id === subjectId);
-      if (builtin) groupList.push(JSON.parse(JSON.stringify(builtin)));
-    }
-
-    nextCustom[targetClass][targetGroup] = groupList.map((s) =>
-      s.id !== subjectId
-        ? s
-        : {
-            ...s,
-            chapters: s.chapters.map((ch) =>
-              ch.id !== chapterId
-                ? ch
-                : { ...ch, mcqs: ch.mcqs.map((q) => (q.id === questionId ? { ...q, ans: newAnsIndex } : q)) }
-            ),
-          }
-    );
-    setState({ customSubjects: nextCustom });
-    syncCustomSubjectsToCloud(nextCustom);
-  },
-
-  editCustomMcqFull: ({
-    targetClass,
-    targetGroup,
-    subjectId,
-    chapterId,
-    questionId,
-    questionBn,
-    optionsBn,
-    ansIndex,
-    explanationBn,
-  }) => {
-    const nextCustom = { ...storeState.customSubjects };
-    if (!nextCustom[targetClass]) nextCustom[targetClass] = {};
-    let groupList = [...(nextCustom[targetClass][targetGroup] || [])];
-
-    if (!groupList.some((s) => s.id === subjectId)) {
-      const builtin = (BUILTIN_SYLLABUS[targetClass]?.[targetGroup] || []).find((s) => s.id === subjectId);
-      if (builtin) groupList.push(JSON.parse(JSON.stringify(builtin)));
-    }
-
-    nextCustom[targetClass][targetGroup] = groupList.map((s) =>
-      s.id !== subjectId
-        ? s
-        : {
-            ...s,
-            chapters: s.chapters.map((ch) =>
-              ch.id !== chapterId
-                ? ch
-                : {
-                    ...ch,
-                    mcqs: ch.mcqs.map((q) =>
-                      q.id === questionId
-                        ? {
-                            ...q,
-                            q: { bn: questionBn, en: questionBn },
-                            options: { bn: optionsBn, en: optionsBn },
-                            ans: ansIndex,
-                            explanation: explanationBn ? { bn: explanationBn, en: explanationBn } : q.explanation,
-                          }
-                        : q
-                    ),
-                  }
-            ),
-          }
-    );
-    setState({ customSubjects: nextCustom });
-    syncCustomSubjectsToCloud(nextCustom);
-  },
-
-  deleteCustomMcq: (targetClass, targetGroup, subjectId, chapterId, questionId) => {
-    const nextCustom = { ...storeState.customSubjects };
-    if (!nextCustom[targetClass]?.[targetGroup]) return;
-    nextCustom[targetClass][targetGroup] = nextCustom[targetClass][targetGroup].map((s) =>
-      s.id !== subjectId
-        ? s
-        : {
-            ...s,
-            chapters: s.chapters.map((ch) =>
-              ch.id !== chapterId ? ch : { ...ch, mcqs: ch.mcqs.filter((q) => q.id !== questionId) }
-            ),
-          }
-    );
-    setState({ customSubjects: nextCustom });
-    syncCustomSubjectsToCloud(nextCustom);
-  },
-
-  deleteCustomSubject: (targetClass, targetGroup, subjectId) => {
-    const nextCustom = { ...storeState.customSubjects };
-    if (!nextCustom[targetClass]?.[targetGroup]) return;
-    nextCustom[targetClass][targetGroup] = nextCustom[targetClass][targetGroup].filter((s) => s.id !== subjectId);
-    setState({ customSubjects: nextCustom });
-    syncCustomSubjectsToCloud(nextCustom);
-  },
-
-  updateAdminUserRecord: (userId, updates) => {
-    setState({
-      adminUsersList: storeState.adminUsersList.map((u) => (u.id === userId ? { ...u, ...updates } : u)),
-    });
-  },
-
-  exportProjectSyllabusCode: () => {
-    const mergedSyllabus: Record<string, Record<string, SubjectData[]>> = {};
-    Object.keys(BUILTIN_SYLLABUS).forEach((cls) => {
-      mergedSyllabus[cls] = {};
-      Object.keys(BUILTIN_SYLLABUS[cls]).forEach((grp) => {
-        mergedSyllabus[cls][grp] = getSubjectsForSelection(cls, grp);
-      });
-    });
-    return `// Auto-Generated ExamVerse Project Syllabus File (src/data/syllabusData.ts)\nexport const SYLLABUS_DB = ${JSON.stringify(
-      mergedSyllabus,
-      null,
-      2
-    )};\n`;
-  },
-
-  resetAllDemoAndProgress: () => {
-    if (typeof window !== 'undefined') {
-      window.localStorage.removeItem('examverse-v3-storage');
-    }
-    setState({
-      xp: 0,
-      streak: 0,
-      lastActiveDate: '',
-      examHistory: [],
-      mistakes: [],
-      flashcards: [],
-      studyTasks: [],
-      communityPosts: [],
+export const useExamStore = create<ExamStoreState>()(
+  persist(
+    (set, get) => ({
+      profile: {
+        name: 'শিক্ষার্থী',
+        email: '',
+        institution: 'জাতীয় শিক্ষাক্রম (NCTB)',
+        targetGoal: 'বোর্ড পরীক্ষায় A+ ও মেধা তালিকায় স্থান',
+        bio: 'নিয়মিত অধ্যায়ভিত্তিক অনুশীলন ও মডেল টেস্টের মাধ্যমে নিজের প্রস্তুতি যাচাই করছি।',
+        level: 'HSC',
+        group: 'Business Studies',
+        xp: 0,
+        streak: 1,
+        isLoggedIn: false,
+      },
+      theme: 'light',
+      fontSize: 'medium',
+      subjects: INITIAL_SUBJECTS,
       bookmarks: [],
-      chapterMastery: {},
-      friendsList: [],
-    });
-  },
-};
+      wrongQuestionIds: [],
+      history: [],
+      questionReports: [],
+      registeredUsers: [],
 
-function setState(partial: Partial<ExamStoreState>) {
-  storeState = { ...storeState, ...partial };
-  savePersisted(storeState);
-  listeners.forEach((listener) => listener());
-}
+      updateProfile: (partial) =>
+        set((state) => {
+          const updated = { ...state.profile, ...partial };
+          if (supabase && updated.id) {
+            supabase.from('profiles').upsert({
+              id: updated.id,
+              name: updated.name,
+              email: updated.email,
+              institution: updated.institution,
+              level: updated.level,
+              academic_group: updated.group,
+              xp: updated.xp,
+              streak: updated.streak,
+              updated_at: new Date().toISOString()
+            }).then(() => {});
+          }
+          return { profile: updated };
+        }),
 
-function subscribe(listener: () => void) {
-  listeners.add(listener);
-  return () => listeners.delete(listener);
-}
+      loginUser: (data) =>
+        set((state) => {
+          const userId = data.id || `usr_${Date.now()}`;
+          const newProfile: UserProfile = {
+            ...state.profile,
+            id: userId,
+            name: data.name,
+            email: data.email,
+            phone: data.phone || '',
+            institution: data.institution || 'NCTB',
+            level: data.level,
+            group: data.group,
+            isLoggedIn: true,
+          };
+          const exists = state.registeredUsers.some((u) => u.email === data.email);
+          const nextUsers = exists
+            ? state.registeredUsers.map((u) =>
+                u.email === data.email ? { ...u, name: data.name, institution: data.institution, level: data.level, group: data.group } : u
+              )
+            : [
+                {
+                  id: userId,
+                  name: data.name,
+                  email: data.email,
+                  institution: data.institution,
+                  level: data.level,
+                  group: data.group,
+                  xp: state.profile.xp,
+                  totalExams: state.history.length,
+                  joinedAt: new Date().toLocaleDateString('bn-BD'),
+                },
+                ...state.registeredUsers,
+              ];
 
-function getSnapshot(): ExamStoreState {
-  return storeState;
-}
+          if (supabase) {
+            supabase.from('profiles').upsert({
+              id: userId,
+              name: data.name,
+              email: data.email,
+              institution: data.institution,
+              level: data.level,
+              academic_group: data.group,
+              xp: state.profile.xp,
+              streak: state.profile.streak,
+              updated_at: new Date().toISOString()
+            }).then(() => {});
+          }
+          return { profile: newProfile, registeredUsers: nextUsers };
+        }),
 
-export function useExamStore(): ExamStoreState;
-export function useExamStore<T>(selector: (state: ExamStoreState) => T): T;
-export function useExamStore<T>(selector?: (state: ExamStoreState) => T) {
-  const state = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
-  return selector ? selector(state) : state;
-}
+      logoutUser: () =>
+        set((state) => {
+          if (supabase) {
+            supabase.auth.signOut().catch(() => {});
+          }
+          return {
+            profile: { ...state.profile, isLoggedIn: false, isAdmin: false },
+          };
+        }),
 
-export const useAppStore = useExamStore;
+      setAcademicFilter: (level, group) =>
+        set((state) => ({
+          profile: { ...state.profile, level, group },
+        })),
 
-export const ExamProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  return React.createElement(React.Fragment, null, children);
-};
+      setTheme: (theme) => set({ theme }),
+      setFontSize: (fontSize) => set({ fontSize }),
+
+      toggleBookmark: (qId) =>
+        set((state) => ({
+          bookmarks: state.bookmarks.includes(qId)
+            ? state.bookmarks.filter((id) => id !== qId)
+            : [...state.bookmarks, qId],
+        })),
+
+      recordExamResult: (result) =>
+        set((state) => {
+          const now = Date.now();
+          const newHistoryItem: ExamHistoryItem = {
+            ...result,
+            id: `ex_${now}`,
+            date: new Date().toLocaleDateString('bn-BD', { day: 'numeric', month: 'short', year: 'numeric' }),
+            timestamp: now,
+          };
+          const newWrongSet = new Set([...state.wrongQuestionIds, ...result.wrongQuestionIds]);
+          const earnedXp = Math.max(5, Math.round(result.correct * 12));
+          const nextXp = state.profile.xp + earnedXp;
+
+          const updatedUsers = state.registeredUsers.map((u) =>
+            u.email && u.email === state.profile.email
+              ? { ...u, xp: nextXp, totalExams: state.history.length + 1 }
+              : u
+          );
+
+          if (supabase && state.profile.isLoggedIn) {
+            const uid = state.profile.id || state.profile.email || 'anon';
+            supabase.from('exam_results').insert({
+              user_id: uid,
+              user_name: state.profile.name,
+              institution: state.profile.institution,
+              level: state.profile.level,
+              academic_group: state.profile.group,
+              subject_id: result.subjectId || '',
+              subject_name: result.subjectName,
+              chapter_name: result.chapterName,
+              score: result.score,
+              correct: result.correct,
+              wrong: result.wrong,
+              total_questions: result.totalQuestions,
+              time_taken_sec: result.timeTakenSec,
+              xp_earned: earnedXp,
+              created_at: new Date().toISOString(),
+            }).then(() => {});
+          }
+
+          return {
+            history: [newHistoryItem, ...state.history],
+            wrongQuestionIds: Array.from(newWrongSet),
+            profile: {
+              ...state.profile,
+              xp: nextXp,
+            },
+            registeredUsers: updatedUsers,
+          };
+        }),
+
+      addCustomMCQ: (subjectId, chapterId, mcq) =>
+        set((state) => {
+          const newMcq: MCQ = { ...mcq, id: `custom_${Date.now()}_${Math.random().toString(36).slice(2, 6)}` };
+          const nextSubjects = state.subjects.map((sub) => {
+            if (sub.id !== subjectId) return sub;
+            return {
+              ...sub,
+              chapters: sub.chapters.map((ch) => {
+                if (ch.id !== chapterId) return ch;
+                return {
+                  ...ch,
+                  mcqs: [...ch.mcqs, newMcq],
+                };
+              }),
+            };
+          });
+          return { subjects: nextSubjects };
+        }),
+
+      bulkAddMCQs: (target, chapterItems) => {
+        let addedCount = 0;
+        set((state) => {
+          const subjectsCopy = [...state.subjects];
+          let subjIndex = subjectsCopy.findIndex(
+            (s) =>
+              s.level === target.level &&
+              s.group === target.group &&
+              (s.name.trim() === target.subjectName.trim() || s.id === target.subjectName)
+          );
+
+          if (subjIndex === -1) {
+            const newSubj: Subject = {
+              id: `sub_${Date.now()}`,
+              code: target.code || '100',
+              name: target.subjectName,
+              paper: target.paper,
+              level: target.level,
+              group: target.group,
+              icon: '📚',
+              color: target.group === 'Science' ? 'violet' : target.group === 'Business Studies' ? 'amber' : 'indigo',
+              chapters: [],
+            };
+            subjectsCopy.push(newSubj);
+            subjIndex = subjectsCopy.length - 1;
+          }
+
+          const subj = { ...subjectsCopy[subjIndex], chapters: [...subjectsCopy[subjIndex].chapters] };
+          const existingQTexts = new Set<string>();
+          subj.chapters.forEach((c) => c.mcqs.forEach((m) => existingQTexts.add(m.question.trim())));
+
+          chapterItems.forEach((item, idx) => {
+            const qTrim = item.mcq.question.trim();
+            if (!qTrim || existingQTexts.has(qTrim)) return;
+            existingQTexts.add(qTrim);
+
+            let chIdx = subj.chapters.findIndex((c) => c.name.trim() === item.chapterName.trim());
+            if (chIdx === -1) {
+              subj.chapters.push({
+                id: `${subj.id}_ch_${subj.chapters.length + 1}_${Date.now()}`,
+                name: item.chapterName.trim(),
+                mcqs: [],
+                cqs: [],
+                formulas: [],
+              });
+              chIdx = subj.chapters.length - 1;
+            }
+
+            const ch = { ...subj.chapters[chIdx], mcqs: [...subj.chapters[chIdx].mcqs] };
+            ch.mcqs.push({
+              ...item.mcq,
+              id: `${subj.id}_q_${Date.now()}_${idx}`,
+            });
+            subj.chapters[chIdx] = ch;
+            addedCount++;
+          });
+
+          subjectsCopy[subjIndex] = subj;
+
+          if (supabase && addedCount > 0) {
+            supabase.from('custom_subjects').upsert({
+              id: subj.id,
+              level: subj.level,
+              academic_group: subj.group,
+              name: subj.name,
+              paper: subj.paper,
+              chapters_json: subj.chapters,
+              updated_at: new Date().toISOString(),
+            }).then(() => {});
+          }
+
+          return { subjects: subjectsCopy };
+        });
+        return addedCount;
+      },
+
+      updateMCQAnswer: (subjectId, chapterId, questionId, newCorrectIndex, newExplanation, newQuestionText, newOptions) =>
+        set((state) => {
+          const nextSubjects = state.subjects.map((sub) => {
+            if (sub.id !== subjectId) return sub;
+            const updatedSub = {
+              ...sub,
+              chapters: sub.chapters.map((ch) => {
+                if (ch.id !== chapterId) return ch;
+                return {
+                  ...ch,
+                  mcqs: ch.mcqs.map((m) =>
+                    m.id === questionId
+                      ? {
+                          ...m,
+                          correctIndex: newCorrectIndex,
+                          explanation: newExplanation !== undefined ? newExplanation : m.explanation,
+                          question: newQuestionText !== undefined ? newQuestionText : m.question,
+                          options: newOptions !== undefined ? newOptions : m.options,
+                        }
+                      : m
+                  ),
+                };
+              }),
+            };
+            if (supabase) {
+              supabase.from('custom_subjects').upsert({
+                id: updatedSub.id,
+                level: updatedSub.level,
+                academic_group: updatedSub.group,
+                name: updatedSub.name,
+                paper: updatedSub.paper,
+                chapters_json: updatedSub.chapters,
+                updated_at: new Date().toISOString(),
+              }).then(() => {});
+            }
+            return updatedSub;
+          });
+          return { subjects: nextSubjects };
+        }),
+
+      deleteMCQ: (subjectId, chapterId, questionId) =>
+        set((state) => ({
+          subjects: state.subjects.map((sub) =>
+            sub.id !== subjectId
+              ? sub
+              : {
+                  ...sub,
+                  chapters: sub.chapters.map((ch) =>
+                    ch.id !== chapterId ? ch : { ...ch, mcqs: ch.mcqs.filter((m) => m.id !== questionId) }
+                  ),
+                }
+          ),
+        })),
+
+      reportQuestionError: (report) =>
+        set((state) => {
+          const newReport: QuestionErrorReport = {
+            ...report,
+            id: `rep_${Date.now()}`,
+            status: 'pending',
+            createdAt: new Date().toLocaleString('bn-BD'),
+          };
+          if (supabase) {
+            supabase.from('question_reports').insert({
+              id: newReport.id,
+              question_id: newReport.questionId,
+              subject_id: newReport.subjectId,
+              subject_name: newReport.subjectName,
+              chapter_id: newReport.chapterId,
+              chapter_name: newReport.chapterName,
+              question_text: newReport.questionText,
+              reported_by: newReport.reportedBy,
+              reason: newReport.reason,
+              suggested_correct_index: newReport.suggestedCorrectIndex,
+              status: 'pending',
+              created_at: new Date().toISOString(),
+            }).then(() => {});
+          }
+          return { questionReports: [newReport, ...state.questionReports] };
+        }),
+
+      resolveQuestionReport: (reportId, status, newCorrectIndex) =>
+        set((state) => {
+          const targetReport = state.questionReports.find((r) => r.id === reportId);
+          let nextSubjects = state.subjects;
+
+          if (targetReport && status === 'resolved' && newCorrectIndex !== undefined) {
+            nextSubjects = state.subjects.map((sub) => {
+              if (sub.id !== targetReport.subjectId) return sub;
+              return {
+                ...sub,
+                chapters: sub.chapters.map((ch) => {
+                  if (ch.id !== targetReport.chapterId) return ch;
+                  return {
+                    ...ch,
+                    mcqs: ch.mcqs.map((m) =>
+                      m.id === targetReport.questionId ? { ...m, correctIndex: newCorrectIndex } : m
+                    ),
+                  };
+                }),
+              };
+            });
+          }
+
+          return {
+            subjects: nextSubjects,
+            questionReports: state.questionReports.map((r) =>
+              r.id === reportId ? { ...r, status } : r
+            ),
+          };
+        }),
+
+      addFormulaToChapter: (subjectId, chapterId, formula) =>
+        set((state) => ({
+          subjects: state.subjects.map((sub) =>
+            sub.id !== subjectId
+              ? sub
+              : {
+                  ...sub,
+                  chapters: sub.chapters.map((ch) =>
+                    ch.id !== chapterId
+                      ? ch
+                      : { ...ch, formulas: [...(ch.formulas || []), formula] }
+                  ),
+                }
+          ),
+        })),
+
+      clearMistakes: () => set({ wrongQuestionIds: [] }),
+
+      syncCloudSubjectData: async () => {
+        if (!supabase) return;
+        try {
+          const { data } = await supabase.from('custom_subjects').select('*');
+          if (data && Array.isArray(data) && data.length > 0) {
+            const currentSubjects = [...get().subjects];
+            data.forEach((row: any) => {
+              if (!row.id || !Array.isArray(row.chapters_json)) return;
+              const idx = currentSubjects.findIndex((s) => s.id === row.id);
+              if (idx >= 0) {
+                // Only overwrite if cloud has at least as many MCQs as local
+                const localMcqs = currentSubjects[idx].chapters.reduce((a, c) => a + c.mcqs.length, 0);
+                const cloudMcqs = row.chapters_json.reduce((a: number, c: any) => a + (c.mcqs?.length || 0), 0);
+                if (cloudMcqs >= localMcqs) {
+                  currentSubjects[idx] = {
+                    ...currentSubjects[idx],
+                    chapters: row.chapters_json,
+                  };
+                }
+              }
+            });
+            set({ subjects: currentSubjects });
+          }
+        } catch {
+          // Ignore network errors silently
+        }
+      },
+    }),
+    {
+      name: 'examverse_production_v8',
+      merge: (persistedState: any, currentState) => {
+        const merged = { ...currentState, ...(persistedState || {}) };
+        // Ensure acc-2 always has all 297 MCQs from syllabusData.ts even if older storage had fewer
+        if (Array.isArray(merged.subjects)) {
+          merged.subjects = merged.subjects.map((s: Subject) =>
+            s.id === 'acc-2' ? HSC_ACCOUNTING_2ND_PAPER : s
+          );
+        }
+        return merged;
+      },
+    }
+  )
+);
