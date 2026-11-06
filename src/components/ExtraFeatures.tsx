@@ -9,7 +9,7 @@ import {
   useExamStore,
 } from '../store/useExamStore';
 import { fetchRealCloudLeaderboard, supabase } from '../lib/supabase';
-import { MetallicBadgeSvg } from './ModalsAndQuiz';
+import { EvIcon, MetallicBadgeSvg } from './ModalsAndQuiz';
 import { MCQQuestion, SubjectData } from '../types';
 
 export const ExtraFeaturesView: React.FC = () => {
@@ -39,6 +39,9 @@ export const ExtraFeaturesView: React.FC = () => {
     addFriendByCode,
     selectedClass,
     selectedGroup,
+    formulaSubjectId,
+    formulaChapterId,
+    setFormulaTarget,
     startQuiz,
     recordExamResult,
     getRankInfo,
@@ -93,10 +96,8 @@ export const ExtraFeaturesView: React.FC = () => {
   }, [activeTab, lbSubject]);
 
   /* =====================================================================
-     2. CHAPTER-WISE FORMULA MASTERBOOK STATE
+     2. CHAPTER-WISE FORMULA MASTERBOOK STATE (Synced with Store!)
      ===================================================================== */
-  const [formulaSubjectId, setFormulaSubjectId] = useState<string | null>(null);
-  const [formulaChapterId, setFormulaChapterId] = useState<string>('all');
   const [formulaSearch, setFormulaSearch] = useState('');
   const [copiedFormulaId, setCopiedFormulaId] = useState<string | null>(null);
 
@@ -118,18 +119,10 @@ export const ExtraFeaturesView: React.FC = () => {
   const [battleSelectedOpt, setBattleSelectedOpt] = useState<number | null>(null);
 
   useEffect(() => {
-    if (battleStage !== 'playing') return;
-    const timer = setInterval(() => {
-      setBattleTimeLeft((prev) => {
-        if (prev <= 1) {
-          handleNextBattleQuestion(null);
-          return 15;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [battleStage, battleQIndex]);
+    if (!subjects.some((s) => s.id === battleSubjId)) {
+      setBattleSubjId(subjects[0]?.id || '');
+    }
+  }, [subjects, battleSubjId]);
 
   const prepareBattleQuestions = (): MCQQuestion[] => {
     const targetSubj = subjects.find((s) => s.id === battleSubjId) || subjects[0];
@@ -224,6 +217,20 @@ export const ExtraFeaturesView: React.FC = () => {
     }
   };
 
+  useEffect(() => {
+    if (battleStage !== 'playing') return;
+    const timer = setInterval(() => {
+      setBattleTimeLeft((prev) => (prev <= 1 ? 0 : prev - 1));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [battleStage, battleQIndex]);
+
+  useEffect(() => {
+    if (battleStage === 'playing' && battleTimeLeft === 0 && battleSelectedOpt === null) {
+      handleNextBattleQuestion(null);
+    }
+  }, [battleTimeLeft, battleStage, battleSelectedOpt]);
+
   /* =====================================================================
      4. FLASHCARDS, PLANNER & FORUM STATE
      ===================================================================== */
@@ -233,7 +240,7 @@ export const ExtraFeaturesView: React.FC = () => {
   const [newFcBack, setNewFcBack] = useState('');
 
   const [taskTitle, setTaskTitle] = useState('');
-  const [taskSubject, setTaskSubject] = useState(subjects[0]?.name.bn || 'পদার্থবিজ্ঞান ১ম পত্র');
+  const [taskSubject, setTaskSubject] = useState(subjects[0]?.name.bn || 'হিসাববিজ্ঞান ১ম পত্র');
   const [taskMinutes, setTaskMinutes] = useState(40);
 
   const [postTitle, setPostTitle] = useState('');
@@ -250,7 +257,7 @@ export const ExtraFeaturesView: React.FC = () => {
 
   const [admClass, setAdmClass] = useState<string>('HSC');
   const [admGroup, setAdmGroup] = useState<string>('Business Studies');
-  const [admSubjectId, setAdmSubjectId] = useState<string>('hsc-acc-2');
+  const [admSubjectId, setAdmSubjectId] = useState<string>('hsc-acc-1');
   const [admCustomSubjNameBn, setAdmCustomSubjNameBn] = useState<string>('');
   const [admCustomSubjNameEn, setAdmCustomSubjNameEn] = useState<string>('');
   const [admRawText, setAdmRawText] = useState<string>('');
@@ -291,6 +298,25 @@ export const ExtraFeaturesView: React.FC = () => {
     }
   };
 
+  const renderPeerAvatarContent = (peer: { name: string; avatar?: string; isMe?: boolean }) => {
+    if (peer.isMe && userAvatar && userAvatar.startsWith('http')) {
+      return (
+        <img
+          src={userAvatar}
+          alt={peer.name}
+          style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }}
+        />
+      );
+    }
+    if (peer.isMe && (peer.name === 'শিক্ষার্থী' || peer.name === 'শিক্ষার্থী (Scholar)')) {
+      return <EvIcon name="user" size={16} />;
+    }
+    const clean = (peer.name || 'S').trim();
+    const firstAscii = clean.match(/[A-Za-z0-9]/);
+    if (firstAscii) return firstAscii[0].toUpperCase();
+    return <EvIcon name="user" size={16} />;
+  };
+
   /* =====================================================================
      VIEW 1: LEADERBOARD & RANKING MODE (Single-Button Dropdowns!)
      ===================================================================== */
@@ -309,7 +335,7 @@ export const ExtraFeaturesView: React.FC = () => {
           ? 'সকল বিষয় (All)'
           : 'All Subjects'
         : selectedSubjObj
-        ? selectedSubjObj.name.bn
+        ? trText(selectedSubjObj.name, language)
         : lbSubject;
 
     const periodMultiplier =
@@ -324,7 +350,7 @@ export const ExtraFeaturesView: React.FC = () => {
         avatar: p.avatar || '🎓',
         baseXp: Number(p.xp) || 0,
         acc: 80,
-        streak: 1,
+        streak: Number(p.streak) || 1,
         isFriend: friendsList.includes(p.name),
         isMe: p.name === userName,
       });
@@ -436,7 +462,6 @@ export const ExtraFeaturesView: React.FC = () => {
             </div>
 
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              {/* 1. Time Period Single Dropdown Button */}
               <div className="ev-dropdown-wrap">
                 <button
                   type="button"
@@ -469,7 +494,6 @@ export const ExtraFeaturesView: React.FC = () => {
                 )}
               </div>
 
-              {/* 2. Subject-wise Single Dropdown Button */}
               <div className="ev-dropdown-wrap">
                 <button
                   type="button"
@@ -506,7 +530,7 @@ export const ExtraFeaturesView: React.FC = () => {
                         }}
                       >
                         <span>
-                          {s.icon} {s.name.bn}
+                          {s.icon} {trText(s.name, language)}
                         </span>
                         {lbSubject === s.id && <span>✓</span>}
                       </button>
@@ -544,7 +568,9 @@ export const ExtraFeaturesView: React.FC = () => {
           <div className="ev-podium">
             <div className={`ev-pod rank-2 ${top2?.isMe ? 'is-you' : ''}`}>
               <div className="ev-pod-av">
-                <div className="ev-avatar-sm">{top2 ? top2.name.slice(0, 2).toUpperCase() : '—'}</div>
+                <div className="ev-avatar-sm" style={{ overflow: 'hidden' }}>
+                  {top2 ? renderPeerAvatarContent(top2) : '—'}
+                </div>
               </div>
               <div className="ev-pod-name">{top2 ? top2.name : '—'}</div>
               <div className="ev-pod-xp">{top2 ? `${top2.displayXp} XP` : '0 XP'}</div>
@@ -556,7 +582,9 @@ export const ExtraFeaturesView: React.FC = () => {
                 <svg className="ev-crown" viewBox="0 0 36 26" fill="#F59E0B">
                   <path d="M2 22L6 6l12 9 12-9 4 16H2z" />
                 </svg>
-                <div className="ev-avatar-sm">{top1 ? top1.name.slice(0, 2).toUpperCase() : '—'}</div>
+                <div className="ev-avatar-sm" style={{ overflow: 'hidden' }}>
+                  {top1 ? renderPeerAvatarContent(top1) : '—'}
+                </div>
               </div>
               <div className="ev-pod-name">{top1 ? top1.name : '—'}</div>
               <div className="ev-pod-xp">{top1 ? `${top1.displayXp} XP` : '0 XP'}</div>
@@ -565,7 +593,9 @@ export const ExtraFeaturesView: React.FC = () => {
 
             <div className={`ev-pod rank-3 ${top3?.isMe ? 'is-you' : ''}`}>
               <div className="ev-pod-av">
-                <div className="ev-avatar-sm">{top3 ? top3.name.slice(0, 2).toUpperCase() : '—'}</div>
+                <div className="ev-avatar-sm" style={{ overflow: 'hidden' }}>
+                  {top3 ? renderPeerAvatarContent(top3) : '—'}
+                </div>
               </div>
               <div className="ev-pod-name">{top3 ? top3.name : '—'}</div>
               <div className="ev-pod-xp">{top3 ? `${top3.displayXp} XP` : '0 XP'}</div>
@@ -577,8 +607,8 @@ export const ExtraFeaturesView: React.FC = () => {
             {filteredPeers.map((peer, idx) => (
               <div key={peer.name + idx} className={`ev-lb-row ${peer.isMe ? 'is-current-user' : ''}`}>
                 <div className="ev-lb-rank">#{idx + 1}</div>
-                <div className="ev-avatar-sm" style={{ width: 36, height: 36 }}>
-                  {peer.name.slice(0, 2).toUpperCase()}
+                <div className="ev-avatar-sm" style={{ width: 36, height: 36, overflow: 'hidden' }}>
+                  {renderPeerAvatarContent(peer)}
                 </div>
                 <div style={{ minWidth: 0 }}>
                   <div className="ev-lb-name">
@@ -623,10 +653,7 @@ export const ExtraFeaturesView: React.FC = () => {
                   type="button"
                   className="ev-btn ev-btn-secondary ev-btn-sm"
                   style={{ marginBottom: 8 }}
-                  onClick={() => {
-                    setFormulaSubjectId(null);
-                    setFormulaChapterId('all');
-                  }}
+                  onClick={() => setFormulaTarget(null, 'all')}
                 >
                   ← {isBn ? 'সকল বিষয়ে ফিরে যাও' : 'All Subjects'}
                 </button>
@@ -634,10 +661,10 @@ export const ExtraFeaturesView: React.FC = () => {
               <h2 className="ev-section-title">
                 📐{' '}
                 {activeFormulaSubj
-                  ? `${activeFormulaSubj.icon} ${activeFormulaSubj.name.bn} — অধ্যায়ভিত্তিক সূত্র ও নিয়মাবলি`
+                  ? `${activeFormulaSubj.icon} ${trText(activeFormulaSubj.name, language)} — ${isBn ? 'অধ্যায়ভিত্তিক সূত্র ও নিয়মাবলি' : 'Chapter-wise Formulas'}`
                   : isBn
                   ? `${selectedClass} (${selectedGroup}) — অধ্যায়ভিত্তিক সূত্র ও নিয়মাবলি`
-                  : 'Chapter-wise Formula & Rules Sheet'}
+                  : `${selectedClass} (${selectedGroup}) — Chapter-wise Formula Sheet`}
               </h2>
             </div>
 
@@ -659,16 +686,16 @@ export const ExtraFeaturesView: React.FC = () => {
                   <button
                     type="button"
                     className={`ev-btn ev-btn-sm ${formulaChapterId === 'all' ? 'ev-btn-primary' : 'ev-btn-secondary'}`}
-                    onClick={() => setFormulaChapterId('all')}
+                    onClick={() => setFormulaTarget(activeFormulaSubj.id, 'all')}
                   >
-                    {isBn ? `সকল অধ্যায় (${activeFormulaSubj.chapters.length})` : 'All Chapters'}
+                    {isBn ? `সকল অধ্যায় (${activeFormulaSubj.chapters.length})` : `All Chapters (${activeFormulaSubj.chapters.length})`}
                   </button>
                   {activeFormulaSubj.chapters.map((ch, idx) => (
                     <button
                       key={ch.id}
                       type="button"
                       className={`ev-btn ev-btn-sm ${formulaChapterId === ch.id ? 'ev-btn-primary' : 'ev-btn-secondary'}`}
-                      onClick={() => setFormulaChapterId(ch.id)}
+                      onClick={() => setFormulaTarget(activeFormulaSubj.id, ch.id)}
                     >
                       {isBn ? `অধ্যায় ${idx + 1}` : `Ch ${idx + 1}`}
                     </button>
@@ -684,6 +711,7 @@ export const ExtraFeaturesView: React.FC = () => {
                       if (!searchClean) return true;
                       return (
                         f.title.bn.toLowerCase().includes(searchClean) ||
+                        f.title.en.toLowerCase().includes(searchClean) ||
                         f.formula.toLowerCase().includes(searchClean) ||
                         (f.note?.bn || '').toLowerCase().includes(searchClean) ||
                         ch.name.bn.toLowerCase().includes(searchClean)
@@ -700,7 +728,7 @@ export const ExtraFeaturesView: React.FC = () => {
                       >
                         <div className="ev-section-header" style={{ marginBottom: 10 }}>
                           <div style={{ fontWeight: 800, fontSize: 15.5, color: 'var(--brand-primary)' }}>
-                            {subj.icon} {subj.name.bn} • {ch.name.bn}
+                            {subj.icon} {trText(subj.name, language)} • {trText(ch.name, language)}
                           </div>
                           {ch.mcqs && ch.mcqs.length > 0 && (
                             <button
@@ -721,7 +749,7 @@ export const ExtraFeaturesView: React.FC = () => {
                                 })
                               }
                             >
-                              ⚡ MCQ অনুশীলন ({ch.mcqs.length})
+                              ⚡ {isBn ? `MCQ অনুশীলন (${ch.mcqs.length})` : `Practice MCQ (${ch.mcqs.length})`}
                             </button>
                           )}
                         </div>
@@ -738,17 +766,17 @@ export const ExtraFeaturesView: React.FC = () => {
                               }}
                             >
                               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                                <div style={{ fontWeight: 800, fontSize: 14.5 }}>{f.title.bn}</div>
+                                <div style={{ fontWeight: 800, fontSize: 14.5 }}>{trText(f.title, language)}</div>
                                 <button
                                   type="button"
                                   className="ev-btn ev-btn-secondary ev-btn-sm"
                                   onClick={() => {
-                                    navigator.clipboard?.writeText(`${f.title.bn}: ${f.formula}`);
+                                    navigator.clipboard?.writeText(`${trText(f.title, language)}: ${f.formula}`);
                                     setCopiedFormulaId(f.id);
                                     setTimeout(() => setCopiedFormulaId(null), 1200);
                                   }}
                                 >
-                                  {copiedFormulaId === f.id ? '✅ কপি হয়েছে' : '📋 কপি'}
+                                  {copiedFormulaId === f.id ? (isBn ? '✅ কপি হয়েছে' : '✅ Copied') : isBn ? '📋 কপি' : '📋 Copy'}
                                 </button>
                               </div>
 
@@ -767,9 +795,9 @@ export const ExtraFeaturesView: React.FC = () => {
                                 {f.formula}
                               </div>
 
-                              {f.note?.bn && (
+                              {f.note && (
                                 <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 6, fontWeight: 500 }}>
-                                  💡 {f.note.bn}
+                                  💡 {trText(f.note, language)}
                                 </div>
                               )}
                             </div>
@@ -789,15 +817,12 @@ export const ExtraFeaturesView: React.FC = () => {
                     key={sub.id}
                     className="ev-card ev-card-interactive"
                     style={{ cursor: 'pointer', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: 10 }}
-                    onClick={() => {
-                      setFormulaSubjectId(sub.id);
-                      setFormulaChapterId('all');
-                    }}
+                    onClick={() => setFormulaTarget(sub.id, 'all')}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                       <span style={{ fontSize: 26 }}>{sub.icon}</span>
                       <span className="ev-badge-pill ev-badge-indigo">
-                        {sub.chapters.length} অধ্যায় • {totalFormulas} সূত্র
+                        {sub.chapters.length} {isBn ? 'অধ্যায়' : 'Ch'} • {totalFormulas} {isBn ? 'সূত্র' : 'Formulas'}
                       </span>
                     </div>
                     <div>
@@ -864,7 +889,7 @@ export const ExtraFeaturesView: React.FC = () => {
                 >
                   {subjects.map((s) => (
                     <option key={s.id} value={s.id}>
-                      {s.icon} {s.name.bn}
+                      {s.icon} {trText(s.name, language)}
                     </option>
                   ))}
                 </select>
@@ -909,7 +934,7 @@ export const ExtraFeaturesView: React.FC = () => {
                   onClick={() => {
                     setBattleStage('searching');
                     setTimeout(() => {
-                      startLiveBattle('অনলাইন প্রতিদ্বন্দ্বী');
+                      startLiveBattle(isBn ? 'অনলাইন প্রতিদ্বন্দ্বী' : 'Online Challenger');
                     }, 1200);
                   }}
                 >
@@ -1039,7 +1064,9 @@ export const ExtraFeaturesView: React.FC = () => {
               }}
             >
               <div>
-                <div style={{ fontWeight: 800, fontSize: 14.5 }}>{userName} (তুমি)</div>
+                <div style={{ fontWeight: 800, fontSize: 14.5 }}>
+                  {userName} ({isBn ? 'তুমি' : 'You'})
+                </div>
                 <div className="font-mono" style={{ fontWeight: 800, fontSize: 18, color: 'var(--brand-primary)' }}>
                   {myBattleScore} pts
                 </div>
@@ -1060,7 +1087,14 @@ export const ExtraFeaturesView: React.FC = () => {
             </div>
 
             <div className="ev-options-list">
-              {(curBattleQ.options.bn?.length ? curBattleQ.options.bn : curBattleQ.options.en).map((opt, idx) => (
+              {(language === 'en'
+                ? curBattleQ.options.en?.length
+                  ? curBattleQ.options.en
+                  : curBattleQ.options.bn
+                : curBattleQ.options.bn?.length
+                ? curBattleQ.options.bn
+                : curBattleQ.options.en
+              ).map((opt, idx) => (
                 <button
                   key={idx}
                   type="button"
@@ -1729,17 +1763,17 @@ export const ExtraFeaturesView: React.FC = () => {
      ===================================================================== */
   if (activeTab === 'achievements') {
     const allTiers = [
-      { id: 'bronze', nameBn: 'ব্রোঞ্জ র‍্যাঙ্ক (I – III)', range: '0 – 199 RP', color: '#B45309', div: 'I' },
-      { id: 'silver', nameBn: 'সিলভার র‍্যাঙ্ক (I – III)', range: '200 – 399 RP', color: '#475569', div: 'II' },
-      { id: 'gold', nameBn: 'গোল্ড র‍্যাঙ্ক (I – III)', range: '400 – 649 RP', color: '#D97706', div: 'III' },
-      { id: 'platinum', nameBn: 'প্লাটিনাম র‍্যাঙ্ক (I – III)', range: '650 – 849 RP', color: '#0284C7', div: 'IV' },
-      { id: 'elite', nameBn: 'এলিট গ্র্যান্ডমাস্টার', range: '850 – 1000 RP', color: '#7C3AED', div: 'MAX' },
+      { id: 'bronze', nameBn: 'ব্রোঞ্জ র‍্যাঙ্ক (I – III)', nameEn: 'Bronze Rank (I – III)', range: '0 – 199 RP', color: '#B45309', div: 'I' },
+      { id: 'silver', nameBn: 'সিলভার র‍্যাঙ্ক (I – III)', nameEn: 'Silver Rank (I – III)', range: '200 – 399 RP', color: '#475569', div: 'II' },
+      { id: 'gold', nameBn: 'গোল্ড র‍্যাঙ্ক (I – III)', nameEn: 'Gold Rank (I – III)', range: '400 – 649 RP', color: '#D97706', div: 'III' },
+      { id: 'platinum', nameBn: 'প্লাটিনাম র‍্যাঙ্ক (I – III)', nameEn: 'Platinum Rank (I – III)', range: '650 – 849 RP', color: '#0284C7', div: 'IV' },
+      { id: 'elite', nameBn: 'এলিট গ্র্যান্ডমাস্টার', nameEn: 'Elite Grandmaster', range: '850 – 1000 RP', color: '#7C3AED', div: 'MAX' },
     ];
 
     return (
       <div className="ev-card">
         <div className="ev-section-header">
-          <h3 className="ev-section-title">🛡️ র‍্যাঙ্ক প্রগ্রেশন (Bronze → Elite)</h3>
+          <h3 className="ev-section-title">🛡️ {isBn ? 'র‍্যাঙ্ক প্রগ্রেশন (Bronze → Elite)' : 'Rank Progression (Bronze → Elite)'}</h3>
           <span className="ev-badge-pill ev-badge-indigo">
             {isBn ? myRank.fullTitleBn : myRank.fullTitleEn} • {myRank.rankScore} / 1000 RP
           </span>
@@ -1761,7 +1795,7 @@ export const ExtraFeaturesView: React.FC = () => {
                   <MetallicBadgeSvg color={t.color} label={t.div} />
                   <div>
                     <div style={{ fontWeight: 800, fontSize: 15, color: t.color }}>
-                      {t.nameBn} {isCurrent ? '• (বর্তমান র‍্যাঙ্ক)' : ''}
+                      {isBn ? t.nameBn : t.nameEn} {isCurrent ? (isBn ? '• (বর্তমান র‍্যাঙ্ক)' : '• (Current Rank)') : ''}
                     </div>
                     <div className="font-mono" style={{ fontSize: 12.5, color: 'var(--text-muted)', fontWeight: 700 }}>
                       {t.range}
@@ -1789,7 +1823,7 @@ export const ExtraFeaturesView: React.FC = () => {
         <div className="ev-grid-4" style={{ marginBottom: 18 }}>
           <div className="ev-card ev-stat">
             <div>
-              <div className="ev-stat-lab">মোট পরীক্ষা</div>
+              <div className="ev-stat-lab">{isBn ? 'মোট পরীক্ষা' : 'Total Exams'}</div>
               <div className="ev-stat-val">{examHistory.length}</div>
             </div>
           </div>
@@ -1807,7 +1841,7 @@ export const ExtraFeaturesView: React.FC = () => {
           </div>
           <div className="ev-card ev-stat">
             <div>
-              <div className="ev-stat-lab">র‍্যাঙ্ক স্কোর</div>
+              <div className="ev-stat-lab">{trKey('rank_points', language)}</div>
               <div className="ev-stat-val">{myRank.rankScore} RP</div>
             </div>
           </div>
@@ -1815,7 +1849,9 @@ export const ExtraFeaturesView: React.FC = () => {
 
         {examHistory.length === 0 ? (
           <p style={{ color: 'var(--text-secondary)', fontSize: 14 }}>
-            তুমি এখনো কোনো পরীক্ষায় অংশ নাওনি। যেকোনো বিষয়ে ক্লিক করে কুইজ শুরু করো!
+            {isBn
+              ? 'তুমি এখনো কোনো পরীক্ষায় অংশ নাওনি। যেকোনো বিষয়ে ক্লিক করে কুইজ শুরু করো!'
+              : 'You have not taken any exams yet. Click any subject to start practicing!'}
           </p>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -1865,7 +1901,9 @@ export const ExtraFeaturesView: React.FC = () => {
         </div>
         {activeMistakes.length === 0 ? (
           <p style={{ color: 'var(--text-secondary)', fontSize: 14 }}>
-            ভুলের খাতায় বর্তমানে কোনো প্রশ্ন নেই। কুইজে কোনো প্রশ্ন ভুল হলে তা এখানে অটোমেটিক জমা হবে।
+            {isBn
+              ? 'ভুলের খাতায় বর্তমানে কোনো প্রশ্ন নেই। কুইজে কোনো প্রশ্ন ভুল হলে তা এখানে অটোমেটিক জমা হবে।'
+              : 'No pending mistakes in your Mistake Bank.'}
           </p>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -1876,7 +1914,7 @@ export const ExtraFeaturesView: React.FC = () => {
                 </div>
                 <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 6 }}>{trText(m.question, language)}</div>
                 <div style={{ fontSize: 13.5, color: 'var(--status-success)', fontWeight: 700 }}>
-                  ✅ সঠিক উত্তর: {(m.options.bn?.length ? m.options.bn : m.options.en)[m.correctIndex]}
+                  ✅ {isBn ? 'সঠিক উত্তর:' : 'Correct Answer:'} {(m.options.bn?.length ? m.options.bn : m.options.en)[m.correctIndex]}
                 </div>
                 <button
                   type="button"
@@ -1884,7 +1922,7 @@ export const ExtraFeaturesView: React.FC = () => {
                   style={{ marginTop: 8 }}
                   onClick={() => markMistakeMastered(m.id)}
                 >
-                  ✔️ আয়ত্ত করেছি (Remove)
+                  ✔️ {isBn ? 'আয়ত্ত করেছি (Remove)' : 'Mastered (Remove)'}
                 </button>
               </div>
             ))}
@@ -1909,7 +1947,7 @@ export const ExtraFeaturesView: React.FC = () => {
           <input
             type="text"
             className="ev-input"
-            placeholder="ফ্ল্যাশকার্ডের প্রশ্ন / সূত্রের নাম..."
+            placeholder={isBn ? 'ফ্ল্যাশকার্ডের প্রশ্ন / সূত্রের নাম...' : 'Flashcard Front (Question / Term)...'}
             value={newFcFront}
             onChange={(e) => setNewFcFront(e.target.value)}
           />
@@ -1917,7 +1955,7 @@ export const ExtraFeaturesView: React.FC = () => {
             <input
               type="text"
               className="ev-input"
-              placeholder="উত্তর / সমীকরণ..."
+              placeholder={isBn ? 'উত্তর / সমীকরণ...' : 'Flashcard Back (Answer / Formula)...'}
               value={newFcBack}
               onChange={(e) => setNewFcBack(e.target.value)}
             />
@@ -1931,14 +1969,16 @@ export const ExtraFeaturesView: React.FC = () => {
                 setNewFcBack('');
               }}
             >
-              + যোগ
+              + {isBn ? 'যোগ' : 'Add'}
             </button>
           </div>
         </div>
 
         {flashcards.length === 0 ? (
           <p style={{ color: 'var(--text-secondary)', fontSize: 14 }}>
-            তোমার নিজস্ব ফ্ল্যাশকার্ড তৈরি করতে ওপরে প্রশ্ন ও উত্তর লিখে &ldquo;+ যোগ&rdquo; বাটনে ক্লিক করো।
+            {isBn
+              ? 'তোমার নিজস্ব ফ্ল্যাশকার্ড তৈরি করতে ওপরে প্রশ্ন ও উত্তর লিখে "+ যোগ" বাটনে ক্লিক করো।'
+              : 'Create your own flashcards above to review key formulas and concepts.'}
           </p>
         ) : (
           <div style={{ textAlign: 'center' }}>
@@ -1960,9 +2000,9 @@ export const ExtraFeaturesView: React.FC = () => {
                 gap: 8,
               }}
             >
-              <span className="ev-badge-pill ev-badge-indigo">{fcFlipped ? 'উত্তর' : 'প্রশ্ন'}</span>
+              <span className="ev-badge-pill ev-badge-indigo">{fcFlipped ? (isBn ? 'উত্তর' : 'Answer') : isBn ? 'প্রশ্ন' : 'Question'}</span>
               <div style={{ fontSize: 17, fontWeight: 800 }}>{trText(fcFlipped ? card.back : card.front, language)}</div>
-              <small style={{ color: 'var(--text-muted)' }}>(ট্যাপ করে উল্টাও)</small>
+              <small style={{ color: 'var(--text-muted)' }}>({isBn ? 'ট্যাপ করে উল্টাও' : 'Tap to flip'})</small>
             </div>
             <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginTop: 12 }}>
               <button
@@ -1973,10 +2013,10 @@ export const ExtraFeaturesView: React.FC = () => {
                   setFcIndex((i) => (i + 1) % flashcards.length);
                 }}
               >
-                পরবর্তী কার্ড →
+                {isBn ? 'পরবর্তী কার্ড →' : 'Next Card →'}
               </button>
               <button type="button" className="ev-btn ev-btn-danger ev-btn-sm" onClick={() => deleteFlashcard(card.id)}>
-                🗑️ মুছুন
+                🗑️ {isBn ? 'মুছুন' : 'Delete'}
               </button>
             </div>
           </div>
@@ -2000,7 +2040,7 @@ export const ExtraFeaturesView: React.FC = () => {
             type="text"
             className="ev-input"
             style={{ flex: 1, minWidth: 200 }}
-            placeholder="আজকের পড়ার টার্গেট লেখো..."
+            placeholder={isBn ? 'আজকের পড়ার টার্গেট লেখো...' : 'Write your study goal...'}
             value={taskTitle}
             onChange={(e) => setTaskTitle(e.target.value)}
           />
@@ -2012,7 +2052,7 @@ export const ExtraFeaturesView: React.FC = () => {
           >
             {subjects.map((s) => (
               <option key={s.id} value={s.name.bn}>
-                {s.name.bn}
+                {trText(s.name, language)}
               </option>
             ))}
           </select>
@@ -2022,9 +2062,9 @@ export const ExtraFeaturesView: React.FC = () => {
             value={taskMinutes}
             onChange={(e) => setTaskMinutes(Number(e.target.value))}
           >
-            <option value={25}>25 মিনিট</option>
-            <option value={40}>40 মিনিট</option>
-            <option value={60}>60 মিনিট</option>
+            <option value={25}>25 {isBn ? 'মিনিট' : 'mins'}</option>
+            <option value={40}>40 {isBn ? 'মিনিট' : 'mins'}</option>
+            <option value={60}>60 {isBn ? 'মিনিট' : 'mins'}</option>
           </select>
           <button
             type="button"
@@ -2040,13 +2080,15 @@ export const ExtraFeaturesView: React.FC = () => {
               setTaskTitle('');
             }}
           >
-            + যোগ করো
+            + {isBn ? 'যোগ করো' : 'Add Goal'}
           </button>
         </div>
 
         {studyTasks.length === 0 ? (
           <p style={{ color: 'var(--text-secondary)', fontSize: 14 }}>
-            তোমার পড়ার রুটিনে এখনো কোনো টাস্ক নেই। ওপরে টার্গেট লিখে যোগ করো!
+            {isBn
+              ? 'তোমার পড়ার রুটিনে এখনো কোনো টাস্ক নেই। ওপরে টার্গেট লিখে যোগ করো!'
+              : 'No study tasks yet. Add your daily study goals above!'}
           </p>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -2094,7 +2136,7 @@ export const ExtraFeaturesView: React.FC = () => {
             type="text"
             className="ev-input"
             style={{ flex: 1, minWidth: 200 }}
-            placeholder="তোমার প্রশ্নের শিরোনাম..."
+            placeholder={isBn ? 'তোমার প্রশ্নের শিরোনাম...' : 'Question Title...'}
             value={postTitle}
             onChange={(e) => setPostTitle(e.target.value)}
           />
@@ -2106,7 +2148,7 @@ export const ExtraFeaturesView: React.FC = () => {
           >
             {subjects.map((s) => (
               <option key={s.id} value={s.name.bn}>
-                {s.name.bn}
+                {trText(s.name, language)}
               </option>
             ))}
           </select>
@@ -2116,7 +2158,7 @@ export const ExtraFeaturesView: React.FC = () => {
           <input
             type="text"
             className="ev-input"
-            placeholder="বিস্তারিত প্রশ্ন বা সমস্যা লেখো..."
+            placeholder={isBn ? 'বিস্তারিত প্রশ্ন বা সমস্যা লেখো...' : 'Describe your academic question...'}
             value={postBody}
             onChange={(e) => setPostBody(e.target.value)}
           />
@@ -2127,7 +2169,7 @@ export const ExtraFeaturesView: React.FC = () => {
               if (!postTitle.trim()) return;
               addCommunityPost({
                 authorName: userName,
-                authorAvatar: userAvatar,
+                authorAvatar: '🎓',
                 authorRank: isBn ? myRank.fullTitleBn : myRank.fullTitleEn,
                 subjectName: postSubj,
                 title: postTitle.trim(),
@@ -2137,14 +2179,16 @@ export const ExtraFeaturesView: React.FC = () => {
               setPostBody('');
             }}
           >
-            পোস্ট করো
+            {isBn ? 'পোস্ট করো' : 'Post'}
           </button>
         </div>
       </div>
 
       {communityPosts.length === 0 ? (
         <p style={{ color: 'var(--text-secondary)', fontSize: 14 }}>
-          ফোরামে এখনো কোনো প্রশ্ন পোস্ট করা হয়নি। তোমার যেকোনো একাডেমিক প্রশ্ন ওপরে লিখে পোস্ট করতে পারো!
+          {isBn
+            ? 'ফোরামে এখনো কোনো প্রশ্ন পোস্ট করা হয়নি। তোমার যেকোনো একাডেমিক প্রশ্ন ওপরে লিখে পোস্ট করতে পারো!'
+            : 'No questions posted yet. Ask your first academic doubt above!'}
         </p>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -2152,7 +2196,7 @@ export const ExtraFeaturesView: React.FC = () => {
             <div key={post.id} className="ev-card" style={{ background: 'var(--bg-surface-muted)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 4 }}>
                 <span>
-                  {post.authorAvatar} {post.authorName} • <strong style={{ color: 'var(--brand-primary)' }}>{post.authorRank}</strong> • {post.subjectName}
+                  {post.authorAvatar || '🎓'} {post.authorName} • <strong style={{ color: 'var(--brand-primary)' }}>{post.authorRank}</strong> • {post.subjectName}
                 </span>
                 <span>{post.createdAt}</span>
               </div>
@@ -2179,7 +2223,7 @@ export const ExtraFeaturesView: React.FC = () => {
                 <input
                   type="text"
                   className="ev-input"
-                  placeholder="উত্তর বা মন্তব্য লেখো..."
+                  placeholder={isBn ? 'উত্তর বা মন্তব্য লেখো...' : 'Write a reply...'}
                   value={replyTextMap[post.id] || ''}
                   onChange={(e) => setReplyTextMap((p) => ({ ...p, [post.id]: e.target.value }))}
                 />
@@ -2193,7 +2237,7 @@ export const ExtraFeaturesView: React.FC = () => {
                     setReplyTextMap((p) => ({ ...p, [post.id]: '' }));
                   }}
                 >
-                  উত্তর দাও
+                  {isBn ? 'উত্তর দাও' : 'Reply'}
                 </button>
               </div>
             </div>
