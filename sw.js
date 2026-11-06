@@ -1,24 +1,8 @@
-/* ==========================================================================
-   ExamVerse — Production PWA Service Worker (sw.js)
-   Audit Section 9 Fixes Applied:
-   - Cache versioning (examverse-cache-v3) & old cache deletion on activate
-   - self.skipWaiting() and self.clients.claim()
-   - Network-first for HTML/JS/CSS so updates show immediately
-   ========================================================================== */
-
-var CACHE_VERSION = 'examverse-cache-v3';
+var CACHE_VERSION = 'examverse-cache-v5';
 var CORE_ASSETS = [
   './',
   './index.html',
-  './manifest.json',
-  './css/theme.css',
-  './css/main.css',
-  './css/animations.css',
-  './js/data.js',
-  './js/storage.js',
-  './js/supabase-client.js',
-  './js/quiz.js',
-  './js/app.js'
+  './manifest.json'
 ];
 
 self.addEventListener('install', function (event) {
