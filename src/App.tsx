@@ -51,6 +51,22 @@ function getSubjectIconName(subjId: string): string {
   return 'book';
 }
 
+const VALID_HASH_TABS: NavTabId[] = [
+  'dashboard',
+  'subjects',
+  'leaderboard',
+  'Analytics',
+  'analytics',
+  'achievements',
+  'formulas',
+  'battle',
+  'mistakes',
+  'flashcards',
+  'planner',
+  'community',
+  'admin',
+];
+
 export function App() {
   const {
     language,
@@ -62,7 +78,11 @@ export function App() {
     setClassAndGroup,
     activeTab,
     setActiveTab,
+    selectedSubjectId,
+    setSelectedSubjectId,
+    openSubjectFormulas,
     userName,
+    userAvatar,
     isAuthenticated,
     xp,
     streak,
@@ -77,17 +97,24 @@ export function App() {
     getRankInfo,
   } = useExamStore();
 
-  const [selectedSubject, setSelectedSubject] = useState<SubjectData | null>(null);
   const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
   const [mobileSprintPopupOpen, setMobileSprintPopupOpen] = useState(false);
   const [logoTapCount, setLogoTapCount] = useState(0);
 
   useEffect(() => {
-    const checkHash = () => {
-      if (window.location.hash === '#admin') setActiveTab('admin');
+    const syncFromHash = () => {
+      const rawHash = window.location.hash.replace(/^#\/?/, '').trim();
+      if (!rawHash || rawHash.startsWith('access_token=') || rawHash.startsWith('error=')) {
+        return;
+      }
+      if (VALID_HASH_TABS.includes(rawHash as NavTabId)) {
+        const normalized: NavTabId = rawHash === 'analytics' ? 'Analytics' : (rawHash as NavTabId);
+        setActiveTab(normalized);
+      }
     };
-    checkHash();
-    window.addEventListener('hashchange', checkHash);
+
+    syncFromHash();
+    window.addEventListener('hashchange', syncFromHash);
 
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'a') {
@@ -102,7 +129,7 @@ export function App() {
     }
 
     return () => {
-      window.removeEventListener('hashchange', checkHash);
+      window.removeEventListener('hashchange', syncFromHash);
       window.removeEventListener('keydown', onKeyDown);
     };
   }, [setActiveTab]);
@@ -114,7 +141,7 @@ export function App() {
       setActiveTab('admin');
     } else {
       setLogoTapCount(next);
-      setSelectedSubject(null);
+      setSelectedSubjectId(null);
       setActiveTab('dashboard');
     }
   };
@@ -131,6 +158,9 @@ export function App() {
   const classList = getAvailableClasses();
   const groupList = getAvailableGroups(selectedClass);
   const subjects: SubjectData[] = getSubjectsForSelection(selectedClass, selectedGroup);
+  const selectedSubject: SubjectData | null = selectedSubjectId
+    ? subjects.find((s) => s.id === selectedSubjectId) || null
+    : null;
 
   const pendingMistakesCount = mistakes.filter((m) => !m.mastered).length;
   const pendingReportsCount = questionReports.filter((r) => r.status === 'pending').length;
@@ -190,7 +220,7 @@ export function App() {
 
   const weekDaysBn = ['শনি', 'রবি', 'সোম', 'মঙ্গল', 'বুধ', 'বৃহঃ', 'শুক্র'];
   const weekDaysEn = ['Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
-  const userInitials = (userName || 'S').slice(0, 2).toUpperCase();
+  const hasPhotoAvatar = isAuthenticated && userAvatar && userAvatar.startsWith('http');
 
   return (
     <>
@@ -227,7 +257,7 @@ export function App() {
                   type="button"
                   className={`ev-nav-btn ${activeTab === item.id ? 'is-active' : ''}`}
                   onClick={() => {
-                    setSelectedSubject(null);
+                    setSelectedSubjectId(null);
                     setActiveTab(item.id);
                   }}
                 >
@@ -251,7 +281,7 @@ export function App() {
                   type="button"
                   className={`ev-nav-btn ${activeTab === item.id ? 'is-active' : ''}`}
                   onClick={() => {
-                    setSelectedSubject(null);
+                    setSelectedSubjectId(null);
                     setActiveTab(item.id);
                   }}
                 >
@@ -271,7 +301,7 @@ export function App() {
                 type="button"
                 className={`ev-nav-btn ${activeTab === 'admin' ? 'is-active' : ''}`}
                 onClick={() => {
-                  setSelectedSubject(null);
+                  setSelectedSubjectId(null);
                   setActiveTab('admin');
                 }}
               >
@@ -285,8 +315,8 @@ export function App() {
 
             <button type="button" className="ev-nav-btn" onClick={() => setAuthModalOpen(true)}>
               <span className="ev-nav-btn-left">
-                <EvIcon name="cloud" />
-                <span>{isAuthenticated ? userName : isBn ? 'ক্লাউড সাইন ইন' : 'Cloud Sign In'}</span>
+                <EvIcon name="user" />
+                <span>{isAuthenticated ? `${userName} (${isBn ? 'প্রোফাইল' : 'Profile'})` : isBn ? 'সাইন ইন / অ্যাকাউন্ট' : 'Sign In / Account'}</span>
               </span>
             </button>
 
@@ -349,10 +379,25 @@ export function App() {
                 <EvIcon name={darkMode ? 'sun' : 'moon'} size={18} />
               </button>
 
-              <button type="button" className="ev-profile-trigger" onClick={() => setAuthModalOpen(true)}>
+              <button
+                type="button"
+                className="ev-profile-trigger"
+                onClick={() => setAuthModalOpen(true)}
+                title={isAuthenticated ? userName : trKey('sign_in', language)}
+              >
                 <span className="ev-avatar-ring">
-                  <LevelRingSvg size={38} strokeWidth={3} pct={lvInfo.progressPercent} />
-                  <span className="ev-avatar-sm">{userInitials}</span>
+                  <LevelRingSvg size={38} strokeWidth={3} pct={lvInfo.progressPct} />
+                  <span className="ev-avatar-sm" style={{ overflow: 'hidden' }}>
+                    {hasPhotoAvatar ? (
+                      <img
+                        src={userAvatar}
+                        alt={userName}
+                        style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }}
+                      />
+                    ) : (
+                      <EvIcon name="user" size={15} />
+                    )}
+                  </span>
                   <span className="ev-avatar-lv">{lvInfo.level}</span>
                 </span>
                 <span className="ev-profile-trigger-name">
@@ -373,7 +418,7 @@ export function App() {
                       type="button"
                       className="ev-btn ev-btn-secondary ev-btn-sm"
                       style={{ marginBottom: 10 }}
-                      onClick={() => setSelectedSubject(null)}
+                      onClick={() => setSelectedSubjectId(null)}
                     >
                       ← {isBn ? 'সব বিষয়ে ফিরে যাও' : 'Back to Subjects'}
                     </button>
@@ -385,10 +430,7 @@ export function App() {
                   <button
                     type="button"
                     className="ev-btn ev-btn-soft ev-btn-sm"
-                    onClick={() => {
-                      setSelectedSubject(null);
-                      setActiveTab('formulas');
-                    }}
+                    onClick={() => openSubjectFormulas(selectedSubject.id, 'all')}
                   >
                     📐 {isBn ? 'অধ্যায়ভিত্তিক সূত্র দেখো' : 'Chapter Formulas'}
                   </button>
@@ -427,10 +469,7 @@ export function App() {
                           <button
                             type="button"
                             className="ev-btn ev-btn-soft ev-btn-sm"
-                            onClick={() => {
-                              setSelectedSubject(null);
-                              setActiveTab('formulas');
-                            }}
+                            onClick={() => openSubjectFormulas(selectedSubject.id, chap.id)}
                           >
                             📐 {isBn ? `সূত্র (${formulaCount})` : `Formulas (${formulaCount})`}
                           </button>
@@ -541,7 +580,7 @@ export function App() {
                       </div>
                     </div>
 
-                    {/* Desktop Daily Merit Sprint Card (Hidden inline on mobile; shown as popup modal on mobile!) */}
+                    {/* Desktop Daily Merit Sprint Card */}
                     <div className="ev-card ev-daily-card ev-daily-inline">
                       <div className="ev-daily-head">
                         <div className="ev-daily-ic">
@@ -600,7 +639,7 @@ export function App() {
                           key={subj.id}
                           className="ev-card ev-card-interactive ev-subject-card"
                           data-subj={subjAttr}
-                          onClick={() => setSelectedSubject(subj)}
+                          onClick={() => setSelectedSubjectId(subj.id)}
                         >
                           <div className="ev-subject-top">
                             <div className="ev-subject-icon-box" data-subj={subjAttr}>
@@ -643,7 +682,7 @@ export function App() {
           type="button"
           className={`ev-bottom-nav-btn ${activeTab === 'dashboard' ? 'is-active' : ''}`}
           onClick={() => {
-            setSelectedSubject(null);
+            setSelectedSubjectId(null);
             setActiveTab('dashboard');
           }}
         >
@@ -655,7 +694,7 @@ export function App() {
           type="button"
           className={`ev-bottom-nav-btn ${activeTab === 'subjects' ? 'is-active' : ''}`}
           onClick={() => {
-            setSelectedSubject(null);
+            setSelectedSubjectId(null);
             setActiveTab('subjects');
           }}
         >
@@ -667,7 +706,7 @@ export function App() {
           type="button"
           className={`ev-bottom-nav-btn ${activeTab === 'formulas' ? 'is-active' : ''}`}
           onClick={() => {
-            setSelectedSubject(null);
+            setSelectedSubjectId(null);
             setActiveTab('formulas');
           }}
         >
@@ -679,7 +718,7 @@ export function App() {
           type="button"
           className={`ev-bottom-nav-btn ${activeTab === 'leaderboard' ? 'is-active' : ''}`}
           onClick={() => {
-            setSelectedSubject(null);
+            setSelectedSubjectId(null);
             setActiveTab('leaderboard');
           }}
         >
@@ -771,7 +810,7 @@ export function App() {
                   type="button"
                   className="ev-more-menu-item"
                   onClick={() => {
-                    setSelectedSubject(null);
+                    setSelectedSubjectId(null);
                     setActiveTab(item.id);
                     setMobileMoreOpen(false);
                   }}
@@ -786,7 +825,7 @@ export function App() {
                   type="button"
                   className="ev-more-menu-item"
                   onClick={() => {
-                    setSelectedSubject(null);
+                    setSelectedSubjectId(null);
                     setActiveTab('admin');
                     setMobileMoreOpen(false);
                   }}
@@ -795,6 +834,18 @@ export function App() {
                   <span>🔐 {isBn ? 'অ্যাডমিন প্যানেল' : 'Admin Panel'}</span>
                 </button>
               )}
+
+              <button
+                type="button"
+                className="ev-more-menu-item"
+                onClick={() => {
+                  setMobileMoreOpen(false);
+                  setAuthModalOpen(true);
+                }}
+              >
+                <EvIcon name="user" />
+                <span>{isAuthenticated ? (isBn ? 'আমার প্রোফাইল' : 'My Profile') : isBn ? 'সাইন ইন / লগইন' : 'Sign In'}</span>
+              </button>
 
               <button
                 type="button"
