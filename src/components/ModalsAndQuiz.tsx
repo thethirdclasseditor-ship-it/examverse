@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { signInOrSignUpUser, trKey, trText, useExamStore } from '../store/useExamStore';
-import { signInWithOAuthProvider } from '../lib/supabase';
+import { getLevelProgress, signInOrSignUpUser, trKey, trText, useExamStore } from '../store/useExamStore';
+import { sendPasswordResetEmail, signInWithOAuthProvider } from '../lib/supabase';
 import { MistakeItem } from '../types';
 
 export const ExamVerseLogo: React.FC<{ size?: number }> = ({ size = 36 }) => (
@@ -49,6 +49,8 @@ export const EvIcon: React.FC<{ name: string; size?: number }> = ({ name, size =
       return <svg {...props}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>;
     case 'cloud':
       return <svg {...props}><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z" /></svg>;
+    case 'user':
+      return <svg {...props}><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>;
     case 'settings':
       return <svg {...props}><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" /></svg>;
     case 'sun':
@@ -176,7 +178,22 @@ export const MetallicBadgeSvg: React.FC<{ color?: string; label?: string }> = ({
 );
 
 export const AuthModal: React.FC = () => {
-  const { isAuthModalOpen, setAuthModalOpen, setUserProfile, language } = useExamStore();
+  const {
+    isAuthModalOpen,
+    setAuthModalOpen,
+    isAuthenticated,
+    userName,
+    userEmail,
+    userAvatar,
+    xp,
+    streak,
+    selectedClass,
+    selectedGroup,
+    getRankInfo,
+    setUserProfile,
+    logoutUser,
+    language,
+  } = useExamStore();
 
   const [mode, setMode] = useState<'signin' | 'signup'>('signin');
   const [name, setName] = useState('');
@@ -185,9 +202,17 @@ export const AuthModal: React.FC = () => {
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
+  const [editProfileName, setEditProfileName] = useState(userName);
+
+  useEffect(() => {
+    setEditProfileName(userName);
+  }, [userName, isAuthModalOpen]);
 
   if (!isAuthModalOpen) return null;
   const isBn = language !== 'en';
+  const rank = getRankInfo();
+  const lvInfo = getLevelProgress(xp);
+  const hasPhotoAvatar = isAuthenticated && userAvatar && userAvatar.startsWith('http');
 
   const handleOAuth = async (provider: 'google' | 'facebook') => {
     try {
@@ -195,6 +220,22 @@ export const AuthModal: React.FC = () => {
       await signInWithOAuthProvider(provider);
     } catch (err: any) {
       setStatusMsg(err?.message || (isBn ? 'OAuth সংযোগ সম্ভব হয়নি, ইমেইল দিয়ে চেষ্টা করুন।' : 'OAuth failed.'));
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    if (!email.trim()) {
+      setStatusMsg(isBn ? 'পাসওয়ার্ড রিসেট করতে আগে উপরের বক্সে আপনার ইমেইল লিখুন।' : 'Enter your email address above first.');
+      return;
+    }
+    try {
+      setLoading(true);
+      await sendPasswordResetEmail(email.trim());
+      setStatusMsg(isBn ? '✅ আপনার ইমেইলে পাসওয়ার্ড রিসেট লিংক পাঠানো হয়েছে!' : '✅ Password reset link sent to your email!');
+    } catch (err: any) {
+      setStatusMsg(err?.message || (isBn ? 'পাসওয়ার্ড রিসেট ইমেইল পাঠানো যায়নি।' : 'Failed to send reset email.'));
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -224,6 +265,115 @@ export const AuthModal: React.FC = () => {
       setLoading(false);
     }
   };
+
+  if (isAuthenticated) {
+    return (
+      <div className="ev-modal-backdrop is-open" onClick={() => setAuthModalOpen(false)}>
+        <div className="ev-modal-panel" style={{ maxWidth: 460 }} onClick={(e) => e.stopPropagation()}>
+          <div className="ev-section-header">
+            <h3 className="ev-section-title">👤 {isBn ? 'আমার প্রোফাইল ও ক্লাউড অ্যাকাউন্ট' : 'My Profile & Cloud Account'}</h3>
+            <button type="button" className="ev-btn ev-btn-secondary ev-btn-sm" onClick={() => setAuthModalOpen(false)}>
+              ✕
+            </button>
+          </div>
+
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 14,
+              padding: 16,
+              borderRadius: 16,
+              background: 'var(--bg-surface-muted)',
+              border: '1px solid var(--border-default)',
+              marginBottom: 16,
+            }}
+          >
+            <div
+              className="ev-avatar-sm"
+              style={{ width: 56, height: 56, fontSize: 22, overflow: 'hidden', flexShrink: 0 }}
+            >
+              {hasPhotoAvatar ? (
+                <img
+                  src={userAvatar}
+                  alt={userName}
+                  style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }}
+                />
+              ) : (
+                <EvIcon name="user" size={26} />
+              )}
+            </div>
+
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <div style={{ fontWeight: 800, fontSize: 17 }}>{userName}</div>
+              {userEmail && (
+                <div style={{ fontSize: 12.5, color: 'var(--text-muted)', fontWeight: 600, marginBottom: 4 }}>
+                  {userEmail}
+                </div>
+              )}
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                <span className="ev-badge-pill ev-badge-success">
+                  ☁️ {isBn ? 'ক্লাউড সিঙ্ক সক্রিয়' : 'Cloud Synced'}
+                </span>
+                <span className="ev-badge-pill ev-badge-indigo">
+                  🛡️ {isBn ? rank.fullTitleBn : rank.fullTitleEn} • Lv.{lvInfo.level}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div className="ev-grid-3" style={{ marginBottom: 16 }}>
+            <div className="ev-card" style={{ padding: 10, textAlign: 'center', background: 'var(--bg-surface-muted)' }}>
+              <div style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--text-muted)' }}>XP</div>
+              <div className="font-mono" style={{ fontSize: 16, fontWeight: 800, color: 'var(--brand-primary)' }}>{xp}</div>
+            </div>
+            <div className="ev-card" style={{ padding: 10, textAlign: 'center', background: 'var(--bg-surface-muted)' }}>
+              <div style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--text-muted)' }}>{isBn ? 'স্ট্রিক' : 'Streak'}</div>
+              <div className="font-mono" style={{ fontSize: 16, fontWeight: 800, color: '#D97706' }}>🔥 {streak}d</div>
+            </div>
+            <div className="ev-card" style={{ padding: 10, textAlign: 'center', background: 'var(--bg-surface-muted)' }}>
+              <div style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--text-muted)' }}>{isBn ? 'বিভাগ' : 'Track'}</div>
+              <div style={{ fontSize: 12.5, fontWeight: 800 }}>{selectedClass} • {selectedGroup}</div>
+            </div>
+          </div>
+
+          <div style={{ marginBottom: 16 }}>
+            <label style={{ fontSize: 13, fontWeight: 700, display: 'block', marginBottom: 6 }}>
+              {isBn ? 'প্রোফাইল নাম পরিবর্তন করুন' : 'Update Display Name'}
+            </label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input
+                type="text"
+                className="ev-input"
+                value={editProfileName}
+                onChange={(e) => setEditProfileName(e.target.value)}
+              />
+              <button
+                type="button"
+                className="ev-btn ev-btn-primary"
+                onClick={() => {
+                  if (editProfileName.trim()) {
+                    setUserProfile({ name: editProfileName.trim() });
+                  }
+                }}
+              >
+                {isBn ? 'সেভ' : 'Save'}
+              </button>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            className="ev-btn ev-btn-danger"
+            style={{ width: '100%' }}
+            onClick={() => logoutUser()}
+          >
+            🚪 {isBn ? 'অ্যাকাউন্ট থেকে লগ আউট করুন (Sign Out)' : 'Sign Out'}
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="ev-modal-backdrop is-open" onClick={() => setAuthModalOpen(false)}>
@@ -338,6 +488,18 @@ export const AuthModal: React.FC = () => {
               </button>
             </div>
 
+            {mode === 'signin' && (
+              <div style={{ textAlign: 'right', marginTop: -4 }}>
+                <button
+                  type="button"
+                  onClick={handleForgotPassword}
+                  style={{ fontSize: 12, fontWeight: 700, color: '#6D28D9', background: 'none', border: 'none', cursor: 'pointer' }}
+                >
+                  {isBn ? 'পাসওয়ার্ড ভুলে গেছেন?' : 'Forgot Password?'}
+                </button>
+              </div>
+            )}
+
             {statusMsg && (
               <div
                 style={{
@@ -379,7 +541,10 @@ export const AuthModal: React.FC = () => {
                 {isBn ? 'অ্যাকাউন্ট নেই? ' : "Don't have an account? "}
                 <button
                   type="button"
-                  onClick={() => setMode('signup')}
+                  onClick={() => {
+                    setMode('signup');
+                    setStatusMsg(null);
+                  }}
                   style={{ color: '#5B21B6', fontWeight: 800, textDecoration: 'underline', background: 'none', border: 'none', cursor: 'pointer' }}
                 >
                   {isBn ? 'নতুন তৈরি করুন' : 'Create'}
@@ -390,7 +555,10 @@ export const AuthModal: React.FC = () => {
                 {isBn ? 'ইতিমধ্যে অ্যাকাউন্ট আছে? ' : 'Already have an account? '}
                 <button
                   type="button"
-                  onClick={() => setMode('signin')}
+                  onClick={() => {
+                    setMode('signin');
+                    setStatusMsg(null);
+                  }}
                   style={{ color: '#5B21B6', fontWeight: 800, textDecoration: 'underline', background: 'none', border: 'none', cursor: 'pointer' }}
                 >
                   {isBn ? 'সাইন ইন করুন' : 'Sign In'}
@@ -442,11 +610,17 @@ export const SettingsModal: React.FC = () => {
     darkMode,
     toggleDarkMode,
     userName,
+    isAuthenticated,
     setUserProfile,
+    logoutUser,
     resetAllDemoAndProgress,
   } = useExamStore();
 
   const [tempName, setTempName] = useState(userName);
+
+  useEffect(() => {
+    setTempName(userName);
+  }, [userName, isSettingsModalOpen]);
 
   if (!isSettingsModalOpen) return null;
   const isBn = language !== 'en';
@@ -518,6 +692,32 @@ export const SettingsModal: React.FC = () => {
             </button>
           </div>
 
+          {isAuthenticated && (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '10px 12px',
+                borderRadius: 12,
+                background: 'var(--bg-surface-muted)',
+              }}
+            >
+              <span style={{ fontWeight: 700, fontSize: 13.5 }}>
+                {isBn ? 'ক্লাউড অ্যাকাউন্ট থেকে লগ আউট' : 'Sign Out of Cloud Account'}
+              </span>
+              <button
+                className="ev-btn ev-btn-secondary ev-btn-sm"
+                onClick={() => {
+                  logoutUser();
+                  setSettingsModalOpen(false);
+                }}
+              >
+                🚪 {isBn ? 'লগ আউট' : 'Sign Out'}
+              </button>
+            </div>
+          )}
+
           <div
             style={{
               display: 'flex',
@@ -583,21 +783,11 @@ export const QuizRunnerModal: React.FC = () => {
     return () => clearInterval(timer);
   }, [activeQuiz, submitted]);
 
-  if (!activeQuiz) return null;
-  const isBn = language !== 'en';
-  const questions = activeQuiz.questions || [];
-  const currentQ = questions[currentIndex];
-
-  const formatTimer = (sec: number) => {
-    const m = Math.floor(sec / 60);
-    const s = sec % 60;
-    return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-  };
-
   const handleSubmitExam = () => {
-    if (submitted) return;
+    if (!activeQuiz || submitted) return;
     setSubmitted(true);
 
+    const questions = activeQuiz.questions || [];
     let correctCount = 0;
     const newMistakes: MistakeItem[] = [];
     const attemptedCount = Object.keys(answers).length;
@@ -644,6 +834,23 @@ export const QuizRunnerModal: React.FC = () => {
       },
       newMistakes
     );
+  };
+
+  useEffect(() => {
+    if (activeQuiz && activeQuiz.examType !== 'cq' && !submitted && timeLeft === 0) {
+      handleSubmitExam();
+    }
+  }, [timeLeft, activeQuiz, submitted]);
+
+  if (!activeQuiz) return null;
+  const isBn = language !== 'en';
+  const questions = activeQuiz.questions || [];
+  const currentQ = questions[currentIndex];
+
+  const formatTimer = (sec: number) => {
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
   };
 
   const handleSendReport = () => {
