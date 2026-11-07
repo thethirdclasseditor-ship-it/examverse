@@ -1,15 +1,7 @@
 import React, { useSyncExternalStore } from 'react';
 import { HSC_ACCOUNTING_2ND_PAPER_CHAPTERS } from '../data/syllabusData';
 import { HSC_BANGLA_1ST_PROSE_CHAPTERS } from '../data/bangla1ProseData';
-import React, { useSyncExternalStore } from 'react';
-import * as RawSyllabus from '../data/syllabusData';
-import * as RawSupabase from '../lib/supabase';
 import { HSC_BANGLA_1ST_POETRY_AND_SAHITYA_CHAPTERS } from '../data/bangla1PoetryData';
-import { HSC_BANGLA_1ST_PROSE_CHAPTERS } from '../data/bangla1ProseData';
-import { HSC_BANGLA_1ST_BATCH2_PROSE_CHAPTERS } from '../data/bangla1Batch2ProseData';
-import { HSC_BANGLA_1ST_BATCH2_POETRY_CHAPTERS, mergeBangla1Batches } from '../data/bangla1Batch2PoetryData';
-import { HSC_BANGLA_1ST_PROSE_CHAPTERS } from '../data/bangla1ProseData';
-import { HSC_BANGLA_1ST_POETRY_NOVEL_DRAMA_CHAPTERS } from '../data/bangla1PoetryData';
 import { HSC_BANGLA_1ST_BATCH2_PROSE_CHAPTERS } from '../data/bangla1Batch2ProseData';
 import { HSC_BANGLA_1ST_BATCH2_POETRY_CHAPTERS, mergeBangla1Batches } from '../data/bangla1Batch2PoetryData';
 import * as RawSupabase from '../lib/supabase';
@@ -532,15 +524,18 @@ function convertLegacyChapters(chapters: Chapter[], subjPrefix: string): Chapter
 }
 
 const HSC_BANGLA_1ST_CHAPTERS: Chapter[] = mergeBangla1Batches(
-  [
-    ...HSC_BANGLA_1ST_PROSE_CHAPTERS,
-    ...HSC_BANGLA_1ST_POETRY_AND_SAHITYA_CHAPTERS,
-  ],
-  [
-    ...HSC_BANGLA_1ST_BATCH2_PROSE_CHAPTERS,
-    ...HSC_BANGLA_1ST_BATCH2_POETRY_CHAPTERS,
-  ]
+  [...HSC_BANGLA_1ST_PROSE_CHAPTERS, ...HSC_BANGLA_1ST_POETRY_AND_SAHITYA_CHAPTERS],
+  [...HSC_BANGLA_1ST_BATCH2_PROSE_CHAPTERS, ...HSC_BANGLA_1ST_BATCH2_POETRY_CHAPTERS]
 );
+
+const HSC_BANGLA_1ST_PAPER_SUBJECT: SubjectData = {
+  id: 'hsc-bn-1',
+  name: { bn: 'বাংলা ১ম পত্র (HSC)', en: 'Bangla 1st Paper (HSC)' },
+  icon: '📖',
+  color: '#059669',
+  rgb: '5, 150, 105',
+  chapters: convertLegacyChapters(HSC_BANGLA_1ST_CHAPTERS, 'bn1'),
+};
 
 const HSC_BANGLA_2ND_PAPER_SUBJECT: SubjectData = {
   id: 'hsc-bn-2',
@@ -1381,7 +1376,7 @@ export interface ExamStoreState {
   getRankInfo: () => RankProgressInfo;
 }
 
-const STORAGE_KEY = 'examverse-v7-storage';
+const STORAGE_KEY = 'examverse-v8-storage';
 
 const VALID_TABS: NavTabId[] = [
   'dashboard',
@@ -1422,9 +1417,7 @@ function applyThemeToDocument(isDark: boolean) {
   document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
   try {
     window.localStorage.setItem('examverse_theme', isDark ? 'dark' : 'light');
-  } catch {
-    // ignore
-  }
+  } catch {}
 }
 
 function mergeBuiltInSubjects(savedDB?: Record<string, Record<string, SubjectData[]>>) {
@@ -1508,9 +1501,7 @@ function savePersisted(state: ExamStoreState) {
       syllabusDB: state.syllabusDB,
     };
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
-  } catch {
-    // ignore storage quota errors
-  }
+  } catch {}
 }
 
 const persisted = loadPersistedState();
@@ -1611,9 +1602,7 @@ let storeState: ExamStoreState = {
     if (supaMod?.supabase?.auth) {
       try {
         await supaMod.supabase.auth.signOut();
-      } catch {
-        // ignore
-      }
+      } catch {}
     }
     setState({
       userId: 'guest-user',
@@ -1923,9 +1912,6 @@ export const ExamProvider: React.FC<{ children: React.ReactNode }> = ({ children
   return React.createElement(React.Fragment, null, children);
 };
 
-/* =====================================================================
-   AUTOMATIC SUPABASE AUTH & HASH NAVIGATION SYNC
-   ===================================================================== */
 let authSyncInitialized = false;
 function initSupabaseAuthAndHashSync() {
   if (authSyncInitialized || typeof window === 'undefined') return;
@@ -1970,9 +1956,7 @@ function initSupabaseAuthAndHashSync() {
           nextMastery = { ...prof.chapter_mastery, ...nextMastery };
         }
       }
-    } catch {
-      // ignore if table not ready
-    }
+    } catch {}
     setState({
       userId: user.id,
       userName: resolvedName,
