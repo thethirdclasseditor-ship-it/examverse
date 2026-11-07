@@ -1,7 +1,13 @@
 import React, { useSyncExternalStore } from 'react';
 import { HSC_ACCOUNTING_2ND_PAPER_CHAPTERS } from '../data/syllabusData';
 import { HSC_BANGLA_1ST_PROSE_CHAPTERS } from '../data/bangla1ProseData';
+import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
+import { HSC_ACCOUNTING_2ND_CHAPTERS } from '../data/syllabusData';
 import { HSC_BANGLA_1ST_POETRY_AND_SAHITYA_CHAPTERS } from '../data/bangla1PoetryData';
+import { HSC_BANGLA_1ST_PROSE_CHAPTERS } from '../data/bangla1ProseData';
+import { HSC_BANGLA_1ST_BATCH2_PROSE_CHAPTERS } from '../data/bangla1Batch2ProseData';
+import { HSC_BANGLA_1ST_BATCH2_POETRY_CHAPTERS, mergeBangla1Batches } from '../data/bangla1Batch2PoetryData';
 import { HSC_BANGLA_1ST_PROSE_CHAPTERS } from '../data/bangla1ProseData';
 import { HSC_BANGLA_1ST_POETRY_NOVEL_DRAMA_CHAPTERS } from '../data/bangla1PoetryData';
 import { HSC_BANGLA_1ST_BATCH2_PROSE_CHAPTERS } from '../data/bangla1Batch2ProseData';
@@ -528,7 +534,7 @@ function convertLegacyChapters(chapters: Chapter[], subjPrefix: string): Chapter
 const HSC_BANGLA_1ST_CHAPTERS: Chapter[] = mergeBangla1Batches(
   [
     ...HSC_BANGLA_1ST_PROSE_CHAPTERS,
-    ...HSC_BANGLA_1ST_POETRY_NOVEL_DRAMA_CHAPTERS,
+    ...HSC_BANGLA_1ST_POETRY_AND_SAHITYA_CHAPTERS,
   ],
   [
     ...HSC_BANGLA_1ST_BATCH2_PROSE_CHAPTERS,
