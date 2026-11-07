@@ -525,20 +525,16 @@ function convertLegacyChapters(chapters: Chapter[], subjPrefix: string): Chapter
   });
 }
 
-const HSC_BANGLA_1ST_PAPER_SUBJECT: SubjectData = {
-  id: 'hsc-bn-1',
-  name: { bn: 'বাংলা ১ম পত্র (HSC)', en: 'Bangla 1st Paper (HSC)' },
-  icon: '📖',
-  color: '#E11D48',
-  rgb: '225, 29, 72',
-  chapters: convertLegacyChapters(
-    [
-      ...HSC_BANGLA_1ST_PROSE_CHAPTERS,
-      ...HSC_BANGLA_1ST_POETRY_AND_SAHITYA_CHAPTERS,
-    ],
-    'hsc-bn1'
-  ),
-};
+const HSC_BANGLA_1ST_CHAPTERS: Chapter[] = mergeBangla1Batches(
+  [
+    ...HSC_BANGLA_1ST_PROSE_CHAPTERS,
+    ...HSC_BANGLA_1ST_POETRY_NOVEL_DRAMA_CHAPTERS,
+  ],
+  [
+    ...HSC_BANGLA_1ST_BATCH2_PROSE_CHAPTERS,
+    ...HSC_BANGLA_1ST_BATCH2_POETRY_CHAPTERS,
+  ]
+);
 
 const HSC_BANGLA_2ND_PAPER_SUBJECT: SubjectData = {
   id: 'hsc-bn-2',
@@ -1379,7 +1375,7 @@ export interface ExamStoreState {
   getRankInfo: () => RankProgressInfo;
 }
 
-const STORAGE_KEY = 'examverse-v6-storage';
+const STORAGE_KEY = 'examverse-v7-storage';
 
 const VALID_TABS: NavTabId[] = [
   'dashboard',
