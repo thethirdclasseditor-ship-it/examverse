@@ -3,6 +3,7 @@ import { HSC_ACCOUNTING_2ND_PAPER_CHAPTERS } from '../data/syllabusData';
 import * as RawSupabase from '../lib/supabase';
 import { HSC_ACCOUNTING_1ST_PAPER_CHAPTERS } from '../data/accounting1Data';
 import { HSC_BANGLA_1ST_ALL_2000_CHAPTERS } from '../data/bangla1Batch4PoetryData';
+import { HSC_ICT_CHAPTERS } from '../data/hscIctData';
 import { ActiveQuizConfig, ChapterData, ChapterFormula, CommunityPost, CQQuestion, ExamHistoryItem, FlashcardItem, LanguageMode, LocalizedText, MCQQuestion, MistakeItem, RankProgressInfo, StudyTask, SubjectData,
 } from '../types';
 export type NavTabId = | 'dashboard'
@@ -85,7 +86,7 @@ ch('en1-c3', 'Part B: Flow Chart, Summary Writing, Cloze Test, Rearranging & Gra
 const _S04 = mkSubj('hsc-en-2', 'English 2nd Paper (Code: 108)', 'English 2nd Paper (HSC - 108)', '🔤', '#1D4ED8', '29, 78, 216', [
 ch('en2-c1', 'Grammar Part 1: Articles, Prepositions, Special Phrases & Completing Sentences'), ch('en2-c2', 'Grammar Part 2: Right Form of Verbs, Narration, Modifiers, Connectors, Synonym-Antonym & Punctuation'),
 ch('en2-c3', 'Composition Part: Formal Application, E-mail, Report Writing, Paragraph & Essay'), ], false);
-const _S05 = mkSubj('hsc-ict', 'তথ্য ও যোগাযোগ প্রযুক্তি - ICT (Code: 275)', 'ICT (HSC - 275)', '💻', '#0284C7', '2, 132, 199', [ ch('h-ict-c1', '১ম অধ্যায়: বিশ্ব ও বাংলাদেশ প্রেক্ষিত'),
+const _S05 = { id: 'hsc-ict', name: { bn: 'তথ্য ও যোগাযোগ প্রযুক্তি - ICT (Code: 275)', en: 'ICT (HSC - 275)' }, icon: '💻', color: '#0284C7', rgb: '2, 132, 199', chapters: convertLegacyChapters(HSC_ICT_CHAPTERS, 'h-ict', true) };
 ch('h-ict-c2', '২য় অধ্যায়: কমিউনিকেশন সিস্টেমস ও নেটওয়ার্কিং', [ 'ডেটা ট্রান্সমিশন দক্ষতা: η = (প্রকৃত ডেটা বিট ÷ মোট স্থানান্তরিত বিট) × ১০০%', 'Mesh টপোলজির সংযোগ তারের সংখ্যা: N = n(n - 1) ÷ 2 (যেখানে n = নোড বা কম্পিউটার সংখ্যা)', ]),
 ch('h-ict-c3', '৩য় অধ্যায়: সংখ্যা পদ্ধতি ও ডিজিটাল ডিভাইস', [ 'ডি-মরগ্যানের উপপাদ্য: (A + B)′ = A′ · B′ এবং (A · B)′ = A′ + B′', 'XOR ও XNOR সমীকরণ: A ⊕ B = A′B + AB′ এবং (A ⊕ B)′ = AB + A′B′', 'Half Adder ও Full Adder: Half Adder: S = A ⊕ B, C = AB | Full Adder: S = A ⊕ B ⊕ Cin, Cout = AB + BCin + ACin', '২-এর পরিপূরক (2’s Complement): ২-এর পরিপূরক = ১-এর পরিপূরক + ১', 'এনকোডার ও ডিকোডার: এনকোডারে ইনপুট 2ⁿ ও আউটপুট n; ডিকোডারে ইনপুট n ও আউটপুট 2ⁿ', ]),
 ch('h-ict-c4', '৪র্থ অধ্যায়: ওয়েব ডিজাইন পরিচিতি এবং HTML'),
