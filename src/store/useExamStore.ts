@@ -58,7 +58,7 @@ name: string;
 mcqs: MCQ[];
 cqs: CQ[];
 formulas?: string[]; }
-export { HSC_ACCOUNTING_1ST_PAPER_CHAPTERS };
+export { HSC_ACCOUNTING_1ST_PAPER_CHAPTERS, HSC_ICT_CHAPTERS };
 const NON_MATH_CHAPTER_IDS = new Set(['acc1-c5']);
 function convertLegacyChapters( chapters: Chapter[], subjPrefix: string, allowFormulas = true ): ChapterData[] { return (chapters || []).map((ch, cIdx): ChapterData => { const rawFormulas =
 allowFormulas && !NON_MATH_CHAPTER_IDS.has(ch.id) ? ch.formulas || [] : [];
@@ -86,12 +86,8 @@ ch('en1-c3', 'Part B: Flow Chart, Summary Writing, Cloze Test, Rearranging & Gra
 const _S04 = mkSubj('hsc-en-2', 'English 2nd Paper (Code: 108)', 'English 2nd Paper (HSC - 108)', '🔤', '#1D4ED8', '29, 78, 216', [
 ch('en2-c1', 'Grammar Part 1: Articles, Prepositions, Special Phrases & Completing Sentences'), ch('en2-c2', 'Grammar Part 2: Right Form of Verbs, Narration, Modifiers, Connectors, Synonym-Antonym & Punctuation'),
 ch('en2-c3', 'Composition Part: Formal Application, E-mail, Report Writing, Paragraph & Essay'), ], false);
-const _S05 = { id: 'hsc-ict', name: { bn: 'তথ্য ও যোগাযোগ প্রযুক্তি - ICT (Code: 275)', en: 'ICT (HSC - 275)' }, icon: '💻', color: '#0284C7', rgb: '2, 132, 199', chapters: convertLegacyChapters(HSC_ICT_CHAPTERS, 'h-ict', true) };
-ch('h-ict-c2', '২য় অধ্যায়: কমিউনিকেশন সিস্টেমস ও নেটওয়ার্কিং', [ 'ডেটা ট্রান্সমিশন দক্ষতা: η = (প্রকৃত ডেটা বিট ÷ মোট স্থানান্তরিত বিট) × ১০০%', 'Mesh টপোলজির সংযোগ তারের সংখ্যা: N = n(n - 1) ÷ 2 (যেখানে n = নোড বা কম্পিউটার সংখ্যা)', ]),
-ch('h-ict-c3', '৩য় অধ্যায়: সংখ্যা পদ্ধতি ও ডিজিটাল ডিভাইস', [ 'ডি-মরগ্যানের উপপাদ্য: (A + B)′ = A′ · B′ এবং (A · B)′ = A′ + B′', 'XOR ও XNOR সমীকরণ: A ⊕ B = A′B + AB′ এবং (A ⊕ B)′ = AB + A′B′', 'Half Adder ও Full Adder: Half Adder: S = A ⊕ B, C = AB | Full Adder: S = A ⊕ B ⊕ Cin, Cout = AB + BCin + ACin', '২-এর পরিপূরক (2’s Complement): ২-এর পরিপূরক = ১-এর পরিপূরক + ১', 'এনকোডার ও ডিকোডার: এনকোডারে ইনপুট 2ⁿ ও আউটপুট n; ডিকোডারে ইনপুট n ও আউটপুট 2ⁿ', ]),
-ch('h-ict-c4', '৪র্থ অধ্যায়: ওয়েব ডিজাইন পরিচিতি এবং HTML'),
-ch('h-ict-c5', '৫ম অধ্যায়: প্রোগ্রামিং ভাষা (C Programming)', [ 'সমান্তর ধারার যোগফল নির্ণয়: S = 1 + 2 + 3 + ... + n = n(n + 1) ÷ 2', 'তাপমাত্রা রূপান্তর সমীকরণ: C ÷ 5 = (F - 32) ÷ 9 = (K - 273) ÷ 5', 'ত্রিভুজের ক্ষেত্রফল নির্ণয়: Area = 0.5 × base × height অথবা √[s(s-a)(s-b)(s-c)] যেখানে s = (a+b+c) ÷ 2', ]),
-ch('h-ict-c6', '৬ষ্ঠ অধ্যায়: ডেটাবেজ ম্যানেজমেন্ট সিস্টেম (DBMS)'), ]);
+const _S05 = { id: 'hsc-ict', name: { bn: 'তথ্য ও যোগাযোগ প্রযুক্তি - ICT (Code: 275)', en: 'ICT (HSC - 275)' }, icon: '💻', color: '#0284C7', rgb: '2, 132, 199',
+chapters: convertLegacyChapters(HSC_ICT_CHAPTERS, 'h-ict', true), };
 const _S06 = { id: 'acc-1', name: { bn: 'হিসাববিজ্ঞান ১ম পত্র (Code: 253)', en: 'Accounting 1st Paper (HSC - 253)' }, icon: '📘', color: '#4F46E5', rgb: '79, 70, 229',
 chapters: convertLegacyChapters(HSC_ACCOUNTING_1ST_PAPER_CHAPTERS, 'acc1', true), };
 const _S07 = { id: 'acc-2', name: { bn: 'হিসাববিজ্ঞান ২য় পত্র (Code: 254)', en: 'Accounting 2nd Paper (HSC - 254)' }, icon: '📊', color: '#D97706', rgb: '217, 119, 6',
@@ -429,7 +425,7 @@ adminAddQuestion: (payload: { className: string; groupName: string; subjectId: s
 adminBulkImportQuestions: (payload: { className: string; groupName: string; subjectId: string; chapterId: string; questions: MCQQuestion[] }) => number;
 adminDeleteQuestion: (payload: { className: string; groupName: string; subjectId: string; chapterId: string; questionId: string }) => void;
 getRankInfo: () => RankProgressInfo; }
-const STORAGE_KEY = 'examverse-v11-storage';
+const STORAGE_KEY = 'examverse-v12-storage';
 const VALID_TABS: NavTabId[] = [ 'dashboard', 'subjects', 'Analytics', 'mistakes', 'flashcards', 'formulas', 'planner', 'battle', 'community', 'leaderboard', 'achievements', 'admin', ];
 function getInitialTabFromHashOrStorage(savedTab?: NavTabId): NavTabId { if (typeof window !== 'undefined') { const rawHash = window.location.hash.replace(/^#\/?/, '').trim();
 if (rawHash && !rawHash.startsWith('access_token=') && !rawHash.startsWith('error=')) { if (rawHash === 'analytics') return 'Analytics';
@@ -458,14 +454,14 @@ const merged: Record<string, Record<string, SubjectData[]>> = {};
 Object.keys(INITIAL_SYLLABUS_DB).forEach((cls) => { merged[cls] = {}; Object.keys(INITIAL_SYLLABUS_DB[cls]).forEach((grp) => { const fallback = INITIAL_SYLLABUS_DB[cls][grp]; const savedList = savedDB[cls]?.[grp]; merged[cls][grp] = sanitizeSubjectList(savedList || fallback, fallback); }); });
 return merged; }
 function loadPersistedState(): Partial<ExamStoreState> { if (typeof window === 'undefined') return {};
-try { const v11Raw = window.localStorage.getItem(STORAGE_KEY);
-const legacyRaw = window.localStorage.getItem('examverse-v10-storage') || window.localStorage.getItem('examverse-v9-storage') || window.localStorage.getItem('examverse-v8-storage') ||
-window.localStorage.getItem('examverse-v7-storage');
-const raw = v11Raw || legacyRaw;
+try { const v12Raw = window.localStorage.getItem(STORAGE_KEY);
+const legacyRaw = window.localStorage.getItem('examverse-v11-storage') || window.localStorage.getItem('examverse-v10-storage') || window.localStorage.getItem('examverse-v9-storage') ||
+window.localStorage.getItem('examverse-v8-storage') || window.localStorage.getItem('examverse-v7-storage');
+const raw = v12Raw || legacyRaw;
 if (!raw) return {};
 const parsed = JSON.parse(raw);
 if (!parsed || typeof parsed !== 'object') return {};
-return { ...parsed, selectedGroup: v11Raw ? parsed.selectedGroup : 'All Groups', activeTab: getInitialTabFromHashOrStorage(parsed.activeTab), syllabusDB: mergeBuiltInSubjects(parsed.syllabusDB), }; } catch { return {}; }
+return { ...parsed, selectedGroup: v12Raw ? parsed.selectedGroup : 'All Groups', activeTab: getInitialTabFromHashOrStorage(parsed.activeTab), syllabusDB: mergeBuiltInSubjects(parsed.syllabusDB), }; } catch { return {}; }
 }
 let saveTimer: any = null;
 function scheduleSavePersisted(state: ExamStoreState) { if (typeof window === 'undefined') return;
@@ -618,6 +614,7 @@ nextDB[cls] = { ...nextDB[cls], [grp]: defaultSubj ? nextDB[cls][grp].map((s) =>
 setState({ syllabusDB: nextDB }); }, exportProjectSyllabusCode: () => {
 return `// ExamVerse Exported Syllabus Backup (${new Date().toISOString()})\nexport const EXPORTED_SYLLABUS_DB = ${JSON.stringify(storeState.syllabusDB, null, 2)};\n`; }, resetAllDemoAndProgress: () => { try {
 window.localStorage.removeItem(STORAGE_KEY);
+window.localStorage.removeItem('examverse-v11-storage');
 window.localStorage.removeItem('examverse-v10-storage');
 window.localStorage.removeItem('examverse-v9-storage');
 window.localStorage.removeItem('examverse-v8-storage');
