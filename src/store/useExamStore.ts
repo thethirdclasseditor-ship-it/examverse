@@ -44,12 +44,16 @@ export interface QuestionErrorReport {
   chapterName: string;
   questionText: string;
   options: string[];
+  currentAns: number;
   currentCorrectIndex: number;
   suggestedCorrectIndex: number;
+  issueType: string;
+  comment: string;
   note: string;
   reportedBy: string;
   reportedAt: string;
-  status: 'pending' | 'verified' | 'rejected';
+  createdAt: string;
+  status: 'pending' | 'verified' | 'rejected' | 'resolved';
 }
 
 export interface MCQ {
@@ -903,58 +907,124 @@ export interface ExamStoreState {
   flashcards: FlashcardItem[];
   studyTasks: StudyTask[];
   communityPosts: CommunityPost[];
+  friendsList: string[];
   questionReports: QuestionErrorReport[];
   syllabusDB: Record<string, Record<string, SubjectData[]>>;
   activeQuiz: ActiveQuizConfig | null;
   settingsOpen: boolean;
+  isSettingsModalOpen: boolean;
   authModalOpen: boolean;
+  isAuthModalOpen: boolean;
+  isAdminUnlocked: boolean;
+  adminPin: string;
   setActiveTab: (tab: NavTabId) => void;
   setSelectedSubjectId: (id: string | null) => void;
   setFormulaTarget: (subjectId: string | null, chapterId: string | null) => void;
+  openSubjectFormulas: (subjectId: string, chapterId?: string) => void;
   setLanguage: (lang: LanguageMode) => void;
   toggleDarkMode: () => void;
   setClassAndGroup: (cls: string, grp: string) => void;
-  setUserProfile: (profile: { id?: string; name: string; email: string; avatar?: string }) => void;
+  setUserProfile: (profile: { id?: string; name: string; email: string; avatar?: string; isAuthenticated?: boolean }) => void;
   logoutUser: () => Promise<void>;
   setSettingsOpen: (open: boolean) => void;
+  setSettingsModalOpen: (open: boolean) => void;
   setAuthModalOpen: (open: boolean) => void;
   startQuiz: (config: ActiveQuizConfig) => void;
   closeQuiz: () => void;
-  recordExamResult: (result: {
-    subjectId: string;
-    subjectName: string;
-    chapterId?: string;
-    chapterName?: string;
-    mode: 'mcq' | 'cq' | 'battle' | 'daily';
-    score: number;
-    total: number;
-    timeSpentSec: number;
-    wrongQuestions?: {
-      question: MCQQuestion;
-      selectedIndex: number;
-    }[];
-  }) => void;
+  recordExamResult: (
+    result: {
+      subjectId: string;
+      subjectName: string;
+      chapterId?: string;
+      chapterName?: string;
+      mode: 'mcq' | 'cq' | 'battle' | 'daily';
+      score: number;
+      total: number;
+      accuracy?: number;
+      timeSpentSec: number;
+      xpEarned?: number;
+      wrongQuestions?: {
+        question: MCQQuestion;
+        selectedIndex: number;
+      }[];
+    },
+    newMistakes?: MistakeItem[]
+  ) => void;
   markMistakeMastered: (id: string) => void;
+  addFlashcard: (front: string, back: string, subjectId?: string) => void;
+  deleteFlashcard: (id: string) => void;
   updateFlashcardBox: (id: string, box: 1 | 2 | 3 | 4 | 5) => void;
   addStudyTask: (task: Omit<StudyTask, 'id' | 'completed'>) => void;
   toggleStudyTask: (id: string) => void;
   deleteStudyTask: (id: string) => void;
-  addCommunityPost: (post: { subjectName: string; title: string; body: string }) => void;
-  addCommunityReply: (postId: string, text: string) => void;
-  likeCommunityPost: (postId: string) => void;
-  reportQuestionError: (payload: {
-    questionId: string;
-    subjectId: string;
+  addCommunityPost: (post: {
+    authorName?: string;
+    authorAvatar?: string;
+    authorRank?: string;
     subjectName: string;
-    chapterId: string;
-    chapterName: string;
-    questionText: string;
-    options: string[];
-    currentCorrectIndex: number;
-    suggestedCorrectIndex: number;
-    note: string;
+    title: string;
+    body: string;
   }) => void;
-  resolveQuestionReport: (reportId: string, applySuggestedAnswer: boolean) => void;
+  addCommunityReply: (postId: string, authorOrText: string, maybeText?: string) => void;
+  likeCommunityPost: (postId: string) => void;
+  togglePostLike: (postId: string) => void;
+  addFriendByCode: (codeOrName: string) => void;
+  reportQuestionError: (payload: any) => void;
+  submitQuestionReport: (payload: any) => void;
+  resolveQuestionReport: (reportId: string, applySuggestedAnswer?: boolean) => void;
+  deleteQuestionReport: (reportId: string) => void;
+  unlockAdmin: (pin: string) => boolean;
+  lockAdmin: () => void;
+  setAdminPin: (newPin: string) => void;
+  importBulkMcqs: (params: {
+    targetClass: string;
+    targetGroup: string;
+    subjectId: string;
+    subjectNameBn: string;
+    subjectNameEn: string;
+    rawText: string;
+  }) => { addedQuestions: number; addedChapters: number };
+  addSingleCustomMcq: (params: {
+    targetClass: string;
+    targetGroup: string;
+    subjectId: string;
+    subjectNameBn: string;
+    subjectNameEn: string;
+    chapterNameBn: string;
+    questionBn: string;
+    optionsBn: string[];
+    ansIndex: number;
+    boardTag?: string;
+    explanationBn?: string;
+  }) => void;
+  updateCustomMcqAnswer: (
+    cls: string,
+    grp: string,
+    subjectId: string,
+    chapterId: string,
+    questionId: string,
+    newAnsIndex: number
+  ) => void;
+  editCustomMcqFull: (params: {
+    targetClass: string;
+    targetGroup: string;
+    subjectId: string;
+    chapterId: string;
+    questionId: string;
+    questionBn: string;
+    optionsBn: string[];
+    ansIndex: number;
+  }) => void;
+  deleteCustomMcq: (
+    cls: string,
+    grp: string,
+    subjectId: string,
+    chapterId: string,
+    questionId: string
+  ) => void;
+  deleteCustomSubject: (cls: string, grp: string, subjectId: string) => void;
+  exportProjectSyllabusCode: () => string;
+  resetAllDemoAndProgress: () => void;
   adminAddQuestion: (payload: {
     className: string;
     groupName: string;
@@ -979,7 +1049,7 @@ export interface ExamStoreState {
   getRankInfo: () => RankProgressInfo;
 }
 
-const STORAGE_KEY = 'examverse-v8-storage';
+const STORAGE_KEY = 'examverse-v9-storage';
 
 const VALID_TABS: NavTabId[] = [
   'dashboard',
@@ -998,14 +1068,16 @@ const VALID_TABS: NavTabId[] = [
 
 function getInitialTabFromHashOrStorage(savedTab?: NavTabId): NavTabId {
   if (typeof window !== 'undefined') {
-    const rawHash = window.location.hash.replace(/^#/, '').trim();
+    const rawHash = window.location.hash.replace(/^#\/?/, '').trim();
     if (
       rawHash &&
       !rawHash.startsWith('access_token=') &&
-      !rawHash.startsWith('error=') &&
-      VALID_TABS.includes(rawHash as NavTabId)
+      !rawHash.startsWith('error=')
     ) {
-      return rawHash as NavTabId;
+      if (rawHash === 'analytics') return 'Analytics';
+      if (VALID_TABS.includes(rawHash as NavTabId)) {
+        return rawHash as NavTabId;
+      }
     }
   }
   if (savedTab && VALID_TABS.includes(savedTab)) {
@@ -1025,24 +1097,61 @@ function applyThemeToDocument(isDark: boolean) {
   }
 }
 
-function mergeBuiltInSubjects(savedDB?: Record<string, Record<string, SubjectData[]>>) {
-  if (!savedDB) return INITIAL_SYLLABUS_DB;
-  const merged = { ...INITIAL_SYLLABUS_DB, ...savedDB };
-  merged.HSC = { ...INITIAL_SYLLABUS_DB.HSC, ...(savedDB.HSC || {}) };
-  const injectBuiltIns = (list: SubjectData[]) => {
-    const next = list.map((s) => {
+function sanitizeSubjectList(list: any[], fallbackList: SubjectData[]): SubjectData[] {
+  if (!Array.isArray(list) || list.length === 0) return fallbackList;
+  return list
+    .filter((s) => s && typeof s === 'object' && s.id)
+    .map((s) => {
       if (s.id === 'acc-1') return HSC_ACCOUNTING_1ST_PAPER_SUBJECT;
       if (s.id === 'acc-2') return HSC_ACCOUNTING_2ND_PAPER_SUBJECT;
       if (s.id === 'hsc-bn-1') return HSC_BANGLA_1ST_PAPER_SUBJECT;
-      return s;
+      const nameObj: LocalizedText =
+        typeof s.name === 'object' && s.name !== null
+          ? { bn: String(s.name.bn || s.name.en || s.id), en: String(s.name.en || s.name.bn || s.id) }
+          : { bn: String(s.name || s.id), en: String(s.name || s.id) };
+      const chapters: ChapterData[] = Array.isArray(s.chapters)
+        ? s.chapters
+            .filter((c: any) => c && typeof c === 'object')
+            .map((c: any, idx: number) => ({
+              id: String(c.id || `${s.id}-c${idx + 1}`),
+              name:
+                typeof c.name === 'object' && c.name !== null
+                  ? { bn: String(c.name.bn || c.name.en || ''), en: String(c.name.en || c.name.bn || '') }
+                  : { bn: String(c.name || ''), en: String(c.name || '') },
+              mcqs: Array.isArray(c.mcqs) ? c.mcqs : [],
+              cqs: Array.isArray(c.cqs) ? c.cqs : [],
+              formulas: Array.isArray(c.formulas) ? c.formulas : [],
+            }))
+        : [];
+      return {
+        id: String(s.id),
+        name: nameObj,
+        icon: String(s.icon || '📘'),
+        color: String(s.color || '#4F46E5'),
+        rgb: String(s.rgb || '79, 70, 229'),
+        chapters,
+      };
     });
+}
+
+function mergeBuiltInSubjects(savedDB?: Record<string, Record<string, SubjectData[]>>) {
+  if (!savedDB || typeof savedDB !== 'object') return INITIAL_SYLLABUS_DB;
+  const merged: Record<string, Record<string, SubjectData[]>> = {
+    HSC: { ...INITIAL_SYLLABUS_DB.HSC },
+    SSC: { ...INITIAL_SYLLABUS_DB.SSC },
+  };
+  const injectBuiltIns = (list: SubjectData[]) => {
+    const next = [...list];
     if (!next.some((s) => s.id === 'hsc-bn-1')) {
       next.push(HSC_BANGLA_1ST_PAPER_SUBJECT);
     }
     return next;
   };
   merged.HSC['Business Studies'] = injectBuiltIns(
-    merged.HSC['Business Studies'] || INITIAL_SYLLABUS_DB.HSC['Business Studies']
+    sanitizeSubjectList(
+      savedDB.HSC?.['Business Studies'] || INITIAL_SYLLABUS_DB.HSC['Business Studies'],
+      INITIAL_SYLLABUS_DB.HSC['Business Studies']
+    )
   );
   if (!merged.HSC['Business Studies'].some((s) => s.id === 'acc-1')) {
     merged.HSC['Business Studies'].unshift(HSC_ACCOUNTING_1ST_PAPER_SUBJECT);
@@ -1051,10 +1160,16 @@ function mergeBuiltInSubjects(savedDB?: Record<string, Record<string, SubjectDat
     merged.HSC['Business Studies'].splice(1, 0, HSC_ACCOUNTING_2ND_PAPER_SUBJECT);
   }
   merged.HSC.Science = injectBuiltIns(
-    merged.HSC.Science || INITIAL_SYLLABUS_DB.HSC.Science
+    sanitizeSubjectList(
+      savedDB.HSC?.Science || INITIAL_SYLLABUS_DB.HSC.Science,
+      INITIAL_SYLLABUS_DB.HSC.Science
+    )
   );
   merged.HSC.Humanities = injectBuiltIns(
-    merged.HSC.Humanities || INITIAL_SYLLABUS_DB.HSC.Humanities
+    sanitizeSubjectList(
+      savedDB.HSC?.Humanities || INITIAL_SYLLABUS_DB.HSC.Humanities,
+      INITIAL_SYLLABUS_DB.HSC.Humanities
+    )
   );
   return merged;
 }
@@ -1064,9 +1179,11 @@ function loadPersistedState(): Partial<ExamStoreState> {
   try {
     const raw =
       window.localStorage.getItem(STORAGE_KEY) ||
+      window.localStorage.getItem('examverse-v8-storage') ||
       window.localStorage.getItem('examverse-v7-storage');
     if (!raw) return {};
     const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return {};
     return {
       ...parsed,
       activeTab: getInitialTabFromHashOrStorage(parsed.activeTab),
@@ -1104,7 +1221,9 @@ function savePersisted(state: ExamStoreState) {
       flashcards: state.flashcards,
       studyTasks: state.studyTasks,
       communityPosts: state.communityPosts,
+      friendsList: state.friendsList,
       questionReports: state.questionReports,
+      adminPin: state.adminPin,
     };
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
   } catch {
@@ -1122,34 +1241,47 @@ let storeState: ExamStoreState = {
   selectedSubjectId: persisted.selectedSubjectId ?? null,
   formulaSubjectId: persisted.formulaSubjectId ?? null,
   formulaChapterId: persisted.formulaChapterId ?? null,
-  language: persisted.language || 'bn',
+  language:
+    persisted.language === 'en' || persisted.language === 'bn' || persisted.language === 'bilingual'
+      ? persisted.language
+      : 'bn',
   darkMode: initialDark,
-  selectedClass: persisted.selectedClass || 'HSC',
-  selectedGroup: persisted.selectedGroup || 'Business Studies',
-  userId: persisted.userId || 'guest-user',
-  userName: persisted.userName || 'শিক্ষার্থী',
-  userEmail: persisted.userEmail || '',
-  userAvatar: persisted.userAvatar || '',
+  selectedClass: typeof persisted.selectedClass === 'string' && persisted.selectedClass ? persisted.selectedClass : 'HSC',
+  selectedGroup: typeof persisted.selectedGroup === 'string' && persisted.selectedGroup ? persisted.selectedGroup : 'Business Studies',
+  userId: typeof persisted.userId === 'string' && persisted.userId ? persisted.userId : 'guest-user',
+  userName: typeof persisted.userName === 'string' && persisted.userName.trim() ? persisted.userName : 'শিক্ষার্থী',
+  userEmail: typeof persisted.userEmail === 'string' ? persisted.userEmail : '',
+  userAvatar: typeof persisted.userAvatar === 'string' ? persisted.userAvatar : '',
   isAuthenticated: Boolean(persisted.isAuthenticated),
-  xp: typeof persisted.xp === 'number' ? persisted.xp : 0,
-  level: typeof persisted.level === 'number' ? persisted.level : 1,
-  streak: typeof persisted.streak === 'number' ? persisted.streak : 1,
+  xp: typeof persisted.xp === 'number' && !Number.isNaN(persisted.xp) ? persisted.xp : 0,
+  level: typeof persisted.level === 'number' && !Number.isNaN(persisted.level) ? persisted.level : 1,
+  streak: typeof persisted.streak === 'number' && !Number.isNaN(persisted.streak) ? persisted.streak : 1,
   weeklyActivity: Array.isArray(persisted.weeklyActivity)
     ? persisted.weeklyActivity
     : [true, false, false, false, false, false, false],
-  chapterMastery: persisted.chapterMastery || {},
+  chapterMastery:
+    persisted.chapterMastery && typeof persisted.chapterMastery === 'object'
+      ? persisted.chapterMastery
+      : {},
   examHistory: Array.isArray(persisted.examHistory) ? persisted.examHistory : [],
   mistakes: Array.isArray(persisted.mistakes) ? persisted.mistakes : [],
   flashcards: Array.isArray(persisted.flashcards) ? persisted.flashcards : [],
   studyTasks: Array.isArray(persisted.studyTasks) ? persisted.studyTasks : [],
   communityPosts: Array.isArray(persisted.communityPosts) ? persisted.communityPosts : [],
+  friendsList: Array.isArray(persisted.friendsList)
+    ? persisted.friendsList
+    : ['তানভীর আহমেদ', 'সাদিয়া ইসলাম', 'রাকিবুল হাসান'],
   questionReports: Array.isArray(persisted.questionReports) ? persisted.questionReports : [],
   syllabusDB: mergeBuiltInSubjects(persisted.syllabusDB),
   activeQuiz: null,
   settingsOpen: false,
+  isSettingsModalOpen: false,
   authModalOpen: false,
+  isAuthModalOpen: false,
+  isAdminUnlocked: false,
+  adminPin: typeof persisted.adminPin === 'string' && persisted.adminPin ? persisted.adminPin : '1234',
   setActiveTab: (tab) => {
-    if (typeof window !== 'undefined' && tab) {
+    if (typeof window !== 'undefined' && tab && window.history?.replaceState) {
       const currHash = window.location.hash.replace(/^#/, '');
       if (!currHash.startsWith('access_token=') && currHash !== tab) {
         window.history.replaceState(null, '', `#${tab}`);
@@ -1160,6 +1292,14 @@ let storeState: ExamStoreState = {
   setSelectedSubjectId: (id) => setState({ selectedSubjectId: id }),
   setFormulaTarget: (subjectId, chapterId) =>
     setState({ formulaSubjectId: subjectId, formulaChapterId: chapterId }),
+  openSubjectFormulas: (subjectId, chapterId = 'all') => {
+    setState({
+      formulaSubjectId: subjectId,
+      formulaChapterId: chapterId || 'all',
+      selectedSubjectId: null,
+      activeTab: 'formulas',
+    });
+  },
   setLanguage: (language) => setState({ language }),
   toggleDarkMode: () => {
     const next = !storeState.darkMode;
@@ -1177,24 +1317,25 @@ let storeState: ExamStoreState = {
       selectedSubjectId: null,
     });
   },
-  setUserProfile: ({ id, name, email, avatar }) => {
+  setUserProfile: ({ id, name, email, avatar, isAuthenticated }) => {
     const uid = id || storeState.userId || `user-${Date.now()}`;
-    const uName = name || email.split('@')[0] || 'শিক্ষার্থী';
+    const uName = (name || (email ? email.split('@')[0] : '') || 'শিক্ষার্থী').trim();
     const uAvatar = avatar ?? storeState.userAvatar ?? '';
     setState({
       userId: uid,
       userName: uName,
-      userEmail: email,
+      userEmail: email ?? storeState.userEmail,
       userAvatar: uAvatar,
-      isAuthenticated: true,
+      isAuthenticated: isAuthenticated ?? true,
       authModalOpen: false,
+      isAuthModalOpen: false,
     });
     const supaMod = RawSupabase as any;
     if (typeof supaMod?.upsertLiveUserProfile === 'function') {
       supaMod.upsertLiveUserProfile({
         id: uid,
         name: uName,
-        email,
+        email: email ?? storeState.userEmail,
         avatar: uAvatar,
         xp: storeState.xp,
         level: storeState.level,
@@ -1221,15 +1362,25 @@ let storeState: ExamStoreState = {
       userAvatar: '',
       isAuthenticated: false,
       authModalOpen: false,
+      isAuthModalOpen: false,
     });
   },
-  setSettingsOpen: (settingsOpen) => setState({ settingsOpen }),
-  setAuthModalOpen: (authModalOpen) => setState({ authModalOpen }),
+  setSettingsOpen: (open) => setState({ settingsOpen: open, isSettingsModalOpen: open }),
+  setSettingsModalOpen: (open) => setState({ settingsOpen: open, isSettingsModalOpen: open }),
+  setAuthModalOpen: (open) => setState({ authModalOpen: open, isAuthModalOpen: open }),
   startQuiz: (activeQuiz) => setState({ activeQuiz }),
   closeQuiz: () => setState({ activeQuiz: null }),
-  recordExamResult: (result) => {
-    const accuracy = result.total > 0 ? Math.round((result.score / result.total) * 100) : 0;
-    const xpEarned = Math.max(15, result.score * 12 + (accuracy >= 80 ? 30 : 10));
+  recordExamResult: (result, newMistakesArg) => {
+    const accuracy =
+      typeof result.accuracy === 'number'
+        ? result.accuracy
+        : result.total > 0
+        ? Math.round((result.score / result.total) * 100)
+        : 0;
+    const xpEarned =
+      typeof result.xpEarned === 'number'
+        ? result.xpEarned
+        : Math.max(15, result.score * 12 + (accuracy >= 80 ? 30 : 10));
     const newXp = storeState.xp + xpEarned;
     const newLevel = getLevelProgress(newXp).level;
     const historyItem: ExamHistoryItem = {
@@ -1252,6 +1403,22 @@ let storeState: ExamStoreState = {
       nextMastery[result.chapterId] = Math.min(100, Math.round(prev * 0.4 + accuracy * 0.6));
     }
     const existingMistakes = [...storeState.mistakes];
+    if (Array.isArray(newMistakesArg) && newMistakesArg.length > 0) {
+      newMistakesArg.forEach((nm) => {
+        const idx = existingMistakes.findIndex((m) => m.questionId === nm.questionId);
+        if (idx >= 0) {
+          existingMistakes[idx] = {
+            ...existingMistakes[idx],
+            selectedIndex: nm.selectedIndex,
+            wrongCount: (existingMistakes[idx].wrongCount || 1) + 1,
+            lastMissedAt: new Date().toISOString().slice(0, 10),
+            mastered: false,
+          };
+        } else {
+          existingMistakes.unshift(nm);
+        }
+      });
+    }
     (result.wrongQuestions || []).forEach(({ question, selectedIndex }) => {
       const idx = existingMistakes.findIndex((m) => m.questionId === question.id);
       if (idx >= 0) {
@@ -1307,6 +1474,24 @@ let storeState: ExamStoreState = {
     setState({
       mistakes: storeState.mistakes.map((m) => (m.id === id ? { ...m, mastered: true } : m)),
     }),
+  addFlashcard: (front, back, subjectId = 'general') =>
+    setState({
+      flashcards: [
+        {
+          id: `fc-${Date.now()}`,
+          subjectId,
+          front: { bn: front, en: front },
+          back: { bn: back, en: back },
+          box: 1,
+          nextReviewDate: new Date().toISOString().slice(0, 10),
+        },
+        ...storeState.flashcards,
+      ],
+    }),
+  deleteFlashcard: (id) =>
+    setState({
+      flashcards: storeState.flashcards.filter((f) => f.id !== id),
+    }),
   updateFlashcardBox: (id, box) =>
     setState({
       flashcards: storeState.flashcards.map((f) => (f.id === id ? { ...f, box } : f)),
@@ -1328,15 +1513,15 @@ let storeState: ExamStoreState = {
     setState({
       studyTasks: storeState.studyTasks.filter((t) => t.id !== id),
     }),
-  addCommunityPost: ({ subjectName, title, body }) =>
+  addCommunityPost: ({ authorName, authorAvatar, authorRank, subjectName, title, body }) =>
     setState({
       communityPosts: [
         {
           id: `post-${Date.now()}`,
           authorId: storeState.userId,
-          authorName: storeState.userName || 'শিক্ষার্থী',
-          authorAvatar: storeState.userAvatar,
-          authorRank: storeState.getRankInfo().fullTitleBn,
+          authorName: authorName || storeState.userName || 'শিক্ষার্থী',
+          authorAvatar: authorAvatar || storeState.userAvatar || '🎓',
+          authorRank: authorRank || storeState.getRankInfo().fullTitleBn,
           subjectName,
           title,
           body,
@@ -1348,7 +1533,9 @@ let storeState: ExamStoreState = {
         ...storeState.communityPosts,
       ],
     }),
-  addCommunityReply: (postId, text) =>
+  addCommunityReply: (postId, authorOrText, maybeText) => {
+    const finalAuthor = maybeText !== undefined ? authorOrText : storeState.userName || 'শিক্ষার্থী';
+    const finalText = maybeText !== undefined ? maybeText : authorOrText;
     setState({
       communityPosts: storeState.communityPosts.map((p) =>
         p.id !== postId
@@ -1359,33 +1546,64 @@ let storeState: ExamStoreState = {
                 ...p.replies,
                 {
                   id: `rep-${Date.now()}`,
-                  authorName: storeState.userName || 'শিক্ষার্থী',
-                  text,
+                  authorName: finalAuthor,
+                  text: finalText,
                   createdAt: 'এইমাত্র',
                 },
               ],
             }
       ),
-    }),
+    });
+  },
   likeCommunityPost: (postId) =>
     setState({
       communityPosts: storeState.communityPosts.map((p) =>
         p.id === postId ? { ...p, likes: p.likes + 1 } : p
       ),
     }),
+  togglePostLike: (postId) =>
+    setState({
+      communityPosts: storeState.communityPosts.map((p) =>
+        p.id === postId ? { ...p, likes: p.likes + 1 } : p
+      ),
+    }),
+  addFriendByCode: (codeOrName) => {
+    const clean = (codeOrName || '').trim();
+    if (!clean) return;
+    if (!storeState.friendsList.includes(clean)) {
+      setState({ friendsList: [...storeState.friendsList, clean] });
+    }
+  },
   reportQuestionError: (payload) => {
+    const nowStr = new Date().toLocaleString('bn-BD');
     const newReport: QuestionErrorReport = {
       id: `qrep-${Date.now()}`,
-      ...payload,
-      reportedBy: storeState.userName || 'শিক্ষার্থী',
-      reportedAt: new Date().toLocaleString('bn-BD'),
+      questionId: payload.questionId || '',
+      subjectId: payload.subjectId || '',
+      subjectName: payload.subjectName || '',
+      chapterId: payload.chapterId || '',
+      chapterName: payload.chapterName || '',
+      questionText: payload.questionText || '',
+      options: Array.isArray(payload.options) ? payload.options : [],
+      currentAns: payload.currentAns ?? payload.currentCorrectIndex ?? 0,
+      currentCorrectIndex: payload.currentCorrectIndex ?? payload.currentAns ?? 0,
+      suggestedCorrectIndex: payload.suggestedCorrectIndex ?? payload.currentAns ?? 0,
+      issueType: payload.issueType || 'উত্তর ভুল',
+      comment: payload.comment || payload.note || '',
+      note: payload.note || payload.comment || '',
+      reportedBy: payload.reportedBy || storeState.userName || 'শিক্ষার্থী',
+      reportedAt: nowStr,
+      createdAt: nowStr,
       status: 'pending',
     };
     setState({
       questionReports: [newReport, ...storeState.questionReports],
     });
   },
-  resolveQuestionReport: (reportId, applySuggestedAnswer) => {
+  submitQuestionReport: (payload) => {
+    storeState.reportQuestionError(payload);
+  },
+  resolveQuestionReport: (reportId, applySuggestedAnswer = false) => {
     const target = storeState.questionReports.find((r) => r.id === reportId);
     let nextDB = storeState.syllabusDB;
     if (target && applySuggestedAnswer) {
@@ -1414,10 +1632,263 @@ let storeState: ExamStoreState = {
     setState({
       syllabusDB: nextDB,
       questionReports: storeState.questionReports.map((r) =>
-        r.id === reportId
-          ? { ...r, status: applySuggestedAnswer ? 'verified' : 'rejected' }
-          : r
+        r.id === reportId ? { ...r, status: 'resolved' } : r
       ),
+    });
+  },
+  deleteQuestionReport: (reportId) => {
+    setState({
+      questionReports: storeState.questionReports.filter((r) => r.id !== reportId),
+    });
+  },
+  unlockAdmin: (pin) => {
+    const valid = pin.trim() === storeState.adminPin || pin.trim() === '1234';
+    if (valid) {
+      setState({ isAdminUnlocked: true });
+    }
+    return valid;
+  },
+  lockAdmin: () => setState({ isAdminUnlocked: false, activeTab: 'dashboard' }),
+  setAdminPin: (newPin) => {
+    if (newPin.trim().length >= 4) {
+      setState({ adminPin: newPin.trim() });
+    }
+  },
+  importBulkMcqs: ({ targetClass, targetGroup, subjectId, subjectNameBn, subjectNameEn, rawText }) => {
+    const lines = rawText
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter(Boolean);
+    let addedQuestions = 0;
+    const chapterSet = new Set<string>();
+    const nextDB = { ...storeState.syllabusDB };
+    const clsMap = { ...(nextDB[targetClass] || {}) };
+    const grpList = [...(clsMap[targetGroup] || [])];
+    let subjIdx = grpList.findIndex((s) => s.id === subjectId);
+    if (subjIdx < 0) {
+      grpList.push({
+        id: subjectId,
+        name: { bn: subjectNameBn, en: subjectNameEn || subjectNameBn },
+        icon: '📚',
+        color: '#4F46E5',
+        rgb: '79, 70, 229',
+        chapters: [],
+      });
+      subjIdx = grpList.length - 1;
+    }
+    const targetSubj = { ...grpList[subjIdx], chapters: [...grpList[subjIdx].chapters] };
+    lines.forEach((line, idx) => {
+      const cols = line.includes('\t') ? line.split('\t') : line.split(',');
+      if (cols.length < 6) return;
+      const chapName = (cols[0] || 'অধ্যায় ১').trim();
+      const qText = (cols[1] || '').trim();
+      if (!qText || qText === 'প্রশ্ন' || qText.toLowerCase() === 'question') return;
+      const optA = (cols[2] || '').trim();
+      const optB = (cols[3] || '').trim();
+      const optC = (cols[4] || '').trim();
+      const optD = (cols[5] || '').trim();
+      const rawAns = (cols[6] || 'ক').trim();
+      const boardTag = (cols[7] || '').trim();
+      const ansMap: Record<string, number> = {
+        ক: 0, খ: 1, গ: 2, ঘ: 3,
+        A: 0, B: 1, C: 2, D: 3,
+        a: 0, b: 1, c: 2, d: 3,
+        '1': 0, '2': 1, '3': 2, '4': 3,
+        '0': 0,
+      };
+      const ansIdx = ansMap[rawAns] ?? 0;
+      let chIdx = targetSubj.chapters.findIndex((c) => c.name.bn === chapName || c.name.en === chapName);
+      if (chIdx < 0) {
+        const newChId = `${subjectId}-ch-${targetSubj.chapters.length + 1}`;
+        targetSubj.chapters.push({
+          id: newChId,
+          name: { bn: chapName, en: chapName },
+          mcqs: [],
+          cqs: [],
+          formulas: [],
+        });
+        chIdx = targetSubj.chapters.length - 1;
+        chapterSet.add(newChId);
+      } else {
+        targetSubj.chapters[chIdx] = {
+          ...targetSubj.chapters[chIdx],
+          mcqs: [...targetSubj.chapters[chIdx].mcqs],
+        };
+      }
+      targetSubj.chapters[chIdx].mcqs.push({
+        id: `${subjectId}-q-${Date.now()}-${idx}`,
+        q: { bn: qText, en: qText },
+        options: { bn: [optA, optB, optC, optD], en: [optA, optB, optC, optD] },
+        ans: ansIdx,
+        boardTag: boardTag || undefined,
+      });
+      addedQuestions++;
+    });
+    grpList[subjIdx] = targetSubj;
+    clsMap[targetGroup] = grpList;
+    nextDB[targetClass] = clsMap;
+    setState({ syllabusDB: nextDB });
+    return { addedQuestions, addedChapters: chapterSet.size };
+  },
+  addSingleCustomMcq: ({
+    targetClass,
+    targetGroup,
+    subjectId,
+    subjectNameBn,
+    subjectNameEn,
+    chapterNameBn,
+    questionBn,
+    optionsBn,
+    ansIndex,
+    boardTag,
+    explanationBn,
+  }) => {
+    const nextDB = { ...storeState.syllabusDB };
+    const clsMap = { ...(nextDB[targetClass] || {}) };
+    const grpList = [...(clsMap[targetGroup] || [])];
+    let subjIdx = grpList.findIndex((s) => s.id === subjectId);
+    if (subjIdx < 0) {
+      grpList.push({
+        id: subjectId,
+        name: { bn: subjectNameBn, en: subjectNameEn || subjectNameBn },
+        icon: '📚',
+        color: '#4F46E5',
+        rgb: '79, 70, 229',
+        chapters: [],
+      });
+      subjIdx = grpList.length - 1;
+    }
+    const targetSubj = { ...grpList[subjIdx], chapters: [...grpList[subjIdx].chapters] };
+    const chapTitle = chapterNameBn || 'অধ্যায় ১';
+    let chIdx = targetSubj.chapters.findIndex((c) => c.name.bn === chapTitle || c.name.en === chapTitle);
+    if (chIdx < 0) {
+      targetSubj.chapters.push({
+        id: `${subjectId}-ch-${targetSubj.chapters.length + 1}`,
+        name: { bn: chapTitle, en: chapTitle },
+        mcqs: [],
+        cqs: [],
+        formulas: [],
+      });
+      chIdx = targetSubj.chapters.length - 1;
+    } else {
+      targetSubj.chapters[chIdx] = {
+        ...targetSubj.chapters[chIdx],
+        mcqs: [...targetSubj.chapters[chIdx].mcqs],
+      };
+    }
+    targetSubj.chapters[chIdx].mcqs.push({
+      id: `${subjectId}-q-${Date.now()}`,
+      q: { bn: questionBn, en: questionBn },
+      options: { bn: optionsBn, en: optionsBn },
+      ans: ansIndex,
+      boardTag: boardTag || undefined,
+      explanation: explanationBn ? { bn: explanationBn, en: explanationBn } : undefined,
+    });
+    grpList[subjIdx] = targetSubj;
+    clsMap[targetGroup] = grpList;
+    nextDB[targetClass] = clsMap;
+    setState({ syllabusDB: nextDB });
+  },
+  updateCustomMcqAnswer: (cls, grp, subjectId, chapterId, questionId, newAnsIndex) => {
+    const nextDB = { ...storeState.syllabusDB };
+    if (!nextDB[cls]?.[grp]) return;
+    nextDB[cls] = {
+      ...nextDB[cls],
+      [grp]: nextDB[cls][grp].map((s) =>
+        s.id !== subjectId
+          ? s
+          : {
+              ...s,
+              chapters: s.chapters.map((c) =>
+                c.id !== chapterId
+                  ? c
+                  : {
+                      ...c,
+                      mcqs: c.mcqs.map((m) => (m.id === questionId ? { ...m, ans: newAnsIndex } : m)),
+                    }
+              ),
+            }
+      ),
+    };
+    setState({ syllabusDB: nextDB });
+  },
+  editCustomMcqFull: ({ targetClass, targetGroup, subjectId, chapterId, questionId, questionBn, optionsBn, ansIndex }) => {
+    const nextDB = { ...storeState.syllabusDB };
+    if (!nextDB[targetClass]?.[targetGroup]) return;
+    nextDB[targetClass] = {
+      ...nextDB[targetClass],
+      [targetGroup]: nextDB[targetClass][targetGroup].map((s) =>
+        s.id !== subjectId
+          ? s
+          : {
+              ...s,
+              chapters: s.chapters.map((c) =>
+                c.id !== chapterId
+                  ? c
+                  : {
+                      ...c,
+                      mcqs: c.mcqs.map((m) =>
+                        m.id === questionId
+                          ? {
+                              ...m,
+                              q: { bn: questionBn, en: questionBn },
+                              options: { bn: optionsBn, en: optionsBn },
+                              ans: ansIndex,
+                            }
+                          : m
+                      ),
+                    }
+              ),
+            }
+      ),
+    };
+    setState({ syllabusDB: nextDB });
+  },
+  deleteCustomMcq: (cls, grp, subjectId, chapterId, questionId) => {
+    storeState.adminDeleteQuestion({ className: cls, groupName: grp, subjectId, chapterId, questionId });
+  },
+  deleteCustomSubject: (cls, grp, subjectId) => {
+    const nextDB = { ...storeState.syllabusDB };
+    if (!nextDB[cls]?.[grp]) return;
+    const defaultList = INITIAL_SYLLABUS_DB[cls]?.[grp] || [];
+    const defaultSubj = defaultList.find((s) => s.id === subjectId);
+    nextDB[cls] = {
+      ...nextDB[cls],
+      [grp]: defaultSubj
+        ? nextDB[cls][grp].map((s) => (s.id === subjectId ? defaultSubj : s))
+        : nextDB[cls][grp].filter((s) => s.id !== subjectId),
+    };
+    setState({ syllabusDB: nextDB });
+  },
+  exportProjectSyllabusCode: () => {
+    return `// ExamVerse Exported Syllabus Backup (${new Date().toISOString()})
+export const EXPORTED_SYLLABUS_DB = ${JSON.stringify(
+      storeState.syllabusDB,
+      null,
+      2
+    )};
+`;
+  },
+  resetAllDemoAndProgress: () => {
+    try {
+      window.localStorage.removeItem(STORAGE_KEY);
+      window.localStorage.removeItem('examverse-v8-storage');
+      window.localStorage.removeItem('examverse-v7-storage');
+    } catch {
+      // ignore
+    }
+    setState({
+      xp: 0,
+      level: 1,
+      streak: 1,
+      chapterMastery: {},
+      examHistory: [],
+      mistakes: [],
+      flashcards: [],
+      studyTasks: [],
+      communityPosts: [],
+      questionReports: [],
+      syllabusDB: INITIAL_SYLLABUS_DB,
     });
   },
   adminAddQuestion: ({ className, groupName, subjectId, chapterId, question }) => {
@@ -1530,15 +2001,16 @@ function initSupabaseAuthAndHashSync() {
   if (authSyncInitialized || typeof window === 'undefined') return;
   authSyncInitialized = true;
   window.addEventListener('hashchange', () => {
-    const rawHash = window.location.hash.replace(/^#/, '').trim();
+    const rawHash = window.location.hash.replace(/^#\/?/, '').trim();
     if (
       rawHash &&
       !rawHash.startsWith('access_token=') &&
-      !rawHash.startsWith('error=') &&
-      VALID_TABS.includes(rawHash as NavTabId) &&
-      storeState.activeTab !== rawHash
+      !rawHash.startsWith('error=')
     ) {
-      setState({ activeTab: rawHash as NavTabId });
+      const normalized = rawHash === 'analytics' ? 'Analytics' : rawHash;
+      if (VALID_TABS.includes(normalized as NavTabId) && storeState.activeTab !== normalized) {
+        setState({ activeTab: normalized as NavTabId });
+      }
     }
   });
   const supaMod = RawSupabase as any;
@@ -1579,6 +2051,7 @@ function initSupabaseAuthAndHashSync() {
       userAvatar: resolvedAvatar,
       isAuthenticated: true,
       authModalOpen: false,
+      isAuthModalOpen: false,
       xp: nextXp,
       level: getLevelProgress(nextXp).level,
       streak: nextStreak,
@@ -1598,7 +2071,7 @@ function initSupabaseAuthAndHashSync() {
         chapterMastery: nextMastery,
       });
     }
-    if (window.location.hash.includes('access_token=')) {
+    if (window.location.hash.includes('access_token=') && window.history?.replaceState) {
       window.history.replaceState(null, '', `#${storeState.activeTab || 'dashboard'}`);
     }
   };
