@@ -9,174 +9,332 @@ import {
   trText,
   useExamStore,
 } from '../store/useExamStore';
-import { SUPABASE_ANON_KEY, SUPABASE_URL, supabase } from '../lib/supabase';
-const isSupabaseConfigured = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
-import { MCQ, SubjectData } from '../types';
+import { supabase } from '../lib/supabase';
+import { MCQQuestion, SubjectData } from '../types';
 import { getComplexMathOrRuleExplanation } from './ModalsAndQuiz';
 
 function MetallicBadgeSvg({ color, label }: { color: string; label: string }) {
   return (
     <svg width="36" height="36" viewBox="0 0 40 40" fill="none">
-      <polygon points="20,2 35,10 35,28 20,38 5,28 5,10" fill={color} fillOpacity="0.16" stroke={color} strokeWidth="2.4" />
+      <polygon
+        points="20,2 35,10 35,28 20,38 5,28 5,10"
+        fill={color}
+        fillOpacity="0.16"
+        stroke={color}
+        strokeWidth="2.4"
+      />
       <polygon points="20,6 31,12 31,26 20,34 9,26 9,12" fill={color} />
-      <text x="20" y="24" textAnchor="middle" fill="#FFFFFF" fontSize="11" fontWeight="800" fontFamily="Plus Jakarta Sans, sans-serif">
+      <text
+        x="20"
+        y="24"
+        textAnchor="middle"
+        fill="#FFFFFF"
+        fontSize="11"
+        fontWeight="800"
+        fontFamily="Plus Jakarta Sans, sans-serif"
+      >
         {label}
       </text>
     </svg>
   );
 }
 
-const ELITE_GROUP_BATTLE_BANK: Record<string, MCQ[]> = {
+const ELITE_GROUP_BATTLE_BANK: Record<string, MCQQuestion[]> = {
   science: [
     {
       id: 'eb-sci-1',
-      q: { bn: 'একটি প্রাসের প্রক্ষেপণ কোণ কত হলে আনুভূমিক পাল্লা (R) এবং সর্বাধিক উচ্চতা (H) সমান হবে?', en: 'At what projection angle is horizontal range (R) equal to maximum height (H)?' },
-      options: { bn: ['45°', '60°', '75.96° (tan⁻¹4)', '30°'], en: ['45°', '60°', '75.96° (tan⁻¹4)', '30°'] },
+      q: {
+        bn: 'একটি প্রাসের প্রক্ষেপণ কোণ কত হলে আনুভূমিক পাল্লা (R) এবং সর্বাধিক উচ্চতা (H) সমান হবে?',
+        en: 'At what projection angle is horizontal range (R) equal to maximum height (H)?',
+      },
+      options: {
+        bn: ['45°', '60°', '75.96° (tan⁻¹4)', '30°'],
+        en: ['45°', '60°', '75.96° (tan⁻¹4)', '30°'],
+      },
       ans: 2,
-      board: "ঢা. বো. '২৩ • BUET",
-      explanation: { bn: 'আমরা জানি, R = 4H cotθ। যেহেতু R = H, তাই 4 cotθ = 1 ⇒ tanθ = 4 ⇒ θ = tan⁻¹(4) = 75.96°।', en: 'R = H => tanθ = 4 => θ = 75.96°.' },
+      boardTag: "ঢা. বো. '২৩ • BUET",
+      explanation: {
+        bn: 'আমরা জানি, R = 4H cotθ। যেহেতু R = H, তাই 4 cotθ = 1 ⇒ tanθ = 4 ⇒ θ = tan⁻¹(4) = 75.96°।',
+        en: 'R = H => tanθ = 4 => θ = 75.96°.',
+      },
     },
     {
       id: 'eb-sci-2',
       q: { bn: 'পৃথিবীর মুক্তিবেগ (Escape Velocity) কত?', en: 'What is the escape velocity of Earth?' },
-      options: { bn: ['9.8 km/s', '11.2 km/s', '7.9 km/s', '15.4 km/s'], en: ['9.8 km/s', '11.2 km/s', '7.9 km/s', '15.4 km/s'] },
+      options: {
+        bn: ['9.8 km/s', '11.2 km/s', '7.9 km/s', '15.4 km/s'],
+        en: ['9.8 km/s', '11.2 km/s', '7.9 km/s', '15.4 km/s'],
+      },
       ans: 1,
-      board: "রা. বো. '২৩ • DU",
-      explanation: { bn: 'সূত্র: v_e = √(2gR) = √(2 × 9.8 × 6.4×10⁶) ≈ 11.2 km/s।', en: 'v_e = sqrt(2gR) = 11.2 km/s.' },
+      boardTag: "রা. বো. '২৩ • DU",
+      explanation: {
+        bn: 'সূত্র: v_e = √(2gR) = √(2 × 9.8 × 6.4×10⁶) ≈ 11.2 km/s।',
+        en: 'v_e = sqrt(2gR) = 11.2 km/s.',
+      },
     },
     {
       id: 'eb-sci-3',
       q: { bn: '0.01 M HCl দ্রবণের pH মান কত?', en: 'What is the pH of a 0.01 M HCl solution?' },
       options: { bn: ['1', '2', '3', '12'], en: ['1', '2', '3', '12'] },
       ans: 1,
-      board: "চ. বো. '২৩ • Medical",
-      explanation: { bn: 'pH = -log[H⁺] = -log(0.01) = -log(10⁻²) = 2।', en: 'pH = -log(10^-2) = 2.' },
+      boardTag: "চ. বো. '২৩ • Medical",
+      explanation: {
+        bn: 'pH = -log[H⁺] = -log(0.01) = -log(10⁻²) = 2।',
+        en: 'pH = -log(10^-2) = 2.',
+      },
     },
     {
       id: 'eb-sci-4',
       q: { bn: '∫ (1 / x) dx এর সমাকলন মান নিচের কোনটি?', en: 'What is the integral of ∫ (1 / x) dx?' },
-      options: { bn: ['ln|x| + c', '-1/x² + c', 'x ln(x) + c', 'eˣ + c'], en: ['ln|x| + c', '-1/x² + c', 'x ln(x) + c', 'eˣ + c'] },
+      options: {
+        bn: ['ln|x| + c', '-1/x² + c', 'x ln(x) + c', 'eˣ + c'],
+        en: ['ln|x| + c', '-1/x² + c', 'x ln(x) + c', 'eˣ + c'],
+      },
       ans: 0,
-      board: "য. বো. '২২",
-      explanation: { bn: 'ক্যালকুলাসের মৌলিক সূত্রানুসারে d/dx (ln|x|) = 1/x, তাই ∫(1/x)dx = ln|x| + c।', en: '∫(1/x)dx = ln|x| + c.' },
+      boardTag: "য. বো. '২২",
+      explanation: {
+        bn: 'ক্যালকুলাসের মৌলিক সূত্রানুসারে d/dx (ln|x|) = 1/x, তাই ∫(1/x)dx = ln|x| + c।',
+        en: '∫(1/x)dx = ln|x| + c.',
+      },
     },
     {
       id: 'eb-sci-5',
-      q: { bn: 'মাইটোকন্ড্রিয়াকে কোষের ‘পাওয়ার হাউস’ (Powerhouse) বলার প্রধান কারণ কী?', en: 'Why is Mitochondria called the powerhouse of the cell?' },
-      options: { bn: ['প্রোটিন সংশ্লেষণ করে', 'ক্রেবস চক্র ও ইলেকট্রন ট্রান্সপোর্টের মাধ্যমে ATP উৎপাদন করে', 'বংশগতির বৈশিষ্ট্য বহন করে', 'কোষ বিভাজন নিয়ন্ত্রণ করে'], en: ['Synthesizes protein', 'Produces ATP via Krebs cycle & ETC', 'Carries genetic traits', 'Controls cell division'] },
+      q: {
+        bn: 'মাইটোকন্ড্রিয়াকে কোষের ‘পাওয়ার হাউস’ (Powerhouse) বলার প্রধান কারণ কী?',
+        en: 'Why is Mitochondria called the powerhouse of the cell?',
+      },
+      options: {
+        bn: [
+          'প্রোটিন সংশ্লেষণ করে',
+          'ক্রেবস চক্র ও ইলেকট্রন ট্রান্সপোর্টের মাধ্যমে ATP উৎপাদন করে',
+          'বংশগতির বৈশিষ্ট্য বহন করে',
+          'কোষ বিভাজন নিয়ন্ত্রণ করে',
+        ],
+        en: ['Synthesizes protein', 'Produces ATP via Krebs cycle & ETC', 'Carries genetic traits', 'Controls cell division'],
+      },
       ans: 1,
-      board: "সকল বোর্ড '২২ • Medical",
-      explanation: { bn: 'মাইটোকন্ড্রিয়ায় সবাত শ্বসনের ক্রেবস চক্র ও ETC সম্পন্ন হয়ে দেহের প্রয়োজনীয় শক্তির প্রধান উৎস ATP উৎপন্ন হয়।', en: 'Produces ATP through cellular respiration.' },
+      boardTag: "সকল বোর্ড '২২ • Medical",
+      explanation: {
+        bn: 'মাইটোকন্ড্রিয়ায় সবাত শ্বসনের ক্রেবস চক্র ও ETC সম্পন্ন হয়ে দেহের প্রয়োজনীয় শক্তির প্রধান উৎস ATP উৎপন্ন হয়।',
+        en: 'Produces ATP through cellular respiration.',
+      },
     },
   ],
   business: [
     {
       id: 'eb-bus-1',
-      q: { bn: 'প্রারম্ভিক মজুদ ৪০,০০০ টাকা, ক্রয় ২,০০,০০০ টাকা, ক্রয় পরিবহন ১০,০০০ টাকা এবং সমাপনী মজুদ ৫০,০০০ টাকা হলে বিক্রীত পণ্যের ব্যয় (COGS) কত?', en: 'Opening inventory 40,000, Purchase 2,00,000, Carriage inward 10,000, Closing inventory 50,000. What is COGS?' },
-      options: { bn: ['১,৯০,০০০ টাকা', '২,০০,০০০ টাকা', '২,৫০,০০০ টাকা', '১,৮০,০০০ টাকা'], en: ['1,90,000 Tk', '2,00,000 Tk', '2,50,000 Tk', '1,80,000 Tk'] },
+      q: {
+        bn: 'প্রারম্ভিক মজুদ ৪০,০০০ টাকা, ক্রয় ২,০০,০০০ টাকা, ক্রয় পরিবহন ১০,০০০ টাকা এবং সমাপনী মজুদ ৫০,০০০ টাকা হলে বিক্রীত পণ্যের ব্যয় (COGS) কত?',
+        en: 'Opening inventory 40,000, Purchase 2,00,000, Carriage inward 10,000, Closing inventory 50,000. What is COGS?',
+      },
+      options: {
+        bn: ['১,৯০,০০০ টাকা', '২,০০,০০০ টাকা', '২,৫০,০০০ টাকা', '১,৮০,০০০ টাকা'],
+        en: ['1,90,000 Tk', '2,00,000 Tk', '2,50,000 Tk', '1,80,000 Tk'],
+      },
       ans: 1,
-      board: "ঢা. বো. '২৩ • DU C-Unit",
-      explanation: { bn: 'বিক্রীত পণ্যের ব্যয় = প্রারম্ভিক মজুদ (৪০,০০০) + ক্রয় (২,০০,০০০) + ক্রয় পরিবহন (১০,০০০) - সমাপনী মজুদ (৫০,০০০) = ২,০০,০০০ টাকা।', en: 'COGS = 40,000 + 2,00,000 + 10,000 - 50,000 = 2,00,000 Tk.' },
+      boardTag: "ঢা. বো. '২৩ • DU C-Unit",
+      explanation: {
+        bn: 'বিক্রীত পণ্যের ব্যয় = প্রারম্ভিক মজুদ (৪০,০০০) + ক্রয় (২,০০,০০০) + ক্রয় পরিবহন (১০,০০০) - সমাপনী মজুদ (৫০,০০০) = ২,০০,০০০ টাকা।',
+        en: 'COGS = 40,000 + 2,00,000 + 10,000 - 50,000 = 2,00,000 Tk.',
+      },
     },
     {
       id: 'eb-bus-2',
-      q: { bn: 'একটি প্রতিষ্ঠানের চলতি সম্পদ ১,৫০,০০০ টাকা, মজুদ পণ্য ৩০,০০০ টাকা এবং চলতি দায় ৭৫,০০০ টাকা হলে তড়িৎ অনুপাত (Quick Ratio) কত?', en: 'Current Assets 1,50,000, Inventory 30,000, Current Liabilities 75,000. What is the Quick Ratio?' },
-      options: { bn: ['২ : ১', '১.৬ : ১', '১.২ : ১', '১ : ১'], en: ['2 : 1', '1.6 : 1', '1.2 : 1', '1 : 1'] },
+      q: {
+        bn: 'একটি প্রতিষ্ঠানের চলতি সম্পদ ১,৫০,০০০ টাকা, মজুদ পণ্য ৩০,০০০ টাকা এবং চলতি দায় ৭৫,০০০ টাকা হলে তড়িৎ অনুপাত (Quick Ratio) কত?',
+        en: 'Current Assets 1,50,000, Inventory 30,000, Current Liabilities 75,000. What is the Quick Ratio?',
+      },
+      options: {
+        bn: ['২ : ১', '১.৬ : ১', '১.২ : ১', '১ : ১'],
+        en: ['2 : 1', '1.6 : 1', '1.2 : 1', '1 : 1'],
+      },
       ans: 1,
-      board: "রা. বো. '২৩",
-      explanation: { bn: 'তড়িৎ সম্পদ = ১,৫০,০০০ - ৩০,০০০ = ১,২০,০০০ টাকা। তড়িৎ অনুপাত = ১,২০,০০০ ÷ ৭৫,০০০ = ১.৬ : ১।', en: 'Quick Ratio = (150,000 - 30,000) / 75,000 = 1.6 : 1.' },
+      boardTag: "রা. বো. '২৩",
+      explanation: {
+        bn: 'তড়িৎ সম্পদ = ১,৫০,০০০ - ৩০,০০০ = ১,২০,০০০ টাকা। তড়িৎ অনুপাত = ১,২০,০০০ ÷ ৭৫,০০০ = ১.৬ : ১।',
+        en: 'Quick Ratio = (150,000 - 30,000) / 75,000 = 1.6 : 1.',
+      },
     },
     {
       id: 'eb-bus-3',
-      q: { bn: 'বার্ষিক ১২% চক্রবৃদ্ধি সুদে ‘বিধি-৭২’ (Rule-72) অনুযায়ী কত বছরে বিনিয়োগকৃত অর্থ দ্বিগুণ হবে?', en: 'At 12% annual interest, in how many years will an investment double according to Rule-72?' },
-      options: { bn: ['৫ বছরে', '৬ বছরে', '৮ বছরে', '১২ বছরে'], en: ['5 years', '6 years', '8 years', '12 years'] },
+      q: {
+        bn: 'বার্ষিক ১২% চক্রবৃদ্ধি সুদে ‘বিধি-৭২’ (Rule-72) অনুযায়ী কত বছরে বিনিয়োগকৃত অর্থ দ্বিগুণ হবে?',
+        en: 'At 12% annual interest, in how many years will an investment double according to Rule-72?',
+      },
+      options: {
+        bn: ['৫ বছরে', '৬ বছরে', '৮ বছরে', '১২ বছরে'],
+        en: ['5 years', '6 years', '8 years', '12 years'],
+      },
       ans: 1,
-      board: "চ. বো. '২৩ • ফিন্যান্স",
-      explanation: { bn: 'বিধি-৭২ অনুযায়ী অর্থ দ্বিগুণ হওয়ার সময় n = ৭২ ÷ সুদের হার (i) = ৭২ ÷ ১২ = ৬ বছর।', en: 'n = 72 / 12 = 6 years.' },
+      boardTag: "চ. বো. '২৩ • ফিন্যান্স",
+      explanation: {
+        bn: 'বিধি-৭২ অনুযায়ী অর্থ দ্বিগুণ হওয়ার সময় n = ৭২ ÷ সুদের হার (i) = ৭২ ÷ ১২ = ৬ বছর।',
+        en: 'n = 72 / 12 = 6 years.',
+      },
     },
     {
       id: 'eb-bus-4',
-      q: { bn: 'আধুনিক ব্যবস্থাপনার জনক (Father of Modern Management) কে?', en: 'Who is the Father of Modern Management?' },
-      options: { bn: ['এফ. ডব্লিউ. টেইলর', 'হেনরি ফেয়ল (Henri Fayol)', 'এলটন মেয়ো', 'পিটার ড্রাকার'], en: ['F.W. Taylor', 'Henri Fayol', 'Elton Mayo', 'Peter Drucker'] },
+      q: {
+        bn: 'আধুনিক ব্যবস্থাপনার জনক (Father of Modern Management) কে?',
+        en: 'Who is the Father of Modern Management?',
+      },
+      options: {
+        bn: ['এফ. ডব্লিউ. টেইলর', 'হেনরি ফেয়ল (Henri Fayol)', 'এলটন মেয়ো', 'পিটার ড্রাকার'],
+        en: ['F.W. Taylor', 'Henri Fayol', 'Elton Mayo', 'Peter Drucker'],
+      },
       ans: 1,
-      board: "সকল বোর্ড '২২",
-      explanation: { bn: 'হেনরি ফেয়লকে আধুনিক ব্যবস্থাপনার জনক এবং এফ. ডব্লিউ. টেইলরকে বৈজ্ঞানিক ব্যবস্থাপনার জনক বলা হয়।', en: 'Henri Fayol is the Father of Modern Management.' },
+      boardTag: "সকল বোর্ড '২২",
+      explanation: {
+        bn: 'হেনরি ফেয়লকে আধুনিক ব্যবস্থাপনার জনক এবং এফ. ডব্লিউ. টেইলরকে বৈজ্ঞানিক ব্যবস্থাপনার জনক বলা হয়।',
+        en: 'Henri Fayol is the Father of Modern Management.',
+      },
     },
     {
       id: 'eb-bus-5',
-      q: { bn: 'নগদে যন্ত্রপাতি ক্রয় ৫০,০০০ টাকা — এর সঠিক জাবেদা দাখিলা কোনটি?', en: 'Purchased machinery for cash 50,000 Tk — which is the correct journal entry?' },
-      options: { bn: ['ক্রয় হিসাব ডেবিট, নগদান ক্রেডিট', 'যন্ত্রপাতি হিসাব ডেবিট, নগদান হিসাব ক্রেডিট', 'নগদান ডেবিট, যন্ত্রপাতি ক্রেডিট', 'যন্ত্রপাতি ডেবিট, প্রদেয় হিসাব ক্রেডিট'], en: ['Purchase Dr, Cash Cr', 'Machinery A/c Dr, Cash A/c Cr', 'Cash Dr, Machinery Cr', 'Machinery Dr, Accounts Payable Cr'] },
+      q: {
+        bn: 'নগদে যন্ত্রপাতি ক্রয় ৫০,০০০ টাকা — এর সঠিক জাবেদা দাখিলা কোনটি?',
+        en: 'Purchased machinery for cash 50,000 Tk — which is the correct journal entry?',
+      },
+      options: {
+        bn: [
+          'ক্রয় হিসাব ডেবিট, নগদান ক্রেডিট',
+          'যন্ত্রপাতি হিসাব ডেবিট, নগদান হিসাব ক্রেডিট',
+          'নগদান ডেবিট, যন্ত্রপাতি ক্রেডিট',
+          'যন্ত্রপাতি ডেবিট, প্রদেয় হিসাব ক্রেডিট',
+        ],
+        en: ['Purchase Dr, Cash Cr', 'Machinery A/c Dr, Cash A/c Cr', 'Cash Dr, Machinery Cr', 'Machinery Dr, Accounts Payable Cr'],
+      },
       ans: 1,
-      board: "কু. বো. '২৩",
-      explanation: { bn: 'স্থায়ী সম্পত্তি (যন্ত্রপাতি) বৃদ্ধি পাওয়ায় যন্ত্রপাতি হিসাব ডেবিট এবং নগদ অর্থ হ্রাস পাওয়ায় নগদান হিসাব ক্রেডিট।', en: 'Asset (Machinery) increases -> Debit; Cash decreases -> Credit.' },
+      boardTag: "কু. বো. '২৩",
+      explanation: {
+        bn: 'স্থায়ী সম্পত্তি (যন্ত্রপাতি) বৃদ্ধি পাওয়ায় যন্ত্রপাতি হিসাব ডেবিট এবং নগদ অর্থ হ্রাস পাওয়ায় নগদান হিসাব ক্রেডিট।',
+        en: 'Asset (Machinery) increases -> Debit; Cash decreases -> Credit.',
+      },
     },
   ],
   humanities: [
     {
       id: 'eb-hum-1',
-      q: { bn: 'চাহিদা সমীকরণ Q_d = 40 - 2P এবং যোগান সমীকরণ Q_s = 10 + 3P হলে ভারসাম্য দাম (Equilibrium Price, P) কত?', en: 'If Qd = 40 - 2P and Qs = 10 + 3P, what is the Equilibrium Price (P)?' },
-      options: { bn: ['5 টাকা', '6 টাকা', '8 টাকা', '10 টাকা'], en: ['5 Tk', '6 Tk', '8 Tk', '10 Tk'] },
+      q: {
+        bn: 'চাহিদা সমীকরণ Q_d = 40 - 2P এবং যোগান সমীকরণ Q_s = 10 + 3P হলে ভারসাম্য দাম (Equilibrium Price, P) কত?',
+        en: 'If Qd = 40 - 2P and Qs = 10 + 3P, what is the Equilibrium Price (P)?',
+      },
+      options: {
+        bn: ['5 টাকা', '6 টাকা', '8 টাকা', '10 টাকা'],
+        en: ['5 Tk', '6 Tk', '8 Tk', '10 Tk'],
+      },
       ans: 1,
-      board: "ঢা. বো. '২৩ • অর্থনীতি",
-      explanation: { bn: 'ভারসাম্য অবস্থায় Q_d = Q_s ⇒ 40 - 2P = 10 + 3P ⇒ 5P = 30 ⇒ P = 6 টাকা।', en: '40 - 2P = 10 + 3P => 5P = 30 => P = 6.' },
+      boardTag: "ঢা. বো. '২৩ • অর্থনীতি",
+      explanation: {
+        bn: 'ভারসাম্য অবস্থায় Q_d = Q_s ⇒ 40 - 2P = 10 + 3P ⇒ 5P = 30 ⇒ P = 6 টাকা।',
+        en: '40 - 2P = 10 + 3P => 5P = 30 => P = 6.',
+      },
     },
     {
       id: 'eb-hum-2',
-      q: { bn: 'ঐতিহাসিক লাহোর প্রস্তাব কত সালে এবং কার কর্তৃক উত্থাপিত হয়?', en: 'In which year and by whom was the historic Lahore Resolution presented?' },
-      options: { bn: ['১৯৪০ সালের ২৩ মার্চ, এ. কে. ফজলুল হক', '১৯৪০ সালের ২৪ মার্চ, মোহাম্মদ আলী জিন্নাহ', '১৯৪৭ সালের ১৪ আগস্ট, লিয়াকত আলী খান', '১৯৩৫ সালে, লর্ড মাউন্টব্যাটেন'], en: ['23 March 1940, A.K. Fazlul Huq', '24 March 1940, M.A. Jinnah', '14 August 1947, Liaquat Ali Khan', '1935, Lord Mountbatten'] },
+      q: {
+        bn: 'ঐতিহাসিক লাহোর প্রস্তাব কত সালে এবং কার কর্তৃক উত্থাপিত হয়?',
+        en: 'In which year and by whom was the historic Lahore Resolution presented?',
+      },
+      options: {
+        bn: [
+          '১৯৪০ সালের ২৩ মার্চ, এ. কে. ফজলুল হক',
+          '১৯৪০ সালের ২৪ মার্চ, মোহাম্মদ আলী জিন্নাহ',
+          '১৯৪৭ সালের ১৪ আগস্ট, লিয়াকত আলী খান',
+          '১৯৩৫ সালে, লর্ড মাউন্টব্যাটেন',
+        ],
+        en: ['23 March 1940, A.K. Fazlul Huq', '24 March 1940, M.A. Jinnah', '14 August 1947, Liaquat Ali Khan', '1935, Lord Mountbatten'],
+      },
       ans: 0,
-      board: "রা. বো. '২৩ • ইতিহাস ও পৌরনীতি",
+      boardTag: "রা. বো. '২৩ • ইতিহাস ও পৌরনীতি",
       explanation: { bn: '', en: '' },
     },
     {
       id: 'eb-hum-3',
-      q: { bn: 'গণপ্রজাতন্ত্রী বাংলাদেশের সংবিধান কবে থেকে কার্যকর হয়?', en: 'When did the Constitution of Bangladesh come into effect?' },
-      options: { bn: ['৪ নভেম্বর ১৯৭২', '১৬ ডিসেম্বর ১৯৭২', '২৬ মার্চ ১৯৭২', '১৭ এপ্রিল ১৯৭১'], en: ['4 Nov 1972', '16 Dec 1972', '26 Mar 1972', '17 Apr 1971'] },
+      q: {
+        bn: 'গণপ্রজাতন্ত্রী বাংলাদেশের সংবিধান কবে থেকে কার্যকর হয়?',
+        en: 'When did the Constitution of Bangladesh come into effect?',
+      },
+      options: {
+        bn: ['৪ নভেম্বর ১৯৭২', '১৬ ডিসেম্বর ১৯৭২', '২৬ মার্চ ১৯৭২', '১৭ এপ্রিল ১৯৭১'],
+        en: ['4 Nov 1972', '16 Dec 1972', '26 Mar 1972', '17 Apr 1971'],
+      },
       ans: 1,
-      board: "সকল বোর্ড '২৩ • BCS",
+      boardTag: "সকল বোর্ড '২৩ • BCS",
       explanation: { bn: '', en: '' },
     },
     {
       id: 'eb-hum-4',
-      q: { bn: 'কোনো দ্রব্যের দাম ১০% বৃদ্ধি পাওয়ায় চাহিদার পরিমাণ ২০% হ্রাস পেলে চাহিদার দাম স্থিতিস্থাপকতা (E_p) কত?', en: 'If price rises by 10% and quantity demanded falls by 20%, what is the price elasticity of demand?' },
-      options: { bn: ['0.5', '2.0 (স্থিতিস্থাপক)', '1.0', '10'], en: ['0.5', '2.0 (Elastic)', '1.0', '10'] },
+      q: {
+        bn: 'কোনো দ্রব্যের দাম ১০% বৃদ্ধি পাওয়ায় চাহিদার পরিমাণ ২০% হ্রাস পেলে চাহিদার দাম স্থিতিস্থাপকতা (E_p) কত?',
+        en: 'If price rises by 10% and quantity demanded falls by 20%, what is the price elasticity of demand?',
+      },
+      options: {
+        bn: ['0.5', '2.0 (স্থিতিস্থাপক)', '1.0', '10'],
+        en: ['0.5', '2.0 (Elastic)', '1.0', '10'],
+      },
       ans: 1,
-      board: "চ. বো. '২২ • অর্থনীতি",
-      explanation: { bn: 'সূত্র: E_p = (%ΔQ) ÷ (%ΔP) = ২০% ÷ ১০% = ২.০ (একক অপেক্ষা অধিক স্থিতিস্থাপক)।', en: 'Ep = 20% / 10% = 2.0.' },
+      boardTag: "চ. বো. '২২ • অর্থনীতি",
+      explanation: {
+        bn: 'সূত্র: E_p = (%ΔQ) ÷ (%ΔP) = ২০% ÷ ১০% = ২.০ (একক অপেক্ষা অধিক স্থিতিস্থাপক)।',
+        en: 'Ep = 20% / 10% = 2.0.',
+      },
     },
   ],
   common: [
     {
       id: 'eb-com-1',
-      q: { bn: '(101101)₂ বাইনারি সংখ্যাটির দশমিক (Decimal) মান কত?', en: 'What is the decimal value of the binary number (101101)₂?' },
-      options: { bn: ['(43)₁₀', '(45)₁₀', '(47)₁₀', '(53)₁₀'], en: ['(43)₁₀', '(45)₁₀', '(47)₁₀', '(53)₁₀'] },
+      q: {
+        bn: '(101101)₂ বাইনারি সংখ্যাটির দশমিক (Decimal) মান কত?',
+        en: 'What is the decimal value of the binary number (101101)₂?',
+      },
+      options: {
+        bn: ['(43)₁₀', '(45)₁₀', '(47)₁₀', '(53)₁₀'],
+        en: ['(43)₁₀', '(45)₁₀', '(47)₁₀', '(53)₁₀'],
+      },
       ans: 1,
-      board: "ঢা. বো. '২৩ • ICT",
-      explanation: { bn: '(101101)₂ = 1×2⁵ + 0×2⁴ + 1×2³ + 1×2² + 0×2¹ + 1×2⁰ = 32 + 0 + 8 + 4 + 0 + 1 = (45)₁₀।', en: '32 + 8 + 4 + 1 = 45.' },
+      boardTag: "ঢা. বো. '২৩ • ICT",
+      explanation: {
+        bn: '(101101)₂ = 1×2⁵ + 0×2⁴ + 1×2³ + 1×2² + 0×2¹ + 1×2⁰ = 32 + 0 + 8 + 4 + 0 + 1 = (45)₁₀।',
+        en: '32 + 8 + 4 + 1 = 45.',
+      },
     },
     {
       id: 'eb-com-2',
-      q: { bn: 'কোনো 3-input বিশিষ্ট সত্যক সারণিতে (Truth Table) মোট কয়টি ইনপুট কম্বিনেশন বা সারি থাকে?', en: 'How many rows are in a 3-input Truth Table?' },
+      q: {
+        bn: 'কোনো 3-input বিশিষ্ট সত্যক সারণিতে (Truth Table) মোট কয়টি ইনপুট কম্বিনেশন বা সারি থাকে?',
+        en: 'How many rows are in a 3-input Truth Table?',
+      },
       options: { bn: ['6টি', '8টি', '9টি', '16টি'], en: ['6', '8', '9', '16'] },
       ans: 1,
-      board: "রা. বো. '২৩ • ICT",
-      explanation: { bn: 'n-সংখ্যক ইনপুটের জন্য সত্যক সারণির সারি সংখ্যা = 2ⁿ। এখানে n = 3 হওয়ায় 2³ = 8টি সারি থাকে।', en: '2^n = 2^3 = 8 rows.' },
+      boardTag: "রা. বো. '২৩ • ICT",
+      explanation: {
+        bn: 'n-সংখ্যক ইনপুটের জন্য সত্যক সারণির সারি সংখ্যা = 2ⁿ। এখানে n = 3 হওয়ায় 2³ = 8টি সারি থাকে।',
+        en: '2^n = 2^3 = 8 rows.',
+      },
     },
     {
       id: 'eb-com-3',
       q: { bn: 'HTML-এ সবচেয়ে বড় আকারের হেডিং (Heading) ট্যাগ কোনটি?', en: 'Which is the largest heading tag in HTML?' },
       options: { bn: ['<h6>', '<head>', '<h1>', '<header>'], en: ['<h6>', '<head>', '<h1>', '<header>'] },
       ans: 2,
-      board: "সকল বোর্ড '২২ • ICT",
-      explanation: { bn: 'HTML-এ হেডিং ট্যাগ ৬টি (<h1> থেকে <h6>), যার মধ্যে <h1> সবচেয়ে বড় এবং <h6> সবচেয়ে ছোট।', en: '<h1> is the largest and <h6> is the smallest heading tag.' },
+      boardTag: "সকল বোর্ড '২২ • ICT",
+      explanation: {
+        bn: 'HTML-এ হেডিং ট্যাগ ৬টি (<h1> থেকে <h6>), যার মধ্যে <h1> সবচেয়ে বড় এবং <h6> সবচেয়ে ছোট।',
+        en: '<h1> is the largest and <h6> is the smallest heading tag.',
+      },
     },
   ],
 };
 
-function scoreMcqForBattle(q: MCQ): number {
+function getMcqBoardLabel(q: MCQQuestion): string {
+  return String(q.boardTag || q.board || '').trim();
+}
+
+function scoreMcqForBattle(q: MCQQuestion): number {
   let score = 0;
   const qText = (q.q?.bn || q.q?.en || '').trim();
-  const board = (q.board || '').trim();
+  const board = getMcqBoardLabel(q);
   const exp = getComplexMathOrRuleExplanation(q, 'bn');
 
   if (!qText || (q.options?.bn?.length || 0) < 4) return -999;
@@ -271,8 +429,10 @@ export const ExtraFeaturesView: React.FC = () => {
 
   const isBn = language !== 'en';
   const myRank = getRankInfo();
-  const subjects: SubjectData[] = getSubjectsForSelection(selectedClass, selectedGroup);
+  const rankColor = myRank.colorHex || myRank.color || '#4F46E5';
+  const subjects: SubjectData[] = getSubjectsForSelection(selectedClass, selectedGroup, true);
 
+  /* 1. FORMULAS STATE */
   const mathSubjects = useMemo(() => subjects.filter((s) => subjectSupportsFormulas(s)), [subjects]);
   const [formulaSearch, setFormulaSearch] = useState('');
   const activeFormulaSubjId =
@@ -281,11 +441,13 @@ export const ExtraFeaturesView: React.FC = () => {
       : mathSubjects[0]?.id || 'all';
   const activeFormulaChapId = formulaChapterId || 'all';
 
+  /* 2. LEADERBOARD STATE */
   const [lbMode, setLbMode] = useState<'global' | 'friends'>('global');
   const [lbTimeframe, setLbTimeframe] = useState<'all' | 'weekly' | 'monthly'>('all');
   const [lbSubjectFilter, setLbSubjectFilter] = useState<string>('all');
   const [friendCodeInput, setFriendCodeInput] = useState('');
   const [friendNameInput, setFriendNameInput] = useState('');
+  const [friendAddError, setFriendAddError] = useState('');
   const [liveCloudLb, setLiveCloudLb] = useState<any[]>([]);
   const [loadingLb, setLoadingLb] = useState(false);
 
@@ -305,15 +467,16 @@ export const ExtraFeaturesView: React.FC = () => {
     }
   }, [activeTab, xp]);
 
+  /* 3. 1v1 QUIZ BATTLE STATE */
   const [battleModeTab, setBattleModeTab] = useState<'online' | 'friend'>('online');
   const [battleStage, setBattleStage] = useState<'lobby' | 'searching' | 'waiting_room' | 'playing' | 'finished'>('lobby');
   const [battleSubjId, setBattleSubjId] = useState<string>('all');
   const [battleQuestionCount, setBattleQuestionCount] = useState<number>(10);
   const [battleRoomCode, setBattleRoomCode] = useState<string>('');
   const [joinRoomInput, setJoinRoomInput] = useState<string>('');
-  const [opponentName, setOpponentName] = useState<string>('রাকিব হাসান (DU Aspirant)');
+  const [opponentName, setOpponentName] = useState<string>('লাইভ প্রতিদ্বন্দ্বী (Live Rival)');
   const [opponentRankTitle, setOpponentRankTitle] = useState<string>('গোল্ড II');
-  const [battleQuestions, setBattleQuestions] = useState<MCQ[]>([]);
+  const [battleQuestions, setBattleQuestions] = useState<MCQQuestion[]>([]);
   const [battleQIdx, setBattleQIdx] = useState(0);
   const [myScore, setMyScore] = useState(0);
   const [oppScore, setOppScore] = useState(0);
@@ -327,7 +490,7 @@ export const ExtraFeaturesView: React.FC = () => {
     }
   }, [selectedClass, selectedGroup, subjects, battleSubjId]);
 
-  const prepareBattleQuestions = (subjId: string, count: number, seedKey?: string): MCQ[] => {
+  const prepareBattleQuestions = (subjId: string, count: number, seedKey?: string): MCQQuestion[] => {
     const grpLower = selectedGroup.toLowerCase();
     const groupEliteFallback = grpLower.includes('bus')
       ? [...ELITE_GROUP_BATTLE_BANK.business, ...ELITE_GROUP_BATTLE_BANK.common]
@@ -336,8 +499,8 @@ export const ExtraFeaturesView: React.FC = () => {
       : [...ELITE_GROUP_BATTLE_BANK.science, ...ELITE_GROUP_BATTLE_BANK.common];
 
     const seenTexts = new Set<string>();
-    const pickUnique = (list: MCQ[]): MCQ[] => {
-      const out: MCQ[] = [];
+    const pickUnique = (list: MCQQuestion[]): MCQQuestion[] => {
+      const out: MCQQuestion[] = [];
       for (const item of list) {
         const key = (item.q?.bn || item.q?.en || '').trim();
         if (!key || seenTexts.has(key)) continue;
@@ -348,7 +511,7 @@ export const ExtraFeaturesView: React.FC = () => {
     };
 
     if (subjId === 'all') {
-      const perSubjectBuckets: MCQ[][] = [];
+      const perSubjectBuckets: MCQQuestion[][] = [];
       for (const s of subjects) {
         const rawSubjMcqs = s.chapters.flatMap((c) => c.mcqs || []);
         if (rawSubjMcqs.length === 0) continue;
@@ -356,11 +519,13 @@ export const ExtraFeaturesView: React.FC = () => {
           .filter((q) => scoreMcqForBattle(q) > 0)
           .sort((a, b) => scoreMcqForBattle(b) - scoreMcqForBattle(a));
         if (ranked.length > 0) {
-          perSubjectBuckets.push(seedKey ? seededShuffle(ranked.slice(0, 25), `${seedKey}-${s.id}`) : ranked.slice(0, 25));
+          perSubjectBuckets.push(
+            seedKey ? seededShuffle(ranked.slice(0, 25), `${seedKey}-${s.id}`) : ranked.slice(0, 25)
+          );
         }
       }
 
-      const curatedPool: MCQ[] = [];
+      const curatedPool: MCQQuestion[] = [];
       let round = 0;
       while (curatedPool.length < count * 3 && round < 20) {
         let addedAny = false;
@@ -384,16 +549,18 @@ export const ExtraFeaturesView: React.FC = () => {
     const targetSubj = subjects.find((s) => s.id === subjId) || subjects[0];
     if (!targetSubj) return groupEliteFallback.slice(0, count);
 
-    const chapterBuckets: MCQ[][] = [];
+    const chapterBuckets: MCQQuestion[][] = [];
     for (const ch of targetSubj.chapters) {
       const chMcqs = (ch.mcqs || []).filter((q) => scoreMcqForBattle(q) > 0);
       if (chMcqs.length > 0) {
         const sortedCh = [...chMcqs].sort((a, b) => scoreMcqForBattle(b) - scoreMcqForBattle(a));
-        chapterBuckets.push(seedKey ? seededShuffle(sortedCh.slice(0, 20), `${seedKey}-${ch.id}`) : sortedCh.slice(0, 20));
+        chapterBuckets.push(
+          seedKey ? seededShuffle(sortedCh.slice(0, 20), `${seedKey}-${ch.id}`) : sortedCh.slice(0, 20)
+        );
       }
     }
 
-    const subjCurated: MCQ[] = [];
+    const subjCurated: MCQQuestion[] = [];
     let r = 0;
     while (subjCurated.length < count * 3 && r < 25) {
       let added = false;
@@ -416,7 +583,10 @@ export const ExtraFeaturesView: React.FC = () => {
 
   const activeBattlePoolStats = useMemo(() => {
     if (battleSubjId === 'all') {
-      const totalRaw = subjects.reduce((acc, s) => acc + s.chapters.reduce((cAcc, c) => cAcc + (c.mcqs?.length || 0), 0), 0);
+      const totalRaw = subjects.reduce(
+        (acc, s) => acc + s.chapters.reduce((cAcc, c) => cAcc + (c.mcqs?.length || 0), 0),
+        0
+      );
       return {
         labelBn: `সকল বিষয় (${selectedGroup}) — ${subjects.length}টি বিষয়ের সেরা বোর্ড MCQ`,
         labelEn: `All Subjects (${selectedGroup}) — Best Board MCQs across ${subjects.length} subjects`,
@@ -446,8 +616,6 @@ export const ExtraFeaturesView: React.FC = () => {
     setBattleStage('searching');
 
     const rivalPool = [
-      { name: 'তানভীর আহমেদ (NDC)', rank: 'গোল্ড III' },
-      { name: 'সাদিয়া ইসলাম (Viqarunnisa)', rank: 'প্লাটিনাম I' },
       { name: 'মাহমুদুল হাসান (DRMC)', rank: 'সিলভার II' },
       { name: 'ফারহানা আক্তার (Holy Cross)', rank: 'গোল্ড I' },
       { name: 'নাফিস ইকবাল (Rajshahi College)', rank: 'প্লাটিনাম II' },
@@ -463,7 +631,7 @@ export const ExtraFeaturesView: React.FC = () => {
       setBattleLockedAns(null);
       setBattleTimeLeft(15);
       setBattleStage('playing');
-    }, 1400);
+    }, 1200);
   };
 
   const createFriendBattleRoom = () => {
@@ -473,7 +641,7 @@ export const ExtraFeaturesView: React.FC = () => {
     setBattleQuestions(qList);
     setBattleStage('waiting_room');
 
-    if (isSupabaseConfigured && supabase) {
+    if (supabase) {
       if (battleChannelRef.current) supabase.removeChannel(battleChannelRef.current);
       const ch = supabase.channel(`ev_battle_${code}`);
       ch.on('broadcast', { event: 'player_join' }, (payload) => {
@@ -503,7 +671,7 @@ export const ExtraFeaturesView: React.FC = () => {
     setOpponentName(`রুম হোস্ট (${clean})`);
     setOpponentRankTitle('গোল্ড I');
 
-    if (isSupabaseConfigured && supabase) {
+    if (supabase) {
       if (battleChannelRef.current) supabase.removeChannel(battleChannelRef.current);
       const ch = supabase.channel(`ev_battle_${clean}`);
       ch.on('broadcast', { event: 'score_update' }, (payload) => {
@@ -580,21 +748,21 @@ export const ExtraFeaturesView: React.FC = () => {
   const [newFcBack, setNewFcBack] = useState('');
 
   const [taskTitle, setTaskTitle] = useState('');
-  const [taskSubject, setTaskSubject] = useState(subjects[0]?.name.bn || 'পদার্থবিজ্ঞান');
+  const [taskSubject, setTaskSubject] = useState(subjects[0]?.name.bn || 'হিসাববিজ্ঞান ১ম পত্র');
   const [taskMinutes, setTaskMinutes] = useState(30);
 
   const [postTitle, setPostTitle] = useState('');
   const [postBody, setPostBody] = useState('');
-  const [postSubj, setPostSubj] = useState(subjects[0]?.name.bn || 'পদার্থবিজ্ঞান');
+  const [postSubj, setPostSubj] = useState(subjects[0]?.name.bn || 'হিসাববিজ্ঞান ১ম পত্র');
   const [replyTextMap, setReplyTextMap] = useState<Record<string, string>>({});
 
   const [adminPinInput, setAdminPinInput] = useState('');
   const [adminPinError, setAdminPinError] = useState('');
   const [adminSubTab, setAdminSubTab] = useState<'bulk' | 'single' | 'reports' | 'manage' | 'users'>('bulk');
   const [admClass, setAdmClass] = useState<string>(selectedClass || 'HSC');
-  const [admGroup, setAdmGroup] = useState<string>(selectedGroup || 'Science');
-  const admSubjects = getSubjectsForSelection(admClass, admGroup);
-  const [admSubjectId, setAdmSubjectId] = useState<string>(admSubjects[0]?.id || 'hsc-phy1');
+  const [admGroup, setAdmGroup] = useState<string>(selectedGroup || 'Business Studies');
+  const admSubjects = getSubjectsForSelection(admClass, admGroup, true);
+  const [admSubjectId, setAdmSubjectId] = useState<string>(admSubjects[0]?.id || 'acc-1');
   const [admCustomSubjNameBn, setAdmCustomSubjNameBn] = useState('');
   const [admCustomSubjNameEn, setAdmCustomSubjNameEn] = useState('');
   const [admRawText, setAdmRawText] = useState('');
@@ -623,12 +791,13 @@ export const ExtraFeaturesView: React.FC = () => {
     setLoadingUsers(true);
     try {
       const list = await fetchLeaderboardUsers();
-      setCloudUsers(list);
+      setCloudUsers(list || []);
     } finally {
       setLoadingUsers(false);
     }
   };
 
+  /* VIEW 1: FORMULAS (Math & Quantitative Only) */
   if (activeTab === 'formulas') {
     const filteredSubjects =
       activeFormulaSubjId === 'all' ? mathSubjects : mathSubjects.filter((s) => s.id === activeFormulaSubjId);
@@ -729,11 +898,13 @@ export const ExtraFeaturesView: React.FC = () => {
                   const formulas: ChapterFormulaItem[] = (chap.formulas || []).filter((f) => {
                     if (!formulaSearch.trim()) return true;
                     const q = formulaSearch.toLowerCase();
+                    const eq = (f.equation || f.formula || '').toLowerCase();
+                    const noteTxt = f.note ? trText(f.note, language).toLowerCase() : '';
                     return (
                       f.title.bn.toLowerCase().includes(q) ||
                       f.title.en.toLowerCase().includes(q) ||
-                      f.equation.toLowerCase().includes(q) ||
-                      f.note.bn.toLowerCase().includes(q) ||
+                      eq.includes(q) ||
+                      noteTxt.includes(q) ||
                       chap.name.bn.toLowerCase().includes(q)
                     );
                   });
@@ -797,11 +968,13 @@ export const ExtraFeaturesView: React.FC = () => {
                                 overflowX: 'auto',
                               }}
                             >
-                              {f.equation}
+                              {f.equation || f.formula}
                             </div>
-                            <div style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 600 }}>
-                              💡 {trText(f.note, language)}
-                            </div>
+                            {f.note && (
+                              <div style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 600 }}>
+                                💡 {trText(f.note, language)}
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>
@@ -816,8 +989,10 @@ export const ExtraFeaturesView: React.FC = () => {
     );
   }
 
+  /* VIEW 2: 1v1 LIVE QUIZ BATTLE */
   if (activeTab === 'battle') {
     const currentQ = battleQuestions[battleQIdx];
+    const currentQBoard = currentQ ? getMcqBoardLabel(currentQ) : '';
     const currentQExplanation = currentQ ? getComplexMathOrRuleExplanation(currentQ, language) : '';
     const availableGroupsForBattle = getAvailableGroups(selectedClass);
 
@@ -881,7 +1056,7 @@ export const ExtraFeaturesView: React.FC = () => {
                       value={selectedClass}
                       onChange={(e) => {
                         const nextCls = e.target.value;
-                        const firstGrp = getAvailableGroups(nextCls)[0] || 'Science';
+                        const firstGrp = getAvailableGroups(nextCls)[0] || 'Business Studies';
                         setClassAndGroup(nextCls, firstGrp);
                         setBattleSubjId('all');
                       }}
@@ -927,7 +1102,7 @@ export const ExtraFeaturesView: React.FC = () => {
                       const cnt = s.chapters.reduce((sum, c) => sum + (c.mcqs?.length || 0), 0);
                       return (
                         <option key={s.id} value={s.id}>
-                          {s.icon} {trText(s.name, language)} ({cnt > 0 ? `${cnt} MCQs` : 'Board Curated'})
+                          {s.icon} {trText(s.name, language)} ({cnt > 0 ? `${cnt} MCQs` : 'Curated'})
                         </option>
                       );
                     })}
@@ -1010,7 +1185,7 @@ export const ExtraFeaturesView: React.FC = () => {
                     }}
                     onClick={startOnlineSearch}
                   >
-                    ⚡ {isBn ? 'অনলাইন ম্যাচ শুরু করুন' : 'Find Online Match'}
+                    ⚡ {isBn ? 'অনলাইন ম্যাচ শুরু করো' : 'Find Online Match'}
                   </button>
                 </div>
               ) : (
@@ -1175,10 +1350,10 @@ export const ExtraFeaturesView: React.FC = () => {
               </div>
 
               <div style={{ padding: '16px', borderRadius: 14, border: '1px solid var(--border-default)' }}>
-                {currentQ.board && !currentQ.board.includes('NCTB ও বোর্ড প্রশ্ন') && (
+                {currentQBoard && !currentQBoard.includes('NCTB ও বোর্ড প্রশ্ন') && (
                   <div style={{ marginBottom: 8 }}>
                     <span className="ev-badge-pill ev-badge-warning" style={{ fontSize: 11.5 }}>
-                      🏅 {currentQ.board}
+                      🏅 {currentQBoard}
                     </span>
                   </div>
                 )}
@@ -1197,7 +1372,9 @@ export const ExtraFeaturesView: React.FC = () => {
                       <button
                         key={idx}
                         type="button"
-                        className={`ev-option-btn ${isRight ? 'is-correct' : ''} ${isWrong ? 'is-wrong' : ''} ${isPicked ? 'is-selected' : ''}`}
+                        className={`ev-option-btn ${isRight ? 'is-correct' : ''} ${isWrong ? 'is-incorrect' : ''} ${
+                          isPicked ? 'is-selected' : ''
+                        }`}
                         onClick={() => handleSelectBattleOption(idx)}
                       >
                         <span className="ev-option-index">{['ক', 'খ', 'গ', 'ঘ'][idx]}</span>
@@ -1219,7 +1396,7 @@ export const ExtraFeaturesView: React.FC = () => {
                       lineHeight: 1.5,
                     }}
                   >
-                    <strong>💡 {isBn ? 'গাণিতিক ও নিয়মভিত্তিক ব্যাখ্যা:' : 'Explanation:'}</strong> {currentQExplanation}
+                    <strong>💡 {isBn ? 'ব্যাখ্যা ও সমাধান:' : 'Explanation:'}</strong> {currentQExplanation}
                   </div>
                 )}
               </div>
@@ -1245,7 +1422,12 @@ export const ExtraFeaturesView: React.FC = () => {
               <p className="font-mono" style={{ fontSize: 16, fontWeight: 800, margin: '10px 0 18px' }}>
                 {isBn ? 'তোমার স্কোর' : 'Your Score'}: {myScore} pts &nbsp;|&nbsp; {opponentName}: {oppScore} pts
               </p>
-              <button type="button" className="ev-btn ev-btn-primary" style={{ width: '100%', maxWidth: 280 }} onClick={() => setBattleStage('lobby')}>
+              <button
+                type="button"
+                className="ev-btn ev-btn-primary"
+                style={{ width: '100%', maxWidth: 280 }}
+                onClick={() => setBattleStage('lobby')}
+              >
                 🔄 {isBn ? 'আবার ব্যাটল খেলো' : 'Play Another Battle'}
               </button>
             </div>
@@ -1255,38 +1437,53 @@ export const ExtraFeaturesView: React.FC = () => {
     );
   }
 
+  /* VIEW 3: REAL LEADERBOARD (No Fake Multipliers & No Fake Peers) */
   if (activeTab === 'leaderboard') {
-    const timeMult = lbTimeframe === 'weekly' ? 0.35 : lbTimeframe === 'monthly' ? 0.72 : 1;
-    const subjSeed = lbSubjectFilter === 'all' ? 1 : Math.max(0.45, ((lbSubjectFilter.charCodeAt(4) || 68) % 10) / 10);
-    const myComputedXp = Math.max(0, Math.round(xp * timeMult * subjSeed));
+    const nowMs = Date.now();
+    const cutoffDays = lbTimeframe === 'weekly' ? 7 : lbTimeframe === 'monthly' ? 30 : 36500;
+    const cutoffMs = nowMs - cutoffDays * 86400 * 1000;
+
+    // Calculate user's genuine XP from examHistory matching timeframe & subject filter
+    const filteredMyHistory = examHistory.filter((h) => {
+      const hTime = h.timestamp || new Date(h.date).getTime() || nowMs;
+      const withinTime = lbTimeframe === 'all' ? true : hTime >= cutoffMs;
+      const matchesSubject = lbSubjectFilter === 'all' ? true : h.subjectId === lbSubjectFilter;
+      return withinTime && matchesSubject;
+    });
+
+    const myComputedXp =
+      lbTimeframe === 'all' && lbSubjectFilter === 'all'
+        ? xp
+        : filteredMyHistory.reduce((sum, h) => sum + (h.xpEarned || 0), 0);
 
     const cloudEntries = liveCloudLb
-      .filter((u) => u.id !== userId && u.full_name !== userName)
+      .filter((u) => u && u.id !== userId && (u.full_name || u.name) !== userName)
       .map((u, idx) => {
-        const rawUserXp = Number(u.xp || 0) > 0 ? Number(u.xp) : Math.max(15, 35 - idx * 8);
-        const scaledXp = Math.max(5, Math.round(rawUserXp * timeMult * subjSeed));
-        const rScore = Math.min(1000, Math.round(scaledXp / 10));
-        const tierBn = rScore >= 850 ? 'এলিট' : rScore >= 650 ? 'প্লাটিনাম I' : rScore >= 400 ? 'গোল্ড I' : rScore >= 200 ? 'সিলভার I' : 'ব্রোঞ্জ I';
-        const tierEn = rScore >= 850 ? 'Elite' : rScore >= 650 ? 'Platinum I' : rScore >= 400 ? 'Gold I' : rScore >= 200 ? 'Silver I' : 'Bronze I';
-
+        const realXp = Math.max(0, Number(u.xp || 0));
+        const rScore = Math.min(1000, Math.round(realXp / 10));
+        const tierBn =
+          rScore >= 850 ? 'এলিট' : rScore >= 650 ? 'প্লাটিনাম I' : rScore >= 400 ? 'গোল্ড I' : rScore >= 200 ? 'সিলভার I' : 'ব্রোঞ্জ I';
+        const tierEn =
+          rScore >= 850 ? 'Elite' : rScore >= 650 ? 'Platinum I' : rScore >= 400 ? 'Gold I' : rScore >= 200 ? 'Silver I' : 'Bronze I';
         return {
-          id: u.id,
-          name: u.full_name || u.username || 'Scholar',
+          id: u.id || `cloud-${idx}`,
+          name: u.full_name || u.name || u.username || 'Scholar',
           avatar: u.avatar_url || '',
-          xp: scaledXp,
+          xp: realXp,
           rankScore: rScore,
           tierBn,
           tierEn,
-          streak: Number(u.streak_days || 1),
+          streak: Number(u.streak_days || u.streak || 0),
           isMe: false,
         };
       });
 
     const friendEntries = friendList.map((f) => ({
       id: f.id,
-      name: f.name,
+      name: `${f.name} (${f.code})`,
+      shortName: f.name,
       avatar: f.avatar,
-      xp: Math.round(f.xp * timeMult * subjSeed),
+      xp: f.xp,
       rankScore: f.rankScore,
       tierBn: f.rankTitleBn,
       tierEn: f.rankTitleEn,
@@ -1307,15 +1504,7 @@ export const ExtraFeaturesView: React.FC = () => {
       isMe: true,
     };
 
-    const fallbackPeers =
-      cloudEntries.length > 0
-        ? cloudEntries
-        : [
-            { id: 'peer-1', name: 'তানভীর আহমেদ', avatar: '', xp: Math.round(32 * timeMult), rankScore: 15, tierBn: 'ব্রোঞ্জ I', tierEn: 'Bronze I', streak: 2, isMe: false },
-            { id: 'peer-2', name: 'সাদিয়া ইসলাম', avatar: '', xp: Math.round(24 * timeMult), rankScore: 12, tierBn: 'ব্রোঞ্জ I', tierEn: 'Bronze I', streak: 1, isMe: false },
-          ];
-
-    const combined = (lbMode === 'friends' ? [...friendEntries, meEntry] : [...fallbackPeers, meEntry]).sort(
+    const combined = (lbMode === 'friends' ? [...friendEntries, meEntry] : [...cloudEntries, meEntry]).sort(
       (a, b) => b.xp - a.xp || b.rankScore - a.rankScore
     );
 
@@ -1358,7 +1547,10 @@ export const ExtraFeaturesView: React.FC = () => {
               </div>
               <div>
                 <div style={{ fontWeight: 800, fontSize: 15 }}>
-                  {userName} • <span style={{ color: myRank.color }}>🛡️ {isBn ? myRank.fullTitleBn : myRank.fullTitleEn} ({myRank.rankScore} RP)</span>
+                  {userName} •{' '}
+                  <span style={{ color: rankColor }}>
+                    🛡️ {isBn ? myRank.fullTitleBn : myRank.fullTitleEn} ({myRank.rankScore} RP)
+                  </span>
                 </div>
                 <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', fontWeight: 600 }}>
                   {myComputedXp} XP • {trKey('accuracy', language)}: {myRank.accuracyPct}% • 🔥 {streak}d
@@ -1373,7 +1565,16 @@ export const ExtraFeaturesView: React.FC = () => {
         </div>
 
         <div className="ev-card" style={{ paddingBottom: 22 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, marginBottom: 16 }}>
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: 10,
+              marginBottom: 16,
+            }}
+          >
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <button
                 type="button"
@@ -1459,35 +1660,69 @@ export const ExtraFeaturesView: React.FC = () => {
           )}
 
           {lbMode === 'friends' && (
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', padding: 12, borderRadius: 12, background: 'var(--bg-surface-muted)', marginBottom: 14 }}>
-              <input
-                type="text"
-                className="ev-input"
-                style={{ flex: 1, minWidth: 140 }}
-                placeholder={isBn ? 'বন্ধুর কোড (যেমন: EV-204)' : 'Friend Code (EV-204)'}
-                value={friendCodeInput}
-                onChange={(e) => setFriendCodeInput(e.target.value)}
-              />
-              <input
-                type="text"
-                className="ev-input"
-                style={{ flex: 1, minWidth: 140 }}
-                placeholder={isBn ? 'বন্ধুর নাম' : 'Friend Name'}
-                value={friendNameInput}
-                onChange={(e) => setFriendNameInput(e.target.value)}
-              />
-              <button
-                type="button"
-                className="ev-btn ev-btn-primary ev-btn-sm"
-                onClick={() => {
-                  if (!friendCodeInput.trim()) return;
-                  addFriendByCode(friendCodeInput, friendNameInput);
-                  setFriendCodeInput('');
-                  setFriendNameInput('');
-                }}
-              >
-                + {trKey('add_friend', language)}
-              </button>
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 8,
+                padding: 12,
+                borderRadius: 12,
+                background: 'var(--bg-surface-muted)',
+                marginBottom: 14,
+              }}
+            >
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <input
+                  type="text"
+                  className="ev-input font-mono"
+                  style={{ flex: 1, minWidth: 140 }}
+                  placeholder={isBn ? 'বন্ধুর কোড (যেমন: EV-2048)' : 'Friend Code (e.g. EV-2048)'}
+                  value={friendCodeInput}
+                  onChange={(e) => {
+                    setFriendCodeInput(e.target.value);
+                    setFriendAddError('');
+                  }}
+                />
+                <input
+                  type="text"
+                  className="ev-input"
+                  style={{ flex: 1, minWidth: 140 }}
+                  placeholder={isBn ? 'বন্ধুর নাম' : 'Friend Name'}
+                  value={friendNameInput}
+                  onChange={(e) => {
+                    setFriendNameInput(e.target.value);
+                    setFriendAddError('');
+                  }}
+                />
+                <button
+                  type="button"
+                  className="ev-btn ev-btn-primary ev-btn-sm"
+                  onClick={() => {
+                    const cleanCode = friendCodeInput.trim().toUpperCase();
+                    if (!/^EV-\d{3,6}$/i.test(cleanCode)) {
+                      setFriendAddError(
+                        isBn
+                          ? '⚠️ সঠিক ফ্রেন্ড কোড দাও (যেমন: EV-2048)'
+                          : '⚠️ Enter a valid Friend Code (e.g. EV-2048)'
+                      );
+                      return;
+                    }
+                    const ok = addFriendByCode(cleanCode, friendNameInput.trim());
+                    if (!ok) {
+                      setFriendAddError(isBn ? '⚠️ এই বন্ধু ইতিমধ্যে যুক্ত আছে!' : '⚠️ Friend already added!');
+                      return;
+                    }
+                    setFriendCodeInput('');
+                    setFriendNameInput('');
+                    setFriendAddError('');
+                  }}
+                >
+                  + {trKey('add_friend', language)}
+                </button>
+              </div>
+              {friendAddError && (
+                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--status-danger)' }}>{friendAddError}</div>
+              )}
             </div>
           )}
 
@@ -1512,7 +1747,15 @@ export const ExtraFeaturesView: React.FC = () => {
                   </span>
                   {renderAvatarCircle(entry, 36)}
                   <div style={{ minWidth: 0, flex: 1 }}>
-                    <div style={{ fontWeight: 800, fontSize: 14, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    <div
+                      style={{
+                        fontWeight: 800,
+                        fontSize: 14,
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                      }}
+                    >
                       {entry.name}
                     </div>
                     <div style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 600 }}>
@@ -1544,6 +1787,7 @@ export const ExtraFeaturesView: React.FC = () => {
     );
   }
 
+  /* VIEW 4: SECRET ADMIN PANEL */
   if (activeTab === 'admin') {
     if (!isAdminUnlocked) {
       return (
@@ -1580,7 +1824,7 @@ export const ExtraFeaturesView: React.FC = () => {
             />
             {adminPinError && <div style={{ color: 'var(--status-danger)', fontSize: 13, fontWeight: 700 }}>{adminPinError}</div>}
             <button type="submit" className="ev-btn ev-btn-primary">
-              🔓 {isBn ? 'আনলক করুন' : 'Unlock Admin Panel'}
+              🔓 {isBn ? 'আনলক করো' : 'Unlock Admin Panel'}
             </button>
           </form>
         </div>
@@ -1619,22 +1863,38 @@ export const ExtraFeaturesView: React.FC = () => {
                 📦 প্রজেক্ট কোড ডাউনলোড (syllabusData.ts)
               </button>
               <button type="button" className="ev-btn ev-btn-danger ev-btn-sm" onClick={lockAdmin}>
-                🔒 অ্যাডমিন লক ও হাইড করুন
+                🔒 অ্যাডমিন লক ও হাইড করো
               </button>
             </div>
           </div>
 
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
-            <button type="button" className={`ev-btn ev-btn-sm ${adminSubTab === 'bulk' ? 'ev-btn-primary' : 'ev-btn-secondary'}`} onClick={() => setAdminSubTab('bulk')}>
+            <button
+              type="button"
+              className={`ev-btn ev-btn-sm ${adminSubTab === 'bulk' ? 'ev-btn-primary' : 'ev-btn-secondary'}`}
+              onClick={() => setAdminSubTab('bulk')}
+            >
               📥 এক্সেল / CSV বাল্ক আপলোড
             </button>
-            <button type="button" className={`ev-btn ev-btn-sm ${adminSubTab === 'single' ? 'ev-btn-primary' : 'ev-btn-secondary'}`} onClick={() => setAdminSubTab('single')}>
+            <button
+              type="button"
+              className={`ev-btn ev-btn-sm ${adminSubTab === 'single' ? 'ev-btn-primary' : 'ev-btn-secondary'}`}
+              onClick={() => setAdminSubTab('single')}
+            >
               ➕ একক প্রশ্ন যোগ
             </button>
-            <button type="button" className={`ev-btn ev-btn-sm ${adminSubTab === 'reports' ? 'ev-btn-primary' : 'ev-btn-secondary'}`} onClick={() => setAdminSubTab('reports')}>
+            <button
+              type="button"
+              className={`ev-btn ev-btn-sm ${adminSubTab === 'reports' ? 'ev-btn-primary' : 'ev-btn-secondary'}`}
+              onClick={() => setAdminSubTab('reports')}
+            >
               🚨 ভুল প্রশ্নের রিপোর্ট ({questionReports.filter((r) => r.status === 'pending').length})
             </button>
-            <button type="button" className={`ev-btn ev-btn-sm ${adminSubTab === 'manage' ? 'ev-btn-primary' : 'ev-btn-secondary'}`} onClick={() => setAdminSubTab('manage')}>
+            <button
+              type="button"
+              className={`ev-btn ev-btn-sm ${adminSubTab === 'manage' ? 'ev-btn-primary' : 'ev-btn-secondary'}`}
+              onClick={() => setAdminSubTab('manage')}
+            >
               🗂️ প্রশ্ন ও উত্তর সংশোধন
             </button>
             <button
@@ -1675,8 +1935,8 @@ export const ExtraFeaturesView: React.FC = () => {
                   value={admClass}
                   onChange={(e) => {
                     const nextC = e.target.value;
-                    const firstG = getAvailableGroups(nextC)[0] || 'Science';
-                    const firstS = getSubjectsForSelection(nextC, firstG)[0]?.id || '';
+                    const firstG = getAvailableGroups(nextC)[0] || 'Business Studies';
+                    const firstS = getSubjectsForSelection(nextC, firstG, true)[0]?.id || '';
                     setAdmClass(nextC);
                     setAdmGroup(firstG);
                     setAdmSubjectId(firstS);
@@ -1697,7 +1957,7 @@ export const ExtraFeaturesView: React.FC = () => {
                   value={admGroup}
                   onChange={(e) => {
                     const nextG = e.target.value;
-                    const firstS = getSubjectsForSelection(admClass, nextG)[0]?.id || '';
+                    const firstS = getSubjectsForSelection(admClass, nextG, true)[0]?.id || '';
                     setAdmGroup(nextG);
                     setAdmSubjectId(firstS);
                   }}
@@ -1711,14 +1971,16 @@ export const ExtraFeaturesView: React.FC = () => {
               </div>
 
               <div>
-                <label style={{ fontSize: 12.5, fontWeight: 700, display: 'block', marginBottom: 4 }}>বিষয় ও পত্র (Subject & Paper)</label>
+                <label style={{ fontSize: 12.5, fontWeight: 700, display: 'block', marginBottom: 4 }}>
+                  বিষয় ও পত্র (Subject & Paper)
+                </label>
                 <select className="ev-select" value={admSubjectId} onChange={(e) => setAdmSubjectId(e.target.value)}>
                   {admSubjects.map((s) => (
                     <option key={s.id} value={s.id}>
                       {s.icon} {s.name.bn}
                     </option>
                   ))}
-                  <option value="new-custom-subject">➕ নতুন বিষয় তৈরি করুন</option>
+                  <option value="new-custom-subject">➕ নতুন বিষয় তৈরি করো</option>
                 </select>
               </div>
             </div>
@@ -1728,16 +1990,34 @@ export const ExtraFeaturesView: React.FC = () => {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               {admSubjectId === 'new-custom-subject' && (
                 <div className="ev-grid-2">
-                  <input type="text" className="ev-input" placeholder="নতুন বিষয়ের বাংলা নাম" value={admCustomSubjNameBn} onChange={(e) => setAdmCustomSubjNameBn(e.target.value)} />
-                  <input type="text" className="ev-input" placeholder="ইংরেজি নাম" value={admCustomSubjNameEn} onChange={(e) => setAdmCustomSubjNameEn(e.target.value)} />
+                  <input
+                    type="text"
+                    className="ev-input"
+                    placeholder="নতুন বিষয়ের বাংলা নাম"
+                    value={admCustomSubjNameBn}
+                    onChange={(e) => setAdmCustomSubjNameBn(e.target.value)}
+                  />
+                  <input
+                    type="text"
+                    className="ev-input"
+                    placeholder="ইংরেজি নাম"
+                    value={admCustomSubjNameEn}
+                    onChange={(e) => setAdmCustomSubjNameEn(e.target.value)}
+                  />
                 </div>
               )}
 
               <div>
                 <label style={{ fontSize: 12.5, fontWeight: 700, display: 'block', marginBottom: 6 }}>
-                  📂 CSV / TSV ফাইল সিলেক্ট করুন অথবা নিচের বক্সে সরাসরি Microsoft Excel থেকে সারিগুলো কপি (`Ctrl+C`) করে পেস্ট (`Ctrl+V`) করুন:
+                  📂 CSV / TSV ফাইল সিলেক্ট করো অথবা নিচের বক্সে সরাসরি Microsoft Excel থেকে সারিগুলো কপি (`Ctrl+C`) করে পেস্ট (`Ctrl+V`) করো:
                 </label>
-                <input type="file" accept=".csv,.tsv,.txt" className="ev-input" onChange={handleFileUpload} style={{ marginBottom: 8 }} />
+                <input
+                  type="file"
+                  accept=".csv,.tsv,.txt"
+                  className="ev-input"
+                  onChange={handleFileUpload}
+                  style={{ marginBottom: 8 }}
+                />
                 <textarea
                   className="ev-input font-mono"
                   rows={7}
@@ -1753,9 +2033,18 @@ export const ExtraFeaturesView: React.FC = () => {
                   className="ev-btn ev-btn-primary"
                   onClick={() => {
                     if (!admRawText.trim()) return;
-                    const finalId = admSubjectId === 'new-custom-subject' ? `custom-${Date.now()}` : selectedAdmSubj?.id || admSubjectId;
-                    const finalBn = admSubjectId === 'new-custom-subject' ? admCustomSubjNameBn || 'নতুন বিষয়' : selectedAdmSubj?.name.bn || 'বিষয়';
-                    const finalEn = admSubjectId === 'new-custom-subject' ? admCustomSubjNameEn || finalBn : selectedAdmSubj?.name.en || finalBn;
+                    const finalId =
+                      admSubjectId === 'new-custom-subject'
+                        ? `custom-${Date.now()}`
+                        : selectedAdmSubj?.id || admSubjectId;
+                    const finalBn =
+                      admSubjectId === 'new-custom-subject'
+                        ? admCustomSubjNameBn || 'নতুন বিষয়'
+                        : selectedAdmSubj?.name.bn || 'বিষয়';
+                    const finalEn =
+                      admSubjectId === 'new-custom-subject'
+                        ? admCustomSubjNameEn || finalBn
+                        : selectedAdmSubj?.name.en || finalBn;
 
                     const res = importBulkMcqs({
                       targetClass: admClass,
@@ -1766,10 +2055,12 @@ export const ExtraFeaturesView: React.FC = () => {
                       rawText: admRawText,
                     });
                     setAdmRawText('');
-                    setAdmStatusBanner(`✅ ${admClass} (${admGroup}) → ${finalBn}-এ ${res.addedQuestions}টি প্রশ্ন এবং ${res.addedChapters}টি অধ্যায় যুক্ত হয়েছে!`);
+                    setAdmStatusBanner(
+                      `✅ ${admClass} (${admGroup}) → ${finalBn}-এ ${res.addedQuestions}টি প্রশ্ন এবং ${res.addedChapters}টি অধ্যায় স্থায়ীভাবে সংরক্ষিত হয়েছে!`
+                    );
                   }}
                 >
-                  🚀 ডাটাবেস ও প্রজেক্টে আপলোড করুন
+                  🚀 ডাটাবেস ও স্টোরেজে সেভ করো
                 </button>
                 <button type="button" className="ev-btn ev-btn-secondary" onClick={handleDownloadProjectCode}>
                   💾 প্রজেক্ট ফাইল (syllabusData.ts) ডাউনলোড
@@ -1780,13 +2071,49 @@ export const ExtraFeaturesView: React.FC = () => {
 
           {adminSubTab === 'single' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <input type="text" className="ev-input" placeholder="অধ্যায়ের নাম" value={singleChap} onChange={(e) => setSingleChap(e.target.value)} />
-              <input type="text" className="ev-input" placeholder="প্রশ্নটি লিখুন..." value={singleQ} onChange={(e) => setSingleQ(e.target.value)} />
+              <input
+                type="text"
+                className="ev-input"
+                placeholder="অধ্যায়ের নাম"
+                value={singleChap}
+                onChange={(e) => setSingleChap(e.target.value)}
+              />
+              <input
+                type="text"
+                className="ev-input"
+                placeholder="প্রশ্নটি লেখো..."
+                value={singleQ}
+                onChange={(e) => setSingleQ(e.target.value)}
+              />
               <div className="ev-grid-2">
-                <input type="text" className="ev-input" placeholder="অপশন ক" value={singleOptA} onChange={(e) => setSingleOptA(e.target.value)} />
-                <input type="text" className="ev-input" placeholder="অপশন খ" value={singleOptB} onChange={(e) => setSingleOptB(e.target.value)} />
-                <input type="text" className="ev-input" placeholder="অপশন গ" value={singleOptC} onChange={(e) => setSingleOptC(e.target.value)} />
-                <input type="text" className="ev-input" placeholder="অপশন ঘ" value={singleOptD} onChange={(e) => setSingleOptD(e.target.value)} />
+                <input
+                  type="text"
+                  className="ev-input"
+                  placeholder="অপশন ক"
+                  value={singleOptA}
+                  onChange={(e) => setSingleOptA(e.target.value)}
+                />
+                <input
+                  type="text"
+                  className="ev-input"
+                  placeholder="অপশন খ"
+                  value={singleOptB}
+                  onChange={(e) => setSingleOptB(e.target.value)}
+                />
+                <input
+                  type="text"
+                  className="ev-input"
+                  placeholder="অপশন গ"
+                  value={singleOptC}
+                  onChange={(e) => setSingleOptC(e.target.value)}
+                />
+                <input
+                  type="text"
+                  className="ev-input"
+                  placeholder="অপশন ঘ"
+                  value={singleOptD}
+                  onChange={(e) => setSingleOptD(e.target.value)}
+                />
               </div>
               <div className="ev-grid-3">
                 <select className="ev-select" value={singleAns} onChange={(e) => setSingleAns(Number(e.target.value))}>
@@ -1795,8 +2122,20 @@ export const ExtraFeaturesView: React.FC = () => {
                   <option value={2}>সঠিক উত্তর: গ</option>
                   <option value={3}>সঠিক উত্তর: ঘ</option>
                 </select>
-                <input type="text" className="ev-input" placeholder="বোর্ড ট্যাগ" value={singleBoard} onChange={(e) => setSingleBoard(e.target.value)} />
-                <input type="text" className="ev-input" placeholder="ব্যাখ্যা (ঐচ্ছিক)" value={singleExp} onChange={(e) => setSingleExp(e.target.value)} />
+                <input
+                  type="text"
+                  className="ev-input"
+                  placeholder="বোর্ড ট্যাগ"
+                  value={singleBoard}
+                  onChange={(e) => setSingleBoard(e.target.value)}
+                />
+                <input
+                  type="text"
+                  className="ev-input"
+                  placeholder="ব্যাখ্যা (ঐচ্ছিক)"
+                  value={singleExp}
+                  onChange={(e) => setSingleExp(e.target.value)}
+                />
               </div>
               <button
                 type="button"
@@ -1821,10 +2160,10 @@ export const ExtraFeaturesView: React.FC = () => {
                   setSingleOptB('');
                   setSingleOptC('');
                   setSingleOptD('');
-                  setAdmStatusBanner('✅ প্রশ্নটি সফলভাবে যুক্ত হয়েছে!');
+                  setAdmStatusBanner('✅ প্রশ্নটি সফলভাবে সংরক্ষিত হয়েছে!');
                 }}
               >
-                ➕ প্রশ্ন যুক্ত করুন
+                ➕ প্রশ্ন যুক্ত করো
               </button>
             </div>
           )}
@@ -1832,7 +2171,9 @@ export const ExtraFeaturesView: React.FC = () => {
           {adminSubTab === 'reports' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               {questionReports.length === 0 ? (
-                <p style={{ color: 'var(--text-secondary)', fontSize: 14 }}>বর্তমানে স্টুডেন্টদের কোনো অমীমাংসিত প্রশ্ন রিপোর্ট নেই।</p>
+                <p style={{ color: 'var(--text-secondary)', fontSize: 14 }}>
+                  বর্তমানে স্টুডেন্টদের কোনো অমীমাংসিত প্রশ্ন রিপোর্ট নেই।
+                </p>
               ) : (
                 questionReports.map((rep) => (
                   <div
@@ -1848,7 +2189,8 @@ export const ExtraFeaturesView: React.FC = () => {
                         🚩 {rep.issueType} • {rep.subjectName} ({rep.chapterName})
                       </span>
                       <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)' }}>
-                        রিপোর্টকারী: {rep.reportedBy} • {rep.createdAt} • {rep.status === 'resolved' ? '✅ সমাধানকৃত' : '⏳ অপেক্ষমাণ'}
+                        রিপোর্টকারী: {rep.reportedBy} • {rep.createdAt} •{' '}
+                        {rep.status === 'resolved' ? '✅ সমাধানকৃত' : '⏳ অপেক্ষমাণ'}
                       </span>
                     </div>
 
@@ -1891,26 +2233,22 @@ export const ExtraFeaturesView: React.FC = () => {
                             type="button"
                             className="ev-btn ev-btn-primary ev-btn-sm"
                             onClick={() => {
-                              ['HSC', 'SSC'].forEach((cls) => {
-                                getAvailableGroups(cls).forEach((grp) => {
-                                  editCustomMcqFull({
-                                    targetClass: cls,
-                                    targetGroup: grp,
-                                    subjectId: rep.subjectId,
-                                    chapterId: rep.chapterId,
-                                    questionId: rep.questionId,
-                                    questionBn: editRepQ,
-                                    optionsBn: editRepOpts,
-                                    ansIndex: editRepAns,
-                                  });
-                                });
+                              editCustomMcqFull({
+                                targetClass: admClass,
+                                targetGroup: admGroup,
+                                subjectId: rep.subjectId,
+                                chapterId: rep.chapterId,
+                                questionId: rep.questionId,
+                                questionBn: editRepQ,
+                                optionsBn: editRepOpts,
+                                ansIndex: editRepAns,
                               });
                               resolveQuestionReport(rep.id);
                               setEditingReportId(null);
-                              setAdmStatusBanner('✅ প্রশ্নটি সংশোধন করা হয়েছে এবং রিপোর্ট সমাধানকৃত মার্ক হয়েছে!');
+                              setAdmStatusBanner('✅ প্রশ্নটি সংশোধন করা হয়েছে এবং স্থায়ীভাবে সেভ হয়েছে!');
                             }}
                           >
-                            💾 সেভ ও সমাধান করুন
+                            💾 সেভ ও সমাধান করো
                           </button>
                         </div>
                       </div>
@@ -1926,15 +2264,15 @@ export const ExtraFeaturesView: React.FC = () => {
                             setEditRepAns(rep.currentAns || 0);
                           }}
                         >
-                          ✏️ প্রশ্ন ও উত্তর সংশোধন করুন
+                          ✏️ প্রশ্ন ও উত্তর সংশোধন করো
                         </button>
                         {rep.status !== 'resolved' && (
                           <button type="button" className="ev-btn ev-btn-soft ev-btn-sm" onClick={() => resolveQuestionReport(rep.id)}>
-                            ✅ সমাধানকৃত মার্ক করুন
+                            ✅ সমাধানকৃত মার্ক করো
                           </button>
                         )}
                         <button type="button" className="ev-btn ev-btn-danger ev-btn-sm" onClick={() => deleteQuestionReport(rep.id)}>
-                          🗑️ মুছুন
+                          🗑️ মুছো
                         </button>
                       </div>
                     )}
@@ -1950,7 +2288,11 @@ export const ExtraFeaturesView: React.FC = () => {
                 <div style={{ fontWeight: 800, fontSize: 15 }}>
                   {selectedAdmSubj.icon} {selectedAdmSubj.name.bn} — মোট অধ্যায়: {selectedAdmSubj.chapters.length}
                 </div>
-                <button type="button" className="ev-btn ev-btn-danger ev-btn-sm" onClick={() => deleteCustomSubject(admClass, admGroup, selectedAdmSubj.id)}>
+                <button
+                  type="button"
+                  className="ev-btn ev-btn-danger ev-btn-sm"
+                  onClick={() => deleteCustomSubject(admClass, admGroup, selectedAdmSubj.id)}
+                >
                   🗑️ কাস্টম পরিবর্তন রিসেট
                 </button>
               </div>
@@ -1986,12 +2328,18 @@ export const ExtraFeaturesView: React.FC = () => {
                               type="button"
                               className={`ev-btn ev-btn-sm ${q.ans === oIdx ? 'ev-btn-primary' : 'ev-btn-secondary'}`}
                               style={{ minWidth: 32, padding: '0 8px' }}
-                              onClick={() => updateCustomMcqAnswer(admClass, admGroup, selectedAdmSubj.id, ch.id, q.id, oIdx)}
+                              onClick={() =>
+                                updateCustomMcqAnswer(admClass, admGroup, selectedAdmSubj.id, ch.id, q.id, oIdx)
+                              }
                             >
                               {optLbl}
                             </button>
                           ))}
-                          <button type="button" className="ev-btn ev-btn-danger ev-btn-sm" onClick={() => deleteCustomMcq(admClass, admGroup, selectedAdmSubj.id, ch.id, q.id)}>
+                          <button
+                            type="button"
+                            className="ev-btn ev-btn-danger ev-btn-sm"
+                            onClick={() => deleteCustomMcq(admClass, admGroup, selectedAdmSubj.id, ch.id, q.id)}
+                          >
                             🗑️
                           </button>
                         </div>
@@ -2014,7 +2362,9 @@ export const ExtraFeaturesView: React.FC = () => {
                 </div>
 
                 {cloudUsers.length === 0 ? (
-                  <p style={{ fontSize: 13.5, color: 'var(--text-secondary)' }}>বর্তমানে ক্লাউড টেবিলে কোনো ইউজার পাওয়া যায়নি অথবা লোড হচ্ছে।</p>
+                  <p style={{ fontSize: 13.5, color: 'var(--text-secondary)' }}>
+                    বর্তমানে ক্লাউড টেবিলে কোনো ইউজার পাওয়া যায়নি অথবা লোড হচ্ছে।
+                  </p>
                 ) : (
                   <div className="ev-table-wrap">
                     <table className="ev-table">
@@ -2028,13 +2378,13 @@ export const ExtraFeaturesView: React.FC = () => {
                         </tr>
                       </thead>
                       <tbody>
-                        {cloudUsers.map((u) => (
-                          <tr key={u.id}>
-                            <td style={{ fontWeight: 700 }}>{u.full_name || 'Scholar'}</td>
-                            <td>{u.username || '—'}</td>
-                            <td>{u.target_track || 'HSC'}</td>
+                        {cloudUsers.map((u, idx) => (
+                          <tr key={u.id || idx}>
+                            <td style={{ fontWeight: 700 }}>{u.full_name || u.name || 'Scholar'}</td>
+                            <td>{u.username || u.handle || '—'}</td>
+                            <td>{u.target_track || u.badge || 'HSC'}</td>
                             <td className="font-mono">{u.xp || 0} XP (Lv.{u.level || 1})</td>
-                            <td>🔥 {u.streak_days || 0}d</td>
+                            <td>🔥 {u.streak_days || u.streak || 0}d</td>
                           </tr>
                         ))}
                       </tbody>
@@ -2044,13 +2394,13 @@ export const ExtraFeaturesView: React.FC = () => {
               </div>
 
               <div className="ev-card" style={{ background: 'var(--bg-surface-muted)' }}>
-                <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 8 }}>🔑 অ্যাডমিন গোপন পিন পরিবর্তন</div>
+                <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 8 }}>🔑 অ্যাডমিন গোপন পিন পরিবর্তন (Hashed)</div>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   <input
                     type="password"
                     className="ev-input"
                     style={{ flex: 1, minWidth: 200 }}
-                    placeholder="নতুন পিন লিখুন (কমপক্ষে ৪ অক্ষর)"
+                    placeholder="নতুন পিন লেখো (কমপক্ষে ৪ অক্ষর)"
                     value={newPinValue}
                     onChange={(e) => setNewPinValue(e.target.value)}
                   />
@@ -2061,7 +2411,7 @@ export const ExtraFeaturesView: React.FC = () => {
                       if (newPinValue.trim().length >= 4) {
                         setAdminPin(newPinValue.trim());
                         setNewPinValue('');
-                        setAdmStatusBanner('✅ অ্যাডমিন পিন সফলভাবে পরিবর্তন করা হয়েছে!');
+                        setAdmStatusBanner('✅ অ্যাডমিন পিন নিরাপদ হ্যাশ হিসেবে সফলভাবে পরিবর্তন করা হয়েছে!');
                       }
                     }}
                   >
@@ -2076,6 +2426,7 @@ export const ExtraFeaturesView: React.FC = () => {
     );
   }
 
+  /* VIEW 5: RANK & BADGES */
   if (activeTab === 'achievements') {
     const allTiers = [
       { id: 'bronze', nameBn: 'ব্রোঞ্জ র‍্যাঙ্ক (I – III)', nameEn: 'Bronze Rank (I – III)', range: '0 – 199 RP', color: '#B45309', div: 'I' },
@@ -2088,7 +2439,9 @@ export const ExtraFeaturesView: React.FC = () => {
     return (
       <div className="ev-card">
         <div className="ev-section-header">
-          <h3 className="ev-section-title">🛡️ {isBn ? 'র‍্যাঙ্ক প্রগ্রেশন (Bronze → Elite)' : 'Rank Progression (Bronze → Elite)'}</h3>
+          <h3 className="ev-section-title">
+            🛡️ {isBn ? 'র‍্যাঙ্ক প্রগ্রেশন (Bronze → Elite)' : 'Rank Progression (Bronze → Elite)'}
+          </h3>
           <span className="ev-badge-pill ev-badge-indigo">
             {isBn ? myRank.fullTitleBn : myRank.fullTitleEn} • {myRank.rankScore} / 1000 RP
           </span>
@@ -2101,7 +2454,10 @@ export const ExtraFeaturesView: React.FC = () => {
               <div
                 key={t.id}
                 className="ev-badge-card"
-                style={{ border: isCurrent ? `2px solid ${t.color}` : '1px solid var(--border-subtle)', justifyContent: 'space-between' }}
+                style={{
+                  border: isCurrent ? `2px solid ${t.color}` : '1px solid var(--border-subtle)',
+                  justifyContent: 'space-between',
+                }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                   <MetallicBadgeSvg color={t.color} label={t.div} />
@@ -2122,6 +2478,7 @@ export const ExtraFeaturesView: React.FC = () => {
     );
   }
 
+  /* VIEW 6: ANALYTICS */
   if (activeTab === 'Analytics') {
     return (
       <div className="ev-card">
@@ -2158,7 +2515,9 @@ export const ExtraFeaturesView: React.FC = () => {
 
         {examHistory.length === 0 ? (
           <p style={{ color: 'var(--text-secondary)', fontSize: 14 }}>
-            {isBn ? 'তুমি এখনো কোনো পরীক্ষায় অংশ নাওনি। যেকোনো বিষয়ে ক্লিক করে কুইজ শুরু করো!' : 'You have not taken any exams yet. Click any subject to start practicing!'}
+            {isBn
+              ? 'তুমি এখনো কোনো পরীক্ষায় অংশ নাওনি। যেকোনো বিষয়ে ক্লিক করে কুইজ শুরু করো!'
+              : 'You have not taken any exams yet. Click any subject to start practicing!'}
           </p>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -2177,7 +2536,7 @@ export const ExtraFeaturesView: React.FC = () => {
                 <div>
                   <div style={{ fontWeight: 800, fontSize: 14.5 }}>{item.subjectName}</div>
                   <div style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>
-                    {item.chapterName} • {new Date(item.date).toLocaleDateString()}
+                    {item.chapterName} • {item.mode.toUpperCase()} • {item.date}
                   </div>
                 </div>
                 <div className="font-mono" style={{ textAlign: 'right', fontWeight: 800 }}>
@@ -2194,6 +2553,7 @@ export const ExtraFeaturesView: React.FC = () => {
     );
   }
 
+  /* VIEW 7: MISTAKE BANK */
   if (activeTab === 'mistakes') {
     const activeMistakes = mistakes.filter((m) => !m.mastered);
     return (
@@ -2205,7 +2565,9 @@ export const ExtraFeaturesView: React.FC = () => {
         </div>
         {activeMistakes.length === 0 ? (
           <p style={{ color: 'var(--text-secondary)', fontSize: 14 }}>
-            {isBn ? 'ভুলের খাতায় বর্তমানে কোনো প্রশ্ন নেই। কুইজে কোনো প্রশ্ন ভুল হলে তা এখানে অটোমেটিক জমা হবে।' : 'No pending mistakes in your Mistake Bank.'}
+            {isBn
+              ? 'ভুলের খাতায় বর্তমানে কোনো প্রশ্ন নেই। কুইজে কোনো প্রশ্ন ভুল হলে তা এখানে অটোমেটিক জমা হবে।'
+              : 'No pending mistakes in your Mistake Bank.'}
           </p>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -2216,9 +2578,15 @@ export const ExtraFeaturesView: React.FC = () => {
                 </div>
                 <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 6 }}>{trText(m.question, language)}</div>
                 <div style={{ fontSize: 13.5, color: 'var(--status-success)', fontWeight: 700 }}>
-                  ✅ {isBn ? 'সঠিক উত্তর:' : 'Correct Answer:'} {(m.options.bn?.length ? m.options.bn : m.options.en)[m.correctIndex]}
+                  ✅ {isBn ? 'সঠিক উত্তর:' : 'Correct Answer:'}{' '}
+                  {(m.options.bn?.length ? m.options.bn : m.options.en)[m.correctIndex]}
                 </div>
-                <button type="button" className="ev-btn ev-btn-secondary ev-btn-sm" style={{ marginTop: 8 }} onClick={() => markMistakeMastered(m.id)}>
+                <button
+                  type="button"
+                  className="ev-btn ev-btn-secondary ev-btn-sm"
+                  style={{ marginTop: 8 }}
+                  onClick={() => markMistakeMastered(m.id)}
+                >
                   ✔️ {isBn ? 'আয়ত্ত করেছি (Remove)' : 'Mastered (Remove)'}
                 </button>
               </div>
@@ -2229,6 +2597,7 @@ export const ExtraFeaturesView: React.FC = () => {
     );
   }
 
+  /* VIEW 8: FLASHCARDS */
   if (activeTab === 'flashcards') {
     const card = flashcards[fcIndex % Math.max(1, flashcards.length)];
     return (
@@ -2270,7 +2639,9 @@ export const ExtraFeaturesView: React.FC = () => {
 
         {flashcards.length === 0 ? (
           <p style={{ color: 'var(--text-secondary)', fontSize: 14 }}>
-            {isBn ? 'তোমার নিজস্ব ফ্ল্যাশকার্ড তৈরি করতে ওপরে প্রশ্ন ও উত্তর লিখে "+ যোগ" বাটনে ক্লিক করো।' : 'Create your own flashcards above to review key formulas and concepts.'}
+            {isBn
+              ? 'তোমার নিজস্ব ফ্ল্যাশকার্ড তৈরি করতে ওপরে প্রশ্ন ও উত্তর লিখে "+ যোগ" বাটনে ক্লিক করো।'
+              : 'Create your own flashcards above to review key formulas and concepts.'}
           </p>
         ) : (
           <div style={{ textAlign: 'center' }}>
@@ -2292,8 +2663,12 @@ export const ExtraFeaturesView: React.FC = () => {
                 gap: 8,
               }}
             >
-              <span className="ev-badge-pill ev-badge-indigo">{fcFlipped ? (isBn ? 'উত্তর' : 'Answer') : isBn ? 'প্রশ্ন' : 'Question'}</span>
-              <div style={{ fontSize: 17, fontWeight: 800 }}>{trText(fcFlipped ? card.back : card.front, language)}</div>
+              <span className="ev-badge-pill ev-badge-indigo">
+                {fcFlipped ? (isBn ? 'উত্তর' : 'Answer') : isBn ? 'প্রশ্ন' : 'Question'}
+              </span>
+              <div style={{ fontSize: 17, fontWeight: 800 }}>
+                {trText(fcFlipped ? card.back : card.front, language)}
+              </div>
               <small style={{ color: 'var(--text-muted)' }}>({isBn ? 'ট্যাপ করে উল্টাও' : 'Tap to flip'})</small>
             </div>
             <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginTop: 12 }}>
@@ -2308,7 +2683,7 @@ export const ExtraFeaturesView: React.FC = () => {
                 {isBn ? 'পরবর্তী কার্ড →' : 'Next Card →'}
               </button>
               <button type="button" className="ev-btn ev-btn-danger ev-btn-sm" onClick={() => deleteFlashcard(card.id)}>
-                🗑️ {isBn ? 'মুছুন' : 'Delete'}
+                🗑️ {isBn ? 'মুছো' : 'Delete'}
               </button>
             </div>
           </div>
@@ -2317,6 +2692,7 @@ export const ExtraFeaturesView: React.FC = () => {
     );
   }
 
+  /* VIEW 9: STUDY PLANNER */
   if (activeTab === 'planner') {
     return (
       <div className="ev-card">
@@ -2333,14 +2709,24 @@ export const ExtraFeaturesView: React.FC = () => {
             value={taskTitle}
             onChange={(e) => setTaskTitle(e.target.value)}
           />
-          <select className="ev-select" style={{ width: 'auto' }} value={taskSubject} onChange={(e) => setTaskSubject(e.target.value)}>
+          <select
+            className="ev-select"
+            style={{ width: 'auto' }}
+            value={taskSubject}
+            onChange={(e) => setTaskSubject(e.target.value)}
+          >
             {subjects.map((s) => (
               <option key={s.id} value={s.name.bn}>
                 {trText(s.name, language)}
               </option>
             ))}
           </select>
-          <select className="ev-select" style={{ width: 'auto' }} value={taskMinutes} onChange={(e) => setTaskMinutes(Number(e.target.value))}>
+          <select
+            className="ev-select"
+            style={{ width: 'auto' }}
+            value={taskMinutes}
+            onChange={(e) => setTaskMinutes(Number(e.target.value))}
+          >
             <option value={25}>25 {isBn ? 'মিনিট' : 'mins'}</option>
             <option value={40}>40 {isBn ? 'মিনিট' : 'mins'}</option>
             <option value={60}>60 {isBn ? 'মিনিট' : 'mins'}</option>
@@ -2365,7 +2751,9 @@ export const ExtraFeaturesView: React.FC = () => {
 
         {studyTasks.length === 0 ? (
           <p style={{ color: 'var(--text-secondary)', fontSize: 14 }}>
-            {isBn ? 'তোমার পড়ার রুটিনে এখনো কোনো টাস্ক নেই। ওপরে টার্গেট লিখে যোগ করো!' : 'No study tasks yet. Add your daily study goals above!'}
+            {isBn
+              ? 'তোমার পড়ার রুটিনে এখনো কোনো টাস্ক নেই। ওপরে টার্গেট লিখে যোগ করো!'
+              : 'No study tasks yet. Add your daily study goals above!'}
           </p>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -2384,7 +2772,10 @@ export const ExtraFeaturesView: React.FC = () => {
                 <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontWeight: 700 }}>
                   <input type="checkbox" checked={t.completed} onChange={() => toggleStudyTask(t.id)} />
                   <span style={{ textDecoration: t.completed ? 'line-through' : 'none' }}>
-                    {t.title} — <small style={{ color: 'var(--brand-primary)' }}>{t.subjectName} ({t.targetMinutes}m)</small>
+                    {t.title} —{' '}
+                    <small style={{ color: 'var(--brand-primary)' }}>
+                      {t.subjectName} ({t.targetMinutes}m)
+                    </small>
                   </span>
                 </label>
                 <button type="button" className="ev-btn ev-btn-danger ev-btn-sm" onClick={() => deleteStudyTask(t.id)}>
@@ -2398,6 +2789,7 @@ export const ExtraFeaturesView: React.FC = () => {
     );
   }
 
+  /* VIEW 10: DOUBT FORUM */
   return (
     <div className="ev-card">
       <div className="ev-section-header">
@@ -2414,7 +2806,12 @@ export const ExtraFeaturesView: React.FC = () => {
             value={postTitle}
             onChange={(e) => setPostTitle(e.target.value)}
           />
-          <select className="ev-select" style={{ width: 'auto' }} value={postSubj} onChange={(e) => setPostSubj(e.target.value)}>
+          <select
+            className="ev-select"
+            style={{ width: 'auto' }}
+            value={postSubj}
+            onChange={(e) => setPostSubj(e.target.value)}
+          >
             {subjects.map((s) => (
               <option key={s.id} value={s.name.bn}>
                 {trText(s.name, language)}
@@ -2456,60 +2853,93 @@ export const ExtraFeaturesView: React.FC = () => {
 
       {communityPosts.length === 0 ? (
         <p style={{ color: 'var(--text-secondary)', fontSize: 14 }}>
-          {isBn ? 'ফোরামে এখনো কোনো প্রশ্ন পোস্ট করা হয়নি। তোমার যেকোনো একাডেমিক প্রশ্ন ওপরে লিখে পোস্ট করতে পারো!' : 'No questions posted yet. Ask your first academic doubt above!'}
+          {isBn
+            ? 'ফোরামে এখনো কোনো প্রশ্ন পোস্ট করা হয়নি। তোমার যেকোনো একাডেমিক প্রশ্ন ওপরে লিখে পোস্ট করতে পারো!'
+            : 'No questions posted yet. Ask your first academic doubt above!'}
         </p>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {communityPosts.map((post) => (
-            <div key={post.id} className="ev-card" style={{ background: 'var(--bg-surface-muted)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 4, flexWrap: 'wrap', gap: 4 }}>
-                <span>
-                  {post.authorAvatar || '🎓'} {post.authorName} • <strong style={{ color: 'var(--brand-primary)' }}>{post.authorRank}</strong> • {post.subjectName}
-                </span>
-                <span>{post.createdAt}</span>
-              </div>
-              <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 4 }}>{post.title}</div>
-              {post.body && <p style={{ fontSize: 13.5, color: 'var(--text-secondary)', marginBottom: 8 }}>{post.body}</p>}
-
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
-                <button type="button" className="ev-btn ev-btn-secondary ev-btn-sm" onClick={() => togglePostLike(post.id)}>
-                  👍 {post.likes}
-                </button>
-              </div>
-
-              {post.replies.length > 0 && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 8, paddingLeft: 12, borderLeft: '2px solid var(--brand-primary-border)' }}>
-                  {post.replies.map((r) => (
-                    <div key={r.id} style={{ fontSize: 13 }}>
-                      <strong>{r.authorName}:</strong> {r.text}
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              <div style={{ display: 'flex', gap: 6 }}>
-                <input
-                  type="text"
-                  className="ev-input"
-                  placeholder={isBn ? 'উত্তর বা মন্তব্য লেখো...' : 'Write a reply...'}
-                  value={replyTextMap[post.id] || ''}
-                  onChange={(e) => setReplyTextMap((p) => ({ ...p, [post.id]: e.target.value }))}
-                />
-                <button
-                  type="button"
-                  className="ev-btn ev-btn-soft ev-btn-sm"
-                  onClick={() => {
-                    const txt = (replyTextMap[post.id] || '').trim();
-                    if (!txt) return;
-                    addCommunityReply(post.id, userName, txt);
-                    setReplyTextMap((p) => ({ ...p, [post.id]: '' }));
+          {communityPosts.map((post) => {
+            const hasLiked = Array.isArray(post.likedBy) && post.likedBy.includes(userId || 'guest-user');
+            return (
+              <div key={post.id} className="ev-card" style={{ background: 'var(--bg-surface-muted)' }}>
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    fontSize: 12,
+                    fontWeight: 700,
+                    color: 'var(--text-muted)',
+                    marginBottom: 4,
+                    flexWrap: 'wrap',
+                    gap: 4,
                   }}
                 >
-                  {isBn ? 'উত্তর দাও' : 'Reply'}
-                </button>
+                  <span>
+                    {post.authorAvatar || '🎓'} {post.authorName} •{' '}
+                    <strong style={{ color: 'var(--brand-primary)' }}>{post.authorRank}</strong> • {post.subjectName}
+                  </span>
+                  <span>{post.createdAt}</span>
+                </div>
+                <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 4 }}>{post.title}</div>
+                {post.body && (
+                  <p style={{ fontSize: 13.5, color: 'var(--text-secondary)', marginBottom: 8 }}>{post.body}</p>
+                )}
+
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+                  <button
+                    type="button"
+                    className={`ev-btn ${hasLiked ? 'ev-btn-primary' : 'ev-btn-secondary'} ev-btn-sm`}
+                    onClick={() => togglePostLike(post.id)}
+                  >
+                    👍 {post.likes}
+                  </button>
+                </div>
+
+                {post.replies.length > 0 && (
+                  <div
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 6,
+                      marginBottom: 8,
+                      paddingLeft: 12,
+                      borderLeft: '2px solid var(--brand-primary-border)',
+                    }}
+                  >
+                    {post.replies.map((r) => (
+                      <div key={r.id} style={{ fontSize: 13 }}>
+                        <strong>{r.authorName}:</strong> {r.text}{' '}
+                        <small style={{ color: 'var(--text-muted)' }}>({r.createdAt})</small>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <input
+                    type="text"
+                    className="ev-input"
+                    placeholder={isBn ? 'উত্তর বা মন্তব্য লেখো...' : 'Write a reply...'}
+                    value={replyTextMap[post.id] || ''}
+                    onChange={(e) => setReplyTextMap((p) => ({ ...p, [post.id]: e.target.value }))}
+                  />
+                  <button
+                    type="button"
+                    className="ev-btn ev-btn-soft ev-btn-sm"
+                    onClick={() => {
+                      const txt = (replyTextMap[post.id] || '').trim();
+                      if (!txt) return;
+                      addCommunityReply(post.id, userName, txt);
+                      setReplyTextMap((p) => ({ ...p, [post.id]: '' }));
+                    }}
+                  >
+                    {isBn ? 'উত্তর দাও' : 'Reply'}
+                  </button>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
