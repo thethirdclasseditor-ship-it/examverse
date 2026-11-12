@@ -3,7 +3,6 @@ import ReactDOM from 'react-dom/client';
 import { App } from './App';
 import './index.css';
 
-// Unregister any stale Service Workers that might serve outdated cached bundles
 if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
   navigator.serviceWorker
     .getRegistrations()
@@ -30,9 +29,14 @@ class AppErrorBoundary extends React.Component<
 
   handleReset = () => {
     try {
-      window.localStorage.removeItem('examverse-v7-storage');
-      window.localStorage.removeItem('examverse-v8-storage');
-      window.localStorage.removeItem('examverse-v9-storage');
+      const keysToRemove: string[] = [];
+      for (let i = 0; i < window.localStorage.length; i++) {
+        const k = window.localStorage.key(i);
+        if (k && k.startsWith('examverse')) {
+          keysToRemove.push(k);
+        }
+      }
+      keysToRemove.forEach((k) => window.localStorage.removeItem(k));
       window.location.hash = '#dashboard';
     } catch {
       // ignore
@@ -87,7 +91,7 @@ class AppErrorBoundary extends React.Component<
                 width: '100%',
               }}
             >
-              🔄 ক্যাশ ক্লিয়ার ও রিলোড করুন
+              🔄 ক্যাশ ক্লিয়ার ও রিলোড করো
             </button>
           </div>
         </div>
