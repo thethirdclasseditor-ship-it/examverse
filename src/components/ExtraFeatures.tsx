@@ -16,135 +16,6 @@ import { getComplexMathOrRuleExplanation } from './ModalsAndQuiz';
 function MetallicBadgeSvg({ color, label }: { color: string; label: string }) {
   return (
     <svg width="36" height="36" viewBox="0 0 40 40" fill="none">
-      <polygon
-        points="20,2 35,10 35,28 20,38 5,28 5,10"
-        fill={color}
-        fillOpacity="0.16"
-        stroke={color}
-        strokeWidth="2.4"
-      />
-      <polygon points="20,6 31,12 31,26 20,34 9,26 9,12" fill={color} />
-      <text x="20" y="24" textAnchor="middle" fill="#FFFFFF" fontSize="11" fontWeight="800" fontFamily="Plus Jakarta Sans, sans-serif">
-        {label}
-      </text>
-    </svg>
-  );
-}
-
-/**
- * Curated High-Yield Board & Admission MCQs by Group & Subject
- * Ensures every Group (Science, Business Studies, Humanities, Admission, BCS) and Subject
- * has authentic, top-tier Board & mathematical/analytical MCQs for 1v1 Quiz Battles.
- */
-const ELITE_GROUP_BATTLE_BANK: Record<string, MCQ[]> = {
-  science: [
-    {
-      id: 'eb-sci-1',
-      q: { bn: 'একটি প্রাসের প্রক্ষেপণ কোণ কত হলে আনুভূমিক পাল্লা (R) এবং সর্বাধিক উচ্চতা (H) সমান হবে?', en: 'At what projection angle is horizontal range (R) equal to maximum height (H)?' },
-      options: { bn: ['45°', '60°', '75.96° (tan⁻¹4)', '30°'], en: ['45°', '60°', '75.96° (tan⁻¹4)', '30°'] },
-      ans: 2,
-      board: "ঢা. বো. '২৩ • BUET",
-      explanation: { bn: 'আমরা জানি, R = 4H cotθ। যেহেতু R = H, তাই 4 cotθ = 1 ⇒ tanθ = 4 ⇒ θ = tan⁻¹(4) = 75.96°।', en: 'R = H => tanθ = 4 => θ = 75.96°.' },
-    },
-    {
-      id: 'eb-sci-2',
-      q: { bn: 'পৃথিবীর মুক্তিবেগ (Escape Velocity) কত?', en: 'What is the escape velocity of Earth?' },
-      options: { bn: ['9.8 km/s', '11.2 km/s', '7.9 km/s', '15.4 km/s'], en: ['9.8 km/s', '11.2 km/s', '7.9 km/s', '15.4 km/s'] },
-      ans: 1,
-      board: "রা. বো. '২৩ • DU",
-      explanation: { bn: 'সূত্র: v_e = √(2gR) = √(2 × 9.8 × 6.4×10⁶) ≈ 11.2 km/s।', en: 'v_e = sqrt(2gR) = 11.2 km/s.' },
-    },
-    {
-      id: 'eb-sci-3',
-      q: { bn: '0.01 M HCl দ্রবণের pH মান কত?', en: 'What is the pH of a 0.01 M HCl solution?' },
-      options: { bn: ['1', '2', '3', '12'], en: ['1', '2', '3', '12'] },
-      ans: 1,
-      board: "চ. বো. '২৩ • Medical",
-      explanation: { bn: 'pH = -log[H⁺] = -log(0.01) = -log(10⁻²) = 2।', en: 'pH = -log(10^-2) = 2.' },
-    },
-    {
-      id: 'eb-sci-4',
-      q: { bn: '∫ (1 / x) dx এর সমাকলন মান নিচের কোনটি?', en: 'What is the integral of ∫ (1 / x) dx?' },
-      options: { bn: ['ln|x| + c', '-1/x² + c', 'x ln(x) + c', 'eˣ + c'], en: ['ln|x| + c', '-1/x² + c', 'x ln(x) + c', 'eˣ + c'] },
-      ans: 0,
-      board: "য. বো. '২২",
-      explanation: { bn: 'ক্যালকুলাসের মৌলিক সূত্রানুসারে d/dx (ln|x|) = 1/x, তাই ∫(1/x)dx = ln|x| + c।', en: '∫(1/x)dx = ln|x| + c.' },
-    },
-    {
-      id: 'eb-sci-5',
-      q: { bn: 'মাইটোকন্ড্রিয়াকে কোষের ‘পাওয়ার হাউস’ (Powerhouse) বলার প্রধান কারণ কী?', en: 'Why is Mitochondria called the powerhouse of the cell?' },
-      options: { bn: ['প্রোটিন সংশ্লেষণ করে', 'ক্রেবস চক্র ও ইলেকট্রন ট্রান্সপোর্টের মাধ্যমে ATP উৎপাদন করে', 'বংশগতির বৈশিষ্ট্য বহন করে', 'কোষ বিভাজন নিয়ন্ত্রণ করে'], en: ['Synthesizes protein', 'Produces ATP via Krebs cycle & ETC', 'Carries genetic traits', 'Controls cell division'] },
-      ans: 1,
-      board: "সকল বোর্ড '২২ • Medical",
-      explanation: { bn: 'মাইটোকন্ড্রিয়ায় সবাত শ্বসনের ক্রেবস চক্র ও ETC সম্পন্ন হয়ে দেহের প্রয়োজনীয় শক্তির প্রধান উৎস ATP উৎপন্ন হয়।', en: 'Produces ATP through cellular respiration.' },
-    },
-  ],
-  business: [
-    {
-      id: 'eb-bus-1',
-      q: { bn: 'প্রারম্ভিক মজুদ পণ্য ৪০,০০০ টাকা, ক্রয় ২,০০,০০০ টাকা, ক্রয় পরিবহন ১০,০০০ টাকা এবং সমাপনী মজুদ ৫০,০০০ টাকা হলে বিক্রীত পণ্যের ব্যয় (COGS) কত?', en: 'Opening inventory 40,000, Purchase 2,00,000, Carriage inward 10,000, Closing inventory 50,000. What is Cost of Goods Sold?' },
-      options: { bn: ['১,৯০,০০০ টাকা', '২,০০,০০০ টাকা', '২,৫০,০০০ টাকা', '১,৮০,০০০ টাকা'], en: ['1,90,000 Tk', '2,00,000 Tk', '2,50,000 Tk', '1,80,000 Tk'] },
-      ans: 1,
-      board: "ঢা. বো. '২৩ • DU C-Unit",
-      explanation: { bn: 'বিক্রীত পণ্যের ব্যয় = প্রারম্ভিক মজুদ (৪০,০০০) + নিট ক্রয় (২,০০,০০০) + ক্রয় পরিবহন (১০,০০০) - সমাপনী মজুদ (৫০,০০০) = ২,০০,০০০ টাকা।', en: 'COGS = 40,000 + 2,00,000 + 10,000 - 50,000 = 2,00,000 Tk.' },
-    },
-    {
-      id: 'eb-bus-2',
-      q: { bn: 'একটি প্রতিষ্ঠানের চলতি সম্পদ ১,৫০,০০০ টাকা, মজুদ পণ্য ৩০,০০০ টাকা এবং চলতি দায় ৭৫,০০০ টাকা হলে তড়িৎ অনুপাত (Quick Ratio) কত?', en: 'Current Assets 1,50,000, Inventory 30,000, Current Liabilities 75,000. What is the Quick Ratio?' },
-      options: { bn: ['২ : ১', '১.৬ : ১', '১.২ : ১', '১ : ১'], en: ['2 : 1', '1.6 : 1', '1.2 : 1', '1 : 1'] },
-      ans: 1,
-      board: "রা. বো. '২৩",
-      explanation: { bn: 'তড়িৎ সম্পদ = চলতি সম্পদ - মজুদ পণ্য = ১,৫০,০০০ - ৩০,০০০ = ১,২০,০০০ টাকা। তড়িৎ অনুপাত = ১,২০,০০০ ÷ ৭৫,০০০ = ১.৬ : ১।', en: 'Quick Ratio = (150,000 - 30,000) / 75,000 = 1.6 : 1.' },
-    },
-    {
-      id: 'eb-bus-3',
-      q: { bn: 'বার্ষিক ১২% চক্রবৃদ্ধি সুদে ‘বিধি-৭২’ (Rule-72) অনুযায়ী কত বছরে বিনিয়োগকৃত অর্থ দ্বিগুণ হবে?', en: 'At 12% annual interest, in how many years will an investment double according to Rule-72?' },
-      options: { bn: ['৫ বছরে', '৬ বছরে', '৮ বছরে', '১২ বছরে'], en: ['5 years', '6 years', '8 years', '12 years'] },
-      ans: 1,
-      board: "চ. বো. '২৩ • ফিন্যান্স",
-      explanation: { bn: 'বিধি-৭২ অনুযায়ী অর্থ দ্বিগুণ হওয়ার সময় n = ৭২ ÷ সুদের হার (i) = ৭২ ÷ ১২ = ৬ বছর।', en: 'n = 72 / 12 = 6 years.' },
-    },
-    {
-      id: 'eb-bus-4',
-      q: { bn: 'আধুনিক ব্যবস্থাপনার জনক (Father of Modern Management) কে?', en: 'Who is the Father of Modern Management?' },
-      options: { bn: ['এফ. ডব্লিউ. টেইলর', 'হেনরি ফেয়ল (Henri Fayol)', 'এলটন মেয়ো', 'পিটার ড্রাকার'], en: ['F.W. Taylor', 'Henri Fayol', 'Elton Mayo', 'Peter Drucker'] },
-      ans: 1,
-      board: "সকল বোর্ড '২২",
-      explanation: { bn: 'হেনরি ফেয়লকে আধুনিক ব্যবস্থাপনার জনক এবং এফ. ডব্লিউ. টেইলরকে বৈজ্ঞানিক ব্যবস্থাপনার জনক বলা হয়।', en: 'Henri Fayol is the Father of Modern Management.' },
-    },
-
-আগের মেসেজে **`src/App.tsx`**-এর সম্পূর্ণ কোড এবং ৫টি স্ক্রিনশটের সবগুলো সমস্যার সমাধান দেওয়া হয়েছে। মেসেজ বড় হওয়ায় **`src/components/ExtraFeatures.tsx`** ফাইলটি নিচে **১০০% সম্পূর্ণ (শুরু থেকে শেষ লাইন পর্যন্ত)** দিয়ে দিলাম।
-
-### এক নজরে `ExtraFeatures.tsx`-এ যেসব নতুন ফিচার ও বাগ ফিক্স করা হয়েছে:
-* **কুইজ ব্যাটল (All Subjects বা যেকোনো ১টি বিষয়)**: ব্যাটল লবিতে শ্রেণি ও বিভাগ (`Science` / `Business Studies` / `Humanities`) পরিবর্তনের অপশন এবং **`📚 সকল বিষয় — সেরা MCQ মিশ্রণ (All Subjects)`** অথবা **যেকোনো ১টি নির্দিষ্ট বিষয়** সিলেক্ট করার অপশন যুক্ত করা হয়েছে।
-* **স্মার্ট Best-MCQ বাছাই লজিক (`scoreMcqForBattle` ও `prepareBattleQuestions`)**: ইউজার যে গ্রুপ বা বিষয় সিলেক্ট করবে, সেই গ্রুপের সবগুলো বিষয়ের (বা নির্দিষ্ট বিষয়ের সব অধ্যায়ের) **বোর্ড প্রশ্ন (`ঢা. বো.`, `রা. বো.`, `DU`, `BUET`, `Medical`, `GST`), গাণিতিক হিসাব ও নিয়মভিত্তিক সেরা MCQ গুলোকে** সর্বোচ্চ অগ্রাধিকার দিয়ে রাউন্ড-রবিন পদ্ধতিতে সাজানো হবে।
-* **মোবাইল বাটন ও কার্ড ওভারফ্লো ফিক্স**: `⚡ অনলাইন ম্যাচ শুরু করুন`, `🔑 রুম কোড তৈরি করো`, এবং `🚀 রুমে জয়েন ও ব্যাটল শুরু` বাটনগুলো মোবাইলে আর কখনোই বক্সের বাইরে বেরিয়ে যাবে না এবং রুম কার্ড দুটি মোবাইলে ফুল-উইডথে ওপর-নিচে বসবে।
-* **লিডারবোর্ড ফিক্স**: নিচে `#1 শিক্ষার্থী (তুমি)` সারি কেটে যাওয়া, পডিয়ামের নাম কেটে যাওয়া ও `0 XP` সমস্যা এবং ওপরের কার্ডের ওভারল্যাপিং স্কেচ সম্পূর্ণ ফিক্স করা হয়েছে।
-
----
-
-### ফাইল ২: `src/components/ExtraFeatures.tsx` (১০০% সম্পূর্ণ কোড)
-তোমার প্রজেক্টের **`src/components/ExtraFeatures.tsx`** ফাইলটি ওপেন করে নিচের সম্পূর্ণ কোডটি দিয়ে রিপ্লেস (`Ctrl+A` চাপার পর `Ctrl+V`) করে দাও:
-
-```tsx
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import {
-  ChapterFormulaItem,
-  getAvailableClasses,
-  getAvailableGroups,
-  getSubjectsForSelection,
-  subjectSupportsFormulas,
-  trKey,
-  trText,
-  useExamStore,
-} from '../store/useExamStore';
-import { isSupabaseConfigured, supabase } from '../lib/supabase';
-import { MCQ, SubjectData } from '../types';
-import { getComplexMathOrRuleExplanation } from './ModalsAndQuiz';
-
-function MetallicBadgeSvg({ color, label }: { color: string; label: string }) {
-  return (
-    <svg width="36" height="36" viewBox="0 0 40 40" fill="none">
       <polygon points="20,2 35,10 35,28 20,38 5,28 5,10" fill={color} fillOpacity="0.16" stroke={color} strokeWidth="2.4" />
       <polygon points="20,6 31,12 31,26 20,34 9,26 9,12" fill={color} />
       <text x="20" y="24" textAnchor="middle" fill="#FFFFFF" fontSize="11" fontWeight="800" fontFamily="Plus Jakarta Sans, sans-serif">
@@ -154,10 +25,6 @@ function MetallicBadgeSvg({ color, label }: { color: string; label: string }) {
   );
 }
 
-/**
- * Curated High-Yield Board & Admission MCQs by Group & Subject
- * Ensures every Group (Science, Business Studies, Humanities) and Subject has top-tier Board & analytical MCQs.
- */
 const ELITE_GROUP_BATTLE_BANK: Record<string, MCQ[]> = {
   science: [
     {
@@ -305,9 +172,6 @@ const ELITE_GROUP_BATTLE_BANK: Record<string, MCQ[]> = {
   ],
 };
 
-/**
- * Scores an MCQ on competitive quality so 1v1 Quiz Battles always pick the "Best of the Best" MCQs
- */
 function scoreMcqForBattle(q: MCQ): number {
   let score = 0;
   const qText = (q.q?.bn || q.q?.en || '').trim();
@@ -337,9 +201,6 @@ function scoreMcqForBattle(q: MCQ): number {
   return score;
 }
 
-/**
- * Deterministic shuffle for Room Codes so two friends joining the same room get the exact same curated Best MCQs
- */
 function seededShuffle<T>(items: T[], seedStr: string): T[] {
   const arr = [...items];
   let seed = 0;
@@ -411,7 +272,6 @@ export const ExtraFeaturesView: React.FC = () => {
   const myRank = getRankInfo();
   const subjects: SubjectData[] = getSubjectsForSelection(selectedClass, selectedGroup);
 
-  /* 1. FORMULAS STATE */
   const mathSubjects = useMemo(() => subjects.filter((s) => subjectSupportsFormulas(s)), [subjects]);
   const [formulaSearch, setFormulaSearch] = useState('');
   const activeFormulaSubjId =
@@ -420,7 +280,6 @@ export const ExtraFeaturesView: React.FC = () => {
       : mathSubjects[0]?.id || 'all';
   const activeFormulaChapId = formulaChapterId || 'all';
 
-  /* 2. LEADERBOARD STATE */
   const [lbMode, setLbMode] = useState<'global' | 'friends'>('global');
   const [lbTimeframe, setLbTimeframe] = useState<'all' | 'weekly' | 'monthly'>('all');
   const [lbSubjectFilter, setLbSubjectFilter] = useState<string>('all');
@@ -445,7 +304,6 @@ export const ExtraFeaturesView: React.FC = () => {
     }
   }, [activeTab, xp]);
 
-  /* 3. 1v1 QUIZ BATTLE STATE */
   const [battleModeTab, setBattleModeTab] = useState<'online' | 'friend'>('online');
   const [battleStage, setBattleStage] = useState<'lobby' | 'searching' | 'waiting_room' | 'playing' | 'finished'>('lobby');
   const [battleSubjId, setBattleSubjId] = useState<string>('all');
@@ -715,7 +573,6 @@ export const ExtraFeaturesView: React.FC = () => {
     setTimeout(() => handleBattleNextQuestion(idx), 550);
   };
 
-  /* 4. FLASHCARDS, PLANNER, COMMUNITY & ADMIN STATES */
   const [fcIndex, setFcIndex] = useState(0);
   const [fcFlipped, setFcFlipped] = useState(false);
   const [newFcFront, setNewFcFront] = useState('');
@@ -771,7 +628,6 @@ export const ExtraFeaturesView: React.FC = () => {
     }
   };
 
-  /* VIEW 1: FORMULAS (Math & Quantitative Only) */
   if (activeTab === 'formulas') {
     const filteredSubjects =
       activeFormulaSubjId === 'all' ? mathSubjects : mathSubjects.filter((s) => s.id === activeFormulaSubjId);
@@ -959,7 +815,6 @@ export const ExtraFeaturesView: React.FC = () => {
     );
   }
 
-  /* VIEW 2: 1v1 LIVE QUIZ BATTLE (⚔️ activeTab === 'battle') */
   if (activeTab === 'battle') {
     const currentQ = battleQuestions[battleQIdx];
     const currentQExplanation = currentQ ? getComplexMathOrRuleExplanation(currentQ, language) : '';
@@ -1399,7 +1254,6 @@ export const ExtraFeaturesView: React.FC = () => {
     );
   }
 
-  /* VIEW 3: LEADERBOARD (🏆 activeTab === 'leaderboard') */
   if (activeTab === 'leaderboard') {
     const timeMult = lbTimeframe === 'weekly' ? 0.35 : lbTimeframe === 'monthly' ? 0.72 : 1;
     const subjSeed = lbSubjectFilter === 'all' ? 1 : Math.max(0.45, ((lbSubjectFilter.charCodeAt(4) || 68) % 10) / 10);
@@ -1689,7 +1543,6 @@ export const ExtraFeaturesView: React.FC = () => {
     );
   }
 
-  /* VIEW 4: SECRET ADMIN PANEL (🔐 activeTab === 'admin') */
   if (activeTab === 'admin') {
     if (!isAdminUnlocked) {
       return (
@@ -2222,7 +2075,6 @@ export const ExtraFeaturesView: React.FC = () => {
     );
   }
 
-  /* VIEW 5: RANK & BADGES (🛡️ activeTab === 'achievements') */
   if (activeTab === 'achievements') {
     const allTiers = [
       { id: 'bronze', nameBn: 'ব্রোঞ্জ র‍্যাঙ্ক (I – III)', nameEn: 'Bronze Rank (I – III)', range: '0 – 199 RP', color: '#B45309', div: 'I' },
@@ -2269,7 +2121,6 @@ export const ExtraFeaturesView: React.FC = () => {
     );
   }
 
-  /* VIEW 6: ANALYTICS (📊 activeTab === 'Analytics') */
   if (activeTab === 'Analytics') {
     return (
       <div className="ev-card">
@@ -2342,7 +2193,6 @@ export const ExtraFeaturesView: React.FC = () => {
     );
   }
 
-  /* VIEW 7: MISTAKE BANK (🎯 activeTab === 'mistakes') */
   if (activeTab === 'mistakes') {
     const activeMistakes = mistakes.filter((m) => !m.mastered);
     return (
@@ -2378,7 +2228,6 @@ export const ExtraFeaturesView: React.FC = () => {
     );
   }
 
-  /* VIEW 8: FLASHCARDS (🗂️ activeTab === 'flashcards') */
   if (activeTab === 'flashcards') {
     const card = flashcards[fcIndex % Math.max(1, flashcards.length)];
     return (
@@ -2467,7 +2316,6 @@ export const ExtraFeaturesView: React.FC = () => {
     );
   }
 
-  /* VIEW 9: STUDY PLANNER (📅 activeTab === 'planner') */
   if (activeTab === 'planner') {
     return (
       <div className="ev-card">
@@ -2549,7 +2397,6 @@ export const ExtraFeaturesView: React.FC = () => {
     );
   }
 
-  /* VIEW 10: DOUBT FORUM (💬 activeTab === 'community') */
   return (
     <div className="ev-card">
       <div className="ev-section-header">
