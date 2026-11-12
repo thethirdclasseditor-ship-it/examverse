@@ -1,27 +1,376 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  calculateUserRank,
+  ChapterFormulaItem,
   getAvailableClasses,
   getAvailableGroups,
   getSubjectsForSelection,
+  subjectSupportsFormulas,
   trKey,
   trText,
   useExamStore,
 } from '../store/useExamStore';
-import { fetchRealCloudLeaderboard, supabase } from '../lib/supabase';
-import { EvIcon, MetallicBadgeSvg } from './ModalsAndQuiz';
-import { MCQQuestion, SubjectData } from '../types';
+import { isSupabaseConfigured, supabase } from '../lib/supabase';
+import { MCQ, SubjectData } from '../types';
+import { getComplexMathOrRuleExplanation } from './ModalsAndQuiz';
+
+function MetallicBadgeSvg({ color, label }: { color: string; label: string }) {
+  return (
+    <svg width="36" height="36" viewBox="0 0 40 40" fill="none">
+      <polygon
+        points="20,2 35,10 35,28 20,38 5,28 5,10"
+        fill={color}
+        fillOpacity="0.16"
+        stroke={color}
+        strokeWidth="2.4"
+      />
+      <polygon points="20,6 31,12 31,26 20,34 9,26 9,12" fill={color} />
+      <text x="20" y="24" textAnchor="middle" fill="#FFFFFF" fontSize="11" fontWeight="800" fontFamily="Plus Jakarta Sans, sans-serif">
+        {label}
+      </text>
+    </svg>
+  );
+}
+
+/**
+ * Curated High-Yield Board & Admission MCQs by Group & Subject
+ * Ensures every Group (Science, Business Studies, Humanities, Admission, BCS) and Subject
+ * has authentic, top-tier Board & mathematical/analytical MCQs for 1v1 Quiz Battles.
+ */
+const ELITE_GROUP_BATTLE_BANK: Record<string, MCQ[]> = {
+  science: [
+    {
+      id: 'eb-sci-1',
+      q: { bn: 'একটি প্রাসের প্রক্ষেপণ কোণ কত হলে আনুভূমিক পাল্লা (R) এবং সর্বাধিক উচ্চতা (H) সমান হবে?', en: 'At what projection angle is horizontal range (R) equal to maximum height (H)?' },
+      options: { bn: ['45°', '60°', '75.96° (tan⁻¹4)', '30°'], en: ['45°', '60°', '75.96° (tan⁻¹4)', '30°'] },
+      ans: 2,
+      board: "ঢা. বো. '২৩ • BUET",
+      explanation: { bn: 'আমরা জানি, R = 4H cotθ। যেহেতু R = H, তাই 4 cotθ = 1 ⇒ tanθ = 4 ⇒ θ = tan⁻¹(4) = 75.96°।', en: 'R = H => tanθ = 4 => θ = 75.96°.' },
+    },
+    {
+      id: 'eb-sci-2',
+      q: { bn: 'পৃথিবীর মুক্তিবেগ (Escape Velocity) কত?', en: 'What is the escape velocity of Earth?' },
+      options: { bn: ['9.8 km/s', '11.2 km/s', '7.9 km/s', '15.4 km/s'], en: ['9.8 km/s', '11.2 km/s', '7.9 km/s', '15.4 km/s'] },
+      ans: 1,
+      board: "রা. বো. '২৩ • DU",
+      explanation: { bn: 'সূত্র: v_e = √(2gR) = √(2 × 9.8 × 6.4×10⁶) ≈ 11.2 km/s।', en: 'v_e = sqrt(2gR) = 11.2 km/s.' },
+    },
+    {
+      id: 'eb-sci-3',
+      q: { bn: '0.01 M HCl দ্রবণের pH মান কত?', en: 'What is the pH of a 0.01 M HCl solution?' },
+      options: { bn: ['1', '2', '3', '12'], en: ['1', '2', '3', '12'] },
+      ans: 1,
+      board: "চ. বো. '২৩ • Medical",
+      explanation: { bn: 'pH = -log[H⁺] = -log(0.01) = -log(10⁻²) = 2।', en: 'pH = -log(10^-2) = 2.' },
+    },
+    {
+      id: 'eb-sci-4',
+      q: { bn: '∫ (1 / x) dx এর সমাকলন মান নিচের কোনটি?', en: 'What is the integral of ∫ (1 / x) dx?' },
+      options: { bn: ['ln|x| + c', '-1/x² + c', 'x ln(x) + c', 'eˣ + c'], en: ['ln|x| + c', '-1/x² + c', 'x ln(x) + c', 'eˣ + c'] },
+      ans: 0,
+      board: "য. বো. '২২",
+      explanation: { bn: 'ক্যালকুলাসের মৌলিক সূত্রানুসারে d/dx (ln|x|) = 1/x, তাই ∫(1/x)dx = ln|x| + c।', en: '∫(1/x)dx = ln|x| + c.' },
+    },
+    {
+      id: 'eb-sci-5',
+      q: { bn: 'মাইটোকন্ড্রিয়াকে কোষের ‘পাওয়ার হাউস’ (Powerhouse) বলার প্রধান কারণ কী?', en: 'Why is Mitochondria called the powerhouse of the cell?' },
+      options: { bn: ['প্রোটিন সংশ্লেষণ করে', 'ক্রেবস চক্র ও ইলেকট্রন ট্রান্সপোর্টের মাধ্যমে ATP উৎপাদন করে', 'বংশগতির বৈশিষ্ট্য বহন করে', 'কোষ বিভাজন নিয়ন্ত্রণ করে'], en: ['Synthesizes protein', 'Produces ATP via Krebs cycle & ETC', 'Carries genetic traits', 'Controls cell division'] },
+      ans: 1,
+      board: "সকল বোর্ড '২২ • Medical",
+      explanation: { bn: 'মাইটোকন্ড্রিয়ায় সবাত শ্বসনের ক্রেবস চক্র ও ETC সম্পন্ন হয়ে দেহের প্রয়োজনীয় শক্তির প্রধান উৎস ATP উৎপন্ন হয়।', en: 'Produces ATP through cellular respiration.' },
+    },
+  ],
+  business: [
+    {
+      id: 'eb-bus-1',
+      q: { bn: 'প্রারম্ভিক মজুদ পণ্য ৪০,০০০ টাকা, ক্রয় ২,০০,০০০ টাকা, ক্রয় পরিবহন ১০,০০০ টাকা এবং সমাপনী মজুদ ৫০,০০০ টাকা হলে বিক্রীত পণ্যের ব্যয় (COGS) কত?', en: 'Opening inventory 40,000, Purchase 2,00,000, Carriage inward 10,000, Closing inventory 50,000. What is Cost of Goods Sold?' },
+      options: { bn: ['১,৯০,০০০ টাকা', '২,০০,০০০ টাকা', '২,৫০,০০০ টাকা', '১,৮০,০০০ টাকা'], en: ['1,90,000 Tk', '2,00,000 Tk', '2,50,000 Tk', '1,80,000 Tk'] },
+      ans: 1,
+      board: "ঢা. বো. '২৩ • DU C-Unit",
+      explanation: { bn: 'বিক্রীত পণ্যের ব্যয় = প্রারম্ভিক মজুদ (৪০,০০০) + নিট ক্রয় (২,০০,০০০) + ক্রয় পরিবহন (১০,০০০) - সমাপনী মজুদ (৫০,০০০) = ২,০০,০০০ টাকা।', en: 'COGS = 40,000 + 2,00,000 + 10,000 - 50,000 = 2,00,000 Tk.' },
+    },
+    {
+      id: 'eb-bus-2',
+      q: { bn: 'একটি প্রতিষ্ঠানের চলতি সম্পদ ১,৫০,০০০ টাকা, মজুদ পণ্য ৩০,০০০ টাকা এবং চলতি দায় ৭৫,০০০ টাকা হলে তড়িৎ অনুপাত (Quick Ratio) কত?', en: 'Current Assets 1,50,000, Inventory 30,000, Current Liabilities 75,000. What is the Quick Ratio?' },
+      options: { bn: ['২ : ১', '১.৬ : ১', '১.২ : ১', '১ : ১'], en: ['2 : 1', '1.6 : 1', '1.2 : 1', '1 : 1'] },
+      ans: 1,
+      board: "রা. বো. '২৩",
+      explanation: { bn: 'তড়িৎ সম্পদ = চলতি সম্পদ - মজুদ পণ্য = ১,৫০,০০০ - ৩০,০০০ = ১,২০,০০০ টাকা। তড়িৎ অনুপাত = ১,২০,০০০ ÷ ৭৫,০০০ = ১.৬ : ১।', en: 'Quick Ratio = (150,000 - 30,000) / 75,000 = 1.6 : 1.' },
+    },
+    {
+      id: 'eb-bus-3',
+      q: { bn: 'বার্ষিক ১২% চক্রবৃদ্ধি সুদে ‘বিধি-৭২’ (Rule-72) অনুযায়ী কত বছরে বিনিয়োগকৃত অর্থ দ্বিগুণ হবে?', en: 'At 12% annual interest, in how many years will an investment double according to Rule-72?' },
+      options: { bn: ['৫ বছরে', '৬ বছরে', '৮ বছরে', '১২ বছরে'], en: ['5 years', '6 years', '8 years', '12 years'] },
+      ans: 1,
+      board: "চ. বো. '২৩ • ফিন্যান্স",
+      explanation: { bn: 'বিধি-৭২ অনুযায়ী অর্থ দ্বিগুণ হওয়ার সময় n = ৭২ ÷ সুদের হার (i) = ৭২ ÷ ১২ = ৬ বছর।', en: 'n = 72 / 12 = 6 years.' },
+    },
+    {
+      id: 'eb-bus-4',
+      q: { bn: 'আধুনিক ব্যবস্থাপনার জনক (Father of Modern Management) কে?', en: 'Who is the Father of Modern Management?' },
+      options: { bn: ['এফ. ডব্লিউ. টেইলর', 'হেনরি ফেয়ল (Henri Fayol)', 'এলটন মেয়ো', 'পিটার ড্রাকার'], en: ['F.W. Taylor', 'Henri Fayol', 'Elton Mayo', 'Peter Drucker'] },
+      ans: 1,
+      board: "সকল বোর্ড '২২",
+      explanation: { bn: 'হেনরি ফেয়লকে আধুনিক ব্যবস্থাপনার জনক এবং এফ. ডব্লিউ. টেইলরকে বৈজ্ঞানিক ব্যবস্থাপনার জনক বলা হয়।', en: 'Henri Fayol is the Father of Modern Management.' },
+    },
+
+আগের মেসেজে **`src/App.tsx`**-এর সম্পূর্ণ কোড এবং ৫টি স্ক্রিনশটের সবগুলো সমস্যার সমাধান দেওয়া হয়েছে। মেসেজ বড় হওয়ায় **`src/components/ExtraFeatures.tsx`** ফাইলটি নিচে **১০০% সম্পূর্ণ (শুরু থেকে শেষ লাইন পর্যন্ত)** দিয়ে দিলাম।
+
+### এক নজরে `ExtraFeatures.tsx`-এ যেসব নতুন ফিচার ও বাগ ফিক্স করা হয়েছে:
+* **কুইজ ব্যাটল (All Subjects বা যেকোনো ১টি বিষয়)**: ব্যাটল লবিতে শ্রেণি ও বিভাগ (`Science` / `Business Studies` / `Humanities`) পরিবর্তনের অপশন এবং **`📚 সকল বিষয় — সেরা MCQ মিশ্রণ (All Subjects)`** অথবা **যেকোনো ১টি নির্দিষ্ট বিষয়** সিলেক্ট করার অপশন যুক্ত করা হয়েছে।
+* **স্মার্ট Best-MCQ বাছাই লজিক (`scoreMcqForBattle` ও `prepareBattleQuestions`)**: ইউজার যে গ্রুপ বা বিষয় সিলেক্ট করবে, সেই গ্রুপের সবগুলো বিষয়ের (বা নির্দিষ্ট বিষয়ের সব অধ্যায়ের) **বোর্ড প্রশ্ন (`ঢা. বো.`, `রা. বো.`, `DU`, `BUET`, `Medical`, `GST`), গাণিতিক হিসাব ও নিয়মভিত্তিক সেরা MCQ গুলোকে** সর্বোচ্চ অগ্রাধিকার দিয়ে রাউন্ড-রবিন পদ্ধতিতে সাজানো হবে।
+* **মোবাইল বাটন ও কার্ড ওভারফ্লো ফিক্স**: `⚡ অনলাইন ম্যাচ শুরু করুন`, `🔑 রুম কোড তৈরি করো`, এবং `🚀 রুমে জয়েন ও ব্যাটল শুরু` বাটনগুলো মোবাইলে আর কখনোই বক্সের বাইরে বেরিয়ে যাবে না এবং রুম কার্ড দুটি মোবাইলে ফুল-উইডথে ওপর-নিচে বসবে।
+* **লিডারবোর্ড ফিক্স**: নিচে `#1 শিক্ষার্থী (তুমি)` সারি কেটে যাওয়া, পডিয়ামের নাম কেটে যাওয়া ও `0 XP` সমস্যা এবং ওপরের কার্ডের ওভারল্যাপিং স্কেচ সম্পূর্ণ ফিক্স করা হয়েছে।
+
+---
+
+### ফাইল ২: `src/components/ExtraFeatures.tsx` (১০০% সম্পূর্ণ কোড)
+তোমার প্রজেক্টের **`src/components/ExtraFeatures.tsx`** ফাইলটি ওপেন করে নিচের সম্পূর্ণ কোডটি দিয়ে রিপ্লেস (`Ctrl+A` চাপার পর `Ctrl+V`) করে দাও:
+
+```tsx
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  ChapterFormulaItem,
+  getAvailableClasses,
+  getAvailableGroups,
+  getSubjectsForSelection,
+  subjectSupportsFormulas,
+  trKey,
+  trText,
+  useExamStore,
+} from '../store/useExamStore';
+import { isSupabaseConfigured, supabase } from '../lib/supabase';
+import { MCQ, SubjectData } from '../types';
+import { getComplexMathOrRuleExplanation } from './ModalsAndQuiz';
+
+function MetallicBadgeSvg({ color, label }: { color: string; label: string }) {
+  return (
+    <svg width="36" height="36" viewBox="0 0 40 40" fill="none">
+      <polygon points="20,2 35,10 35,28 20,38 5,28 5,10" fill={color} fillOpacity="0.16" stroke={color} strokeWidth="2.4" />
+      <polygon points="20,6 31,12 31,26 20,34 9,26 9,12" fill={color} />
+      <text x="20" y="24" textAnchor="middle" fill="#FFFFFF" fontSize="11" fontWeight="800" fontFamily="Plus Jakarta Sans, sans-serif">
+        {label}
+      </text>
+    </svg>
+  );
+}
+
+/**
+ * Curated High-Yield Board & Admission MCQs by Group & Subject
+ * Ensures every Group (Science, Business Studies, Humanities) and Subject has top-tier Board & analytical MCQs.
+ */
+const ELITE_GROUP_BATTLE_BANK: Record<string, MCQ[]> = {
+  science: [
+    {
+      id: 'eb-sci-1',
+      q: { bn: 'একটি প্রাসের প্রক্ষেপণ কোণ কত হলে আনুভূমিক পাল্লা (R) এবং সর্বাধিক উচ্চতা (H) সমান হবে?', en: 'At what projection angle is horizontal range (R) equal to maximum height (H)?' },
+      options: { bn: ['45°', '60°', '75.96° (tan⁻¹4)', '30°'], en: ['45°', '60°', '75.96° (tan⁻¹4)', '30°'] },
+      ans: 2,
+      board: "ঢা. বো. '২৩ • BUET",
+      explanation: { bn: 'আমরা জানি, R = 4H cotθ। যেহেতু R = H, তাই 4 cotθ = 1 ⇒ tanθ = 4 ⇒ θ = tan⁻¹(4) = 75.96°।', en: 'R = H => tanθ = 4 => θ = 75.96°.' },
+    },
+    {
+      id: 'eb-sci-2',
+      q: { bn: 'পৃথিবীর মুক্তিবেগ (Escape Velocity) কত?', en: 'What is the escape velocity of Earth?' },
+      options: { bn: ['9.8 km/s', '11.2 km/s', '7.9 km/s', '15.4 km/s'], en: ['9.8 km/s', '11.2 km/s', '7.9 km/s', '15.4 km/s'] },
+      ans: 1,
+      board: "রা. বো. '২৩ • DU",
+      explanation: { bn: 'সূত্র: v_e = √(2gR) = √(2 × 9.8 × 6.4×10⁶) ≈ 11.2 km/s।', en: 'v_e = sqrt(2gR) = 11.2 km/s.' },
+    },
+    {
+      id: 'eb-sci-3',
+      q: { bn: '0.01 M HCl দ্রবণের pH মান কত?', en: 'What is the pH of a 0.01 M HCl solution?' },
+      options: { bn: ['1', '2', '3', '12'], en: ['1', '2', '3', '12'] },
+      ans: 1,
+      board: "চ. বো. '২৩ • Medical",
+      explanation: { bn: 'pH = -log[H⁺] = -log(0.01) = -log(10⁻²) = 2।', en: 'pH = -log(10^-2) = 2.' },
+    },
+    {
+      id: 'eb-sci-4',
+      q: { bn: '∫ (1 / x) dx এর সমাকলন মান নিচের কোনটি?', en: 'What is the integral of ∫ (1 / x) dx?' },
+      options: { bn: ['ln|x| + c', '-1/x² + c', 'x ln(x) + c', 'eˣ + c'], en: ['ln|x| + c', '-1/x² + c', 'x ln(x) + c', 'eˣ + c'] },
+      ans: 0,
+      board: "য. বো. '২২",
+      explanation: { bn: 'ক্যালকুলাসের মৌলিক সূত্রানুসারে d/dx (ln|x|) = 1/x, তাই ∫(1/x)dx = ln|x| + c।', en: '∫(1/x)dx = ln|x| + c.' },
+    },
+    {
+      id: 'eb-sci-5',
+      q: { bn: 'মাইটোকন্ড্রিয়াকে কোষের ‘পাওয়ার হাউস’ (Powerhouse) বলার প্রধান কারণ কী?', en: 'Why is Mitochondria called the powerhouse of the cell?' },
+      options: { bn: ['প্রোটিন সংশ্লেষণ করে', 'ক্রেবস চক্র ও ইলেকট্রন ট্রান্সপোর্টের মাধ্যমে ATP উৎপাদন করে', 'বংশগতির বৈশিষ্ট্য বহন করে', 'কোষ বিভাজন নিয়ন্ত্রণ করে'], en: ['Synthesizes protein', 'Produces ATP via Krebs cycle & ETC', 'Carries genetic traits', 'Controls cell division'] },
+      ans: 1,
+      board: "সকল বোর্ড '২২ • Medical",
+      explanation: { bn: 'মাইটোকন্ড্রিয়ায় সবাত শ্বসনের ক্রেবস চক্র ও ETC সম্পন্ন হয়ে দেহের প্রয়োজনীয় শক্তির প্রধান উৎস ATP উৎপন্ন হয়।', en: 'Produces ATP through cellular respiration.' },
+    },
+  ],
+  business: [
+    {
+      id: 'eb-bus-1',
+      q: { bn: 'প্রারম্ভিক মজুদ ৪০,০০০ টাকা, ক্রয় ২,০০,০০০ টাকা, ক্রয় পরিবহন ১০,০০০ টাকা এবং সমাপনী মজুদ ৫০,০০০ টাকা হলে বিক্রীত পণ্যের ব্যয় (COGS) কত?', en: 'Opening inventory 40,000, Purchase 2,00,000, Carriage inward 10,000, Closing inventory 50,000. What is COGS?' },
+      options: { bn: ['১,৯০,০০০ টাকা', '২,০০,০০০ টাকা', '২,৫০,০০০ টাকা', '১,৮০,০০০ টাকা'], en: ['1,90,000 Tk', '2,00,000 Tk', '2,50,000 Tk', '1,80,000 Tk'] },
+      ans: 1,
+      board: "ঢা. বো. '২৩ • DU C-Unit",
+      explanation: { bn: 'বিক্রীত পণ্যের ব্যয় = প্রারম্ভিক মজুদ (৪০,০০০) + ক্রয় (২,০০,০০০) + ক্রয় পরিবহন (১০,০০০) - সমাপনী মজুদ (৫০,০০০) = ২,০০,০০০ টাকা।', en: 'COGS = 40,000 + 2,00,000 + 10,000 - 50,000 = 2,00,000 Tk.' },
+    },
+    {
+      id: 'eb-bus-2',
+      q: { bn: 'একটি প্রতিষ্ঠানের চলতি সম্পদ ১,৫০,০০০ টাকা, মজুদ পণ্য ৩০,০০০ টাকা এবং চলতি দায় ৭৫,০০০ টাকা হলে তড়িৎ অনুপাত (Quick Ratio) কত?', en: 'Current Assets 1,50,000, Inventory 30,000, Current Liabilities 75,000. What is the Quick Ratio?' },
+      options: { bn: ['২ : ১', '১.৬ : ১', '১.২ : ১', '১ : ১'], en: ['2 : 1', '1.6 : 1', '1.2 : 1', '1 : 1'] },
+      ans: 1,
+      board: "রা. বো. '২৩",
+      explanation: { bn: 'তড়িৎ সম্পদ = ১,৫০,০০০ - ৩০,০০০ = ১,২০,০০০ টাকা। তড়িৎ অনুপাত = ১,২০,০০০ ÷ ৭৫,০০০ = ১.৬ : ১।', en: 'Quick Ratio = (150,000 - 30,000) / 75,000 = 1.6 : 1.' },
+    },
+    {
+      id: 'eb-bus-3',
+      q: { bn: 'বার্ষিক ১২% চক্রবৃদ্ধি সুদে ‘বিধি-৭২’ (Rule-72) অনুযায়ী কত বছরে বিনিয়োগকৃত অর্থ দ্বিগুণ হবে?', en: 'At 12% annual interest, in how many years will an investment double according to Rule-72?' },
+      options: { bn: ['৫ বছরে', '৬ বছরে', '৮ বছরে', '১২ বছরে'], en: ['5 years', '6 years', '8 years', '12 years'] },
+      ans: 1,
+      board: "চ. বো. '২৩ • ফিন্যান্স",
+      explanation: { bn: 'বিধি-৭২ অনুযায়ী অর্থ দ্বিগুণ হওয়ার সময় n = ৭২ ÷ সুদের হার (i) = ৭২ ÷ ১২ = ৬ বছর।', en: 'n = 72 / 12 = 6 years.' },
+    },
+    {
+      id: 'eb-bus-4',
+      q: { bn: 'আধুনিক ব্যবস্থাপনার জনক (Father of Modern Management) কে?', en: 'Who is the Father of Modern Management?' },
+      options: { bn: ['এফ. ডব্লিউ. টেইলর', 'হেনরি ফেয়ল (Henri Fayol)', 'এলটন মেয়ো', 'পিটার ড্রাকার'], en: ['F.W. Taylor', 'Henri Fayol', 'Elton Mayo', 'Peter Drucker'] },
+      ans: 1,
+      board: "সকল বোর্ড '২২",
+      explanation: { bn: 'হেনরি ফেয়লকে আধুনিক ব্যবস্থাপনার জনক এবং এফ. ডব্লিউ. টেইলরকে বৈজ্ঞানিক ব্যবস্থাপনার জনক বলা হয়।', en: 'Henri Fayol is the Father of Modern Management.' },
+    },
+    {
+      id: 'eb-bus-5',
+      q: { bn: 'নগদে যন্ত্রপাতি ক্রয় ৫০,০০০ টাকা — এর সঠিক জাবেদা দাখিলা কোনটি?', en: 'Purchased machinery for cash 50,000 Tk — which is the correct journal entry?' },
+      options: { bn: ['ক্রয় হিসাব ডেবিট, নগদান ক্রেডিট', 'যন্ত্রপাতি হিসাব ডেবিট, নগদান হিসাব ক্রেডিট', 'নগদান ডেবিট, যন্ত্রপাতি ক্রেডিট', 'যন্ত্রপাতি ডেবিট, প্রদেয় হিসাব ক্রেডিট'], en: ['Purchase Dr, Cash Cr', 'Machinery A/c Dr, Cash A/c Cr', 'Cash Dr, Machinery Cr', 'Machinery Dr, Accounts Payable Cr'] },
+      ans: 1,
+      board: "কু. বো. '২৩",
+      explanation: { bn: 'স্থায়ী সম্পত্তি (যন্ত্রপাতি) বৃদ্ধি পাওয়ায় যন্ত্রপাতি হিসাব ডেবিট এবং নগদ অর্থ হ্রাস পাওয়ায় নগদান হিসাব ক্রেডিট।', en: 'Asset (Machinery) increases -> Debit; Cash decreases -> Credit.' },
+    },
+  ],
+  humanities: [
+    {
+      id: 'eb-hum-1',
+      q: { bn: 'চাহিদা সমীকরণ Q_d = 40 - 2P এবং যোগান সমীকরণ Q_s = 10 + 3P হলে ভারসাম্য দাম (Equilibrium Price, P) কত?', en: 'If Qd = 40 - 2P and Qs = 10 + 3P, what is the Equilibrium Price (P)?' },
+      options: { bn: ['5 টাকা', '6 টাকা', '8 টাকা', '10 টাকা'], en: ['5 Tk', '6 Tk', '8 Tk', '10 Tk'] },
+      ans: 1,
+      board: "ঢা. বো. '২৩ • অর্থনীতি",
+      explanation: { bn: 'ভারসাম্য অবস্থায় Q_d = Q_s ⇒ 40 - 2P = 10 + 3P ⇒ 5P = 30 ⇒ P = 6 টাকা।', en: '40 - 2P = 10 + 3P => 5P = 30 => P = 6.' },
+    },
+    {
+      id: 'eb-hum-2',
+      q: { bn: 'ঐতিহাসিক লাহোর প্রস্তাব কত সালে এবং কার কর্তৃক উত্থাপিত হয়?', en: 'In which year and by whom was the historic Lahore Resolution presented?' },
+      options: { bn: ['১৯৪০ সালের ২৩ মার্চ, এ. কে. ফজলুল হক', '১৯৪০ সালের ২৪ মার্চ, মোহাম্মদ আলী জিন্নাহ', '১৯৪৭ সালের ১৪ আগস্ট, লিয়াকত আলী খান', '১৯৩৫ সালে, লর্ড মাউন্টব্যাটেন'], en: ['23 March 1940, A.K. Fazlul Huq', '24 March 1940, M.A. Jinnah', '14 August 1947, Liaquat Ali Khan', '1935, Lord Mountbatten'] },
+      ans: 0,
+      board: "রা. বো. '২৩ • ইতিহাস ও পৌরনীতি",
+      explanation: { bn: '', en: '' },
+    },
+    {
+      id: 'eb-hum-3',
+      q: { bn: 'গণপ্রজাতন্ত্রী বাংলাদেশের সংবিধান কবে থেকে কার্যকর হয়?', en: 'When did the Constitution of Bangladesh come into effect?' },
+      options: { bn: ['৪ নভেম্বর ১৯৭২', '১৬ ডিসেম্বর ১৯৭২', '২৬ মার্চ ১৯৭২', '১৭ এপ্রিল ১৯৭১'], en: ['4 Nov 1972', '16 Dec 1972', '26 Mar 1972', '17 Apr 1971'] },
+      ans: 1,
+      board: "সকল বোর্ড '২৩ • BCS",
+      explanation: { bn: '', en: '' },
+    },
+    {
+      id: 'eb-hum-4',
+      q: { bn: 'কোনো দ্রব্যের দাম ১০% বৃদ্ধি পাওয়ায় চাহিদার পরিমাণ ২০% হ্রাস পেলে চাহিদার দাম স্থিতিস্থাপকতা (E_p) কত?', en: 'If price rises by 10% and quantity demanded falls by 20%, what is the price elasticity of demand?' },
+      options: { bn: ['0.5', '2.0 (স্থিতিস্থাপক)', '1.0', '10'], en: ['0.5', '2.0 (Elastic)', '1.0', '10'] },
+      ans: 1,
+      board: "চ. বো. '২২ • অর্থনীতি",
+      explanation: { bn: 'সূত্র: E_p = (%ΔQ) ÷ (%ΔP) = ২০% ÷ ১০% = ২.০ (একক অপেক্ষা অধিক স্থিতিস্থাপক)।', en: 'Ep = 20% / 10% = 2.0.' },
+    },
+  ],
+  common: [
+    {
+      id: 'eb-com-1',
+      q: { bn: '(101101)₂ বাইনারি সংখ্যাটির দশমিক (Decimal) মান কত?', en: 'What is the decimal value of the binary number (101101)₂?' },
+      options: { bn: ['(43)₁₀', '(45)₁₀', '(47)₁₀', '(53)₁₀'], en: ['(43)₁₀', '(45)₁₀', '(47)₁₀', '(53)₁₀'] },
+      ans: 1,
+      board: "ঢা. বো. '২৩ • ICT",
+      explanation: { bn: '(101101)₂ = 1×2⁵ + 0×2⁴ + 1×2³ + 1×2² + 0×2¹ + 1×2⁰ = 32 + 0 + 8 + 4 + 0 + 1 = (45)₁₀।', en: '32 + 8 + 4 + 1 = 45.' },
+    },
+    {
+      id: 'eb-com-2',
+      q: { bn: 'কোনো 3-input বিশিষ্ট সত্যক সারণিতে (Truth Table) মোট কয়টি ইনপুট কম্বিনেশন বা সারি থাকে?', en: 'How many rows are in a 3-input Truth Table?' },
+      options: { bn: ['6টি', '8টি', '9টি', '16টি'], en: ['6', '8', '9', '16'] },
+      ans: 1,
+      board: "রা. বো. '২৩ • ICT",
+      explanation: { bn: 'n-সংখ্যক ইনপুটের জন্য সত্যক সারণির সারি সংখ্যা = 2ⁿ। এখানে n = 3 হওয়ায় 2³ = 8টি সারি থাকে।', en: '2^n = 2^3 = 8 rows.' },
+    },
+    {
+      id: 'eb-com-3',
+      q: { bn: 'HTML-এ সবচেয়ে বড় আকারের হেডিং (Heading) ট্যাগ কোনটি?', en: 'Which is the largest heading tag in HTML?' },
+      options: { bn: ['<h6>', '<head>', '<h1>', '<header>'], en: ['<h6>', '<head>', '<h1>', '<header>'] },
+      ans: 2,
+      board: "সকল বোর্ড '২২ • ICT",
+      explanation: { bn: 'HTML-এ হেডিং ট্যাগ ৬টি (<h1> থেকে <h6>), যার মধ্যে <h1> সবচেয়ে বড় এবং <h6> সবচেয়ে ছোট।', en: '<h1> is the largest and <h6> is the smallest heading tag.' },
+    },
+  ],
+};
+
+/**
+ * Scores an MCQ on competitive quality so 1v1 Quiz Battles always pick the "Best of the Best" MCQs
+ */
+function scoreMcqForBattle(q: MCQ): number {
+  let score = 0;
+  const qText = (q.q?.bn || q.q?.en || '').trim();
+  const board = (q.board || '').trim();
+  const exp = getComplexMathOrRuleExplanation(q, 'bn');
+
+  if (!qText || (q.options?.bn?.length || 0) < 4) return -999;
+
+  if (
+    board &&
+    !board.includes('NCTB ও বোর্ড প্রশ্ন') &&
+    /(বো\.|বোর্ড|Board|BUET|DU|Medical|GST|BCS|RU|CU|JU|CKRUET|সকল)/i.test(board)
+  ) {
+    score += 40;
+  }
+
+  if (exp.length > 0) {
+    score += 35;
+  } else if (/[0-9০-৯]{2,}|[=+\-×÷/%√^₂₈₁₀₁₆]|টাকা|অনুপাত|হার|কত|সমীকরণ|বেগ|বল|রোধ|বাইনারি|গেট|ট্যাগ/.test(qText)) {
+    score += 25;
+  }
+
+  if (qText.length >= 18 && qText.length <= 165) {
+    score += 15;
+  }
+
+  return score;
+}
+
+/**
+ * Deterministic shuffle for Room Codes so two friends joining the same room get the exact same curated Best MCQs
+ */
+function seededShuffle<T>(items: T[], seedStr: string): T[] {
+  const arr = [...items];
+  let seed = 0;
+  for (let i = 0; i < seedStr.length; i++) {
+    seed = (seed * 31 + seedStr.charCodeAt(i)) >>> 0;
+  }
+  for (let i = arr.length - 1; i > 0; i--) {
+    seed = (seed * 1664525 + 1013904223) >>> 0;
+    const j = seed % (i + 1);
+    const tmp = arr[i];
+    arr[i] = arr[j];
+    arr[j] = tmp;
+  }
+  return arr;
+}
 
 export const ExtraFeaturesView: React.FC = () => {
   const {
-    activeTab,
     language,
+    activeTab,
+    selectedClass,
+    selectedGroup,
+    setClassAndGroup,
+    formulaSubjectId,
+    formulaChapterId,
+    setFormulaFilter,
     userName,
-    userEmail,
     userAvatar,
+    userId,
     xp,
     streak,
-    examHistory,
     mistakes,
     markMistakeMastered,
     flashcards,
@@ -33,18 +382,14 @@ export const ExtraFeaturesView: React.FC = () => {
     deleteStudyTask,
     communityPosts,
     addCommunityPost,
-    addCommunityReply,
     togglePostLike,
-    friendsList,
-    addFriendByCode,
-    selectedClass,
-    selectedGroup,
-    formulaSubjectId,
-    formulaChapterId,
-    setFormulaTarget,
-    startQuiz,
-    recordExamResult,
+    addCommunityReply,
+    examHistory,
+    addXp,
     getRankInfo,
+    friendList,
+    addFriendByCode,
+    removeFriend,
     isAdminUnlocked,
     unlockAdmin,
     lockAdmin,
@@ -59,31 +404,36 @@ export const ExtraFeaturesView: React.FC = () => {
     resolveQuestionReport,
     deleteQuestionReport,
     exportProjectSyllabusCode,
+    fetchLeaderboardUsers,
   } = useExamStore();
 
   const isBn = language !== 'en';
   const myRank = getRankInfo();
-  const subjects = getSubjectsForSelection(selectedClass, selectedGroup);
+  const subjects: SubjectData[] = getSubjectsForSelection(selectedClass, selectedGroup);
 
-  /* =====================================================================
-     1. LEADERBOARD & RANKING STATE (With Single-Button Dropdowns!)
-     ===================================================================== */
-  const [lbScope, setLbScope] = useState<'global' | 'friends'>('global');
-  const [lbPeriod, setLbPeriod] = useState<'today' | 'weekly' | 'monthly' | 'alltime'>('alltime');
-  const [lbSubject, setLbSubject] = useState<string>('all');
-  const [periodDropdownOpen, setPeriodDropdownOpen] = useState(false);
-  const [subjectDropdownOpen, setSubjectDropdownOpen] = useState(false);
-  const [friendInput, setFriendInput] = useState('');
-  const [cloudPeers, setCloudPeers] = useState<any[]>([]);
+  /* 1. FORMULAS STATE */
+  const mathSubjects = useMemo(() => subjects.filter((s) => subjectSupportsFormulas(s)), [subjects]);
+  const [formulaSearch, setFormulaSearch] = useState('');
+  const activeFormulaSubjId =
+    formulaSubjectId && (formulaSubjectId === 'all' || mathSubjects.some((s) => s.id === formulaSubjectId))
+      ? formulaSubjectId
+      : mathSubjects[0]?.id || 'all';
+  const activeFormulaChapId = formulaChapterId || 'all';
+
+  /* 2. LEADERBOARD STATE */
+  const [lbMode, setLbMode] = useState<'global' | 'friends'>('global');
+  const [lbTimeframe, setLbTimeframe] = useState<'all' | 'weekly' | 'monthly'>('all');
+  const [lbSubjectFilter, setLbSubjectFilter] = useState<string>('all');
+  const [friendCodeInput, setFriendCodeInput] = useState('');
+  const [friendNameInput, setFriendNameInput] = useState('');
+  const [liveCloudLb, setLiveCloudLb] = useState<any[]>([]);
   const [loadingLb, setLoadingLb] = useState(false);
 
-  const loadCloudLeaderboard = async (subjFilter = lbSubject) => {
+  const refreshLiveLeaderboard = async () => {
     setLoadingLb(true);
     try {
-      const rows = await fetchRealCloudLeaderboard(subjFilter);
-      setCloudPeers(Array.isArray(rows) ? rows : []);
-    } catch {
-      setCloudPeers([]);
+      const list = await fetchLeaderboardUsers();
+      setLiveCloudLb(list || []);
     } finally {
       setLoadingLb(false);
     }
@@ -91,177 +441,307 @@ export const ExtraFeaturesView: React.FC = () => {
 
   useEffect(() => {
     if (activeTab === 'leaderboard') {
-      loadCloudLeaderboard(lbSubject);
+      refreshLiveLeaderboard();
     }
-  }, [activeTab, lbSubject]);
+  }, [activeTab, xp]);
 
-  /* =====================================================================
-     2. CHAPTER-WISE FORMULA MASTERBOOK STATE (Synced with Store!)
-     ===================================================================== */
-  const [formulaSearch, setFormulaSearch] = useState('');
-  const [copiedFormulaId, setCopiedFormulaId] = useState<string | null>(null);
-
-  /* =====================================================================
-     3. 1v1 MCQ BATTLE ARENA STATE (Friends Room Code + Online Matchmaking)
-     ===================================================================== */
+  /* 3. 1v1 QUIZ BATTLE STATE */
   const [battleModeTab, setBattleModeTab] = useState<'online' | 'friend'>('online');
-  const [battleSubjId, setBattleSubjId] = useState<string>(subjects[0]?.id || '');
-  const [battleQCount, setBattleQCount] = useState<number>(5);
-  const [roomCode, setRoomCode] = useState<string>('');
-  const [joinCodeInput, setJoinCodeInput] = useState<string>('');
-  const [battleStage, setBattleStage] = useState<'lobby' | 'searching' | 'playing' | 'finished'>('lobby');
-  const [opponentName, setOpponentName] = useState<string>('অনলাইন প্রতিদ্বন্দ্বী');
-  const [battleQuestions, setBattleQuestions] = useState<MCQQuestion[]>([]);
-  const [battleQIndex, setBattleQIndex] = useState<number>(0);
-  const [myBattleScore, setMyBattleScore] = useState<number>(0);
-  const [oppBattleScore, setOppBattleScore] = useState<number>(0);
-  const [battleTimeLeft, setBattleTimeLeft] = useState<number>(15);
-  const [battleSelectedOpt, setBattleSelectedOpt] = useState<number | null>(null);
+  const [battleStage, setBattleStage] = useState<'lobby' | 'searching' | 'waiting_room' | 'playing' | 'finished'>('lobby');
+  const [battleSubjId, setBattleSubjId] = useState<string>('all');
+  const [battleQuestionCount, setBattleQuestionCount] = useState<number>(10);
+  const [battleRoomCode, setBattleRoomCode] = useState<string>('');
+  const [joinRoomInput, setJoinRoomInput] = useState<string>('');
+  const [opponentName, setOpponentName] = useState<string>('রাকিব হাসান (DU Aspirant)');
+  const [opponentRankTitle, setOpponentRankTitle] = useState<string>('গোল্ড II');
+  const [battleQuestions, setBattleQuestions] = useState<MCQ[]>([]);
+  const [battleQIdx, setBattleQIdx] = useState(0);
+  const [myScore, setMyScore] = useState(0);
+  const [oppScore, setOppScore] = useState(0);
+  const [battleTimeLeft, setBattleTimeLeft] = useState(15);
+  const [battleLockedAns, setBattleLockedAns] = useState<number | null>(null);
+  const battleChannelRef = useRef<any>(null);
 
   useEffect(() => {
-    if (!subjects.some((s) => s.id === battleSubjId)) {
-      setBattleSubjId(subjects[0]?.id || '');
+    if (battleSubjId !== 'all' && !subjects.some((s) => s.id === battleSubjId)) {
+      setBattleSubjId('all');
     }
-  }, [subjects, battleSubjId]);
+  }, [selectedClass, selectedGroup, subjects, battleSubjId]);
 
-  const prepareBattleQuestions = (): MCQQuestion[] => {
-    const targetSubj = subjects.find((s) => s.id === battleSubjId) || subjects[0];
-    let pool = (targetSubj?.chapters || []).flatMap((c) => c.mcqs || []);
-    if (pool.length === 0) {
-      pool = subjects.flatMap((s) => s.chapters.flatMap((c) => c.mcqs || []));
+  const prepareBattleQuestions = (subjId: string, count: number, seedKey?: string): MCQ[] => {
+    const grpLower = selectedGroup.toLowerCase();
+    const groupEliteFallback = grpLower.includes('bus')
+      ? [...ELITE_GROUP_BATTLE_BANK.business, ...ELITE_GROUP_BATTLE_BANK.common]
+      : grpLower.includes('hum')
+      ? [...ELITE_GROUP_BATTLE_BANK.humanities, ...ELITE_GROUP_BATTLE_BANK.common]
+      : [...ELITE_GROUP_BATTLE_BANK.science, ...ELITE_GROUP_BATTLE_BANK.common];
+
+    const seenTexts = new Set<string>();
+    const pickUnique = (list: MCQ[]): MCQ[] => {
+      const out: MCQ[] = [];
+      for (const item of list) {
+        const key = (item.q?.bn || item.q?.en || '').trim();
+        if (!key || seenTexts.has(key)) continue;
+        seenTexts.add(key);
+        out.push(item);
+      }
+      return out;
+    };
+
+    if (subjId === 'all') {
+      const perSubjectBuckets: MCQ[][] = [];
+      for (const s of subjects) {
+        const rawSubjMcqs = s.chapters.flatMap((c) => c.mcqs || []);
+        if (rawSubjMcqs.length === 0) continue;
+        const ranked = [...rawSubjMcqs]
+          .filter((q) => scoreMcqForBattle(q) > 0)
+          .sort((a, b) => scoreMcqForBattle(b) - scoreMcqForBattle(a));
+        if (ranked.length > 0) {
+          perSubjectBuckets.push(seedKey ? seededShuffle(ranked.slice(0, 25), `${seedKey}-${s.id}`) : ranked.slice(0, 25));
+        }
+      }
+
+      const curatedPool: MCQ[] = [];
+      let round = 0;
+      while (curatedPool.length < count * 3 && round < 20) {
+        let addedAny = false;
+        for (const bucket of perSubjectBuckets) {
+          if (round < bucket.length) {
+            curatedPool.push(bucket[round]);
+            addedAny = true;
+          }
+        }
+        if (!addedAny) break;
+        round++;
+      }
+
+      const combined = pickUnique([...curatedPool, ...groupEliteFallback]);
+      const finalPool = seedKey
+        ? seededShuffle(combined, seedKey)
+        : [...combined.slice(0, Math.min(combined.length, count * 2))].sort(() => Math.random() - 0.5);
+      return finalPool.slice(0, count);
     }
-    if (pool.length === 0) {
-      pool = [
-        {
-          id: 'bt-1',
-          q: { bn: 'নিচের কোনটি মৌলিক একক?', en: 'Which is a base unit?' },
-          options: { bn: ['জুল', 'অ্যাম্পিয়ার', 'নিউটন', 'ওয়াট'], en: ['Joule', 'Ampere', 'Newton', 'Watt'] },
-          ans: 1,
-        },
-        {
-          id: 'bt-2',
-          q: { bn: 'প্রাসের সর্বোচ্চ পাল্লার ক্ষেত্রে নিক্ষেপণ কোণ কত?', en: 'Angle for maximum projectile range?' },
-          options: { bn: ['30°', '45°', '60°', '90°'], en: ['30°', '45°', '60°', '90°'] },
-          ans: 1,
-        },
-        {
-          id: 'bt-3',
-          q: { bn: 'সেকেন্ড দোলকের দোলনকাল কত?', en: 'Time period of a second pendulum?' },
-          options: { bn: ['1 sec', '2 sec', '4 sec', '9.8 sec'], en: ['1 sec', '2 sec', '4 sec', '9.8 sec'] },
-          ans: 1,
-        },
-        {
-          id: 'bt-4',
-          q: { bn: 'চলতি অনুপাতের আদর্শ মান কোনটি?', en: 'Standard Current Ratio?' },
-          options: { bn: ['১ : ১', '২ : ১', '৩ : ১', '১ : ২'], en: ['1 : 1', '2 : 1', '3 : 1', '1 : 2'] },
-          ans: 1,
-        },
-        {
-          id: 'bt-5',
-          q: { bn: 'কোন গেইটকে সার্বজনীন গেইট বলা হয়?', en: 'Which is a Universal Gate?' },
-          options: { bn: ['AND ও OR', 'NAND ও NOR', 'XOR ও XNOR', 'NOT'], en: ['AND & OR', 'NAND & NOR', 'XOR & XNOR', 'NOT'] },
-          ans: 1,
-        },
-      ];
+
+    const targetSubj = subjects.find((s) => s.id === subjId) || subjects[0];
+    if (!targetSubj) return groupEliteFallback.slice(0, count);
+
+    const chapterBuckets: MCQ[][] = [];
+    for (const ch of targetSubj.chapters) {
+      const chMcqs = (ch.mcqs || []).filter((q) => scoreMcqForBattle(q) > 0);
+      if (chMcqs.length > 0) {
+        const sortedCh = [...chMcqs].sort((a, b) => scoreMcqForBattle(b) - scoreMcqForBattle(a));
+        chapterBuckets.push(seedKey ? seededShuffle(sortedCh.slice(0, 20), `${seedKey}-${ch.id}`) : sortedCh.slice(0, 20));
+      }
     }
-    return [...pool].sort(() => Math.random() - 0.5).slice(0, battleQCount);
+
+    const subjCurated: MCQ[] = [];
+    let r = 0;
+    while (subjCurated.length < count * 3 && r < 25) {
+      let added = false;
+      for (const b of chapterBuckets) {
+        if (r < b.length) {
+          subjCurated.push(b[r]);
+          added = true;
+        }
+      }
+      if (!added) break;
+      r++;
+    }
+
+    const uniqueSubjPool = pickUnique([...subjCurated, ...groupEliteFallback]);
+    const finalSubjSelection = seedKey
+      ? seededShuffle(uniqueSubjPool, seedKey)
+      : [...uniqueSubjPool.slice(0, Math.min(uniqueSubjPool.length, count * 2))].sort(() => Math.random() - 0.5);
+    return finalSubjSelection.slice(0, count);
   };
 
-  const startLiveBattle = (oppName: string) => {
-    const qList = prepareBattleQuestions();
-    setOpponentName(oppName);
+  const activeBattlePoolStats = useMemo(() => {
+    if (battleSubjId === 'all') {
+      const totalRaw = subjects.reduce((acc, s) => acc + s.chapters.reduce((cAcc, c) => cAcc + (c.mcqs?.length || 0), 0), 0);
+      return {
+        labelBn: `সকল বিষয় (${selectedGroup}) — ${subjects.length}টি বিষয়ের সেরা বোর্ড MCQ`,
+        labelEn: `All Subjects (${selectedGroup}) — Best Board MCQs across ${subjects.length} subjects`,
+        totalAvailable: Math.max(totalRaw, 50),
+      };
+    }
+    const s = subjects.find((item) => item.id === battleSubjId);
+    const rawCount = s ? s.chapters.reduce((acc, c) => acc + (c.mcqs?.length || 0), 0) : 0;
+    return {
+      labelBn: s ? `${s.icon} ${s.name.bn} (${s.chapters.length}টি অধ্যায়ের সেরা বোর্ড MCQ)` : 'নির্বাচিত বিষয়',
+      labelEn: s ? `${s.icon} ${s.name.en} (Best Board MCQs from ${s.chapters.length} chapters)` : 'Selected Subject',
+      totalAvailable: Math.max(rawCount, 25),
+    };
+  }, [battleSubjId, subjects, selectedGroup]);
+
+  useEffect(() => {
+    return () => {
+      if (battleChannelRef.current && supabase) {
+        supabase.removeChannel(battleChannelRef.current);
+      }
+    };
+  }, []);
+
+  const startOnlineSearch = () => {
+    const qList = prepareBattleQuestions(battleSubjId, battleQuestionCount);
     setBattleQuestions(qList);
-    setBattleQIndex(0);
-    setMyBattleScore(0);
-    setOppBattleScore(0);
-    setBattleTimeLeft(15);
-    setBattleSelectedOpt(null);
-    setBattleStage('playing');
+    setBattleStage('searching');
+
+    const rivalPool = [
+      { name: 'তানভীর আহমেদ (NDC)', rank: 'গোল্ড III' },
+      { name: 'সাদিয়া ইসলাম (Viqarunnisa)', rank: 'প্লাটিনাম I' },
+      { name: 'মাহমুদুল হাসান (DRMC)', rank: 'সিলভার II' },
+      { name: 'ফারহানা আক্তার (Holy Cross)', rank: 'গোল্ড I' },
+      { name: 'নাফিস ইকবাল (Rajshahi College)', rank: 'প্লাটিনাম II' },
+    ];
+    const picked = rivalPool[Math.floor(Math.random() * rivalPool.length)];
+
+    setTimeout(() => {
+      setOpponentName(picked.name);
+      setOpponentRankTitle(picked.rank);
+      setMyScore(0);
+      setOppScore(0);
+      setBattleQIdx(0);
+      setBattleLockedAns(null);
+      setBattleTimeLeft(15);
+      setBattleStage('playing');
+    }, 1400);
   };
 
-  const handleNextBattleQuestion = (chosenIdx: number | null) => {
-    const currentQ = battleQuestions[battleQIndex];
-    if (!currentQ) return;
+  const createFriendBattleRoom = () => {
+    const code = `EV-${Math.floor(1000 + Math.random() * 9000)}`;
+    setBattleRoomCode(code);
+    const qList = prepareBattleQuestions(battleSubjId, battleQuestionCount, code);
+    setBattleQuestions(qList);
+    setBattleStage('waiting_room');
 
-    const isCorrect = chosenIdx !== null && chosenIdx === currentQ.ans;
-    const speedBonus = isCorrect ? 10 + Math.max(2, battleTimeLeft) : 0;
-    const oppGetsRight = Math.random() < 0.68;
-    const oppGain = oppGetsRight ? 10 + Math.floor(Math.random() * 10) : 0;
-
-    const nextMyScore = myBattleScore + speedBonus;
-    const nextOppScore = oppBattleScore + oppGain;
-    setMyBattleScore(nextMyScore);
-    setOppBattleScore(nextOppScore);
-
-    if (battleQIndex + 1 < battleQuestions.length) {
-      setBattleQIndex((i) => i + 1);
-      setBattleTimeLeft(15);
-      setBattleSelectedOpt(null);
-    } else {
-      setBattleStage('finished');
-      const won = nextMyScore >= nextOppScore;
-      recordExamResult(
-        {
-          subjectId: battleSubjId || 'battle',
-          subjectName: isBn ? '১v১ কুইজ ব্যাটল' : '1v1 Quiz Battle',
-          chapterName: `🆚 ${opponentName}`,
-          mode: 'battle',
-          score: Math.round(nextMyScore / 15),
-          total: battleQuestions.length,
-          accuracy: Math.min(100, Math.round((nextMyScore / (battleQuestions.length * 20)) * 100)),
-          timeSpentSec: battleQuestions.length * 10,
-          xpEarned: won ? 60 : 20,
-        },
-        []
-      );
+    if (isSupabaseConfigured && supabase) {
+      if (battleChannelRef.current) supabase.removeChannel(battleChannelRef.current);
+      const ch = supabase.channel(`ev_battle_${code}`);
+      ch.on('broadcast', { event: 'player_join' }, (payload) => {
+        setOpponentName(payload.payload?.name || 'বন্ধু (Friend)');
+        setOpponentRankTitle(payload.payload?.rank || 'ব্রোঞ্জ I');
+        setMyScore(0);
+        setOppScore(0);
+        setBattleQIdx(0);
+        setBattleLockedAns(null);
+        setBattleTimeLeft(15);
+        setBattleStage('playing');
+      })
+        .on('broadcast', { event: 'score_update' }, (payload) => {
+          if (typeof payload.payload?.score === 'number') setOppScore(payload.payload.score);
+        })
+        .subscribe();
+      battleChannelRef.current = ch;
     }
+  };
+
+  const joinFriendBattleRoom = () => {
+    const clean = joinRoomInput.trim().toUpperCase();
+    if (!clean) return;
+    setBattleRoomCode(clean);
+    const qList = prepareBattleQuestions(battleSubjId, battleQuestionCount, clean);
+    setBattleQuestions(qList);
+    setOpponentName(`রুম হোস্ট (${clean})`);
+    setOpponentRankTitle('গোল্ড I');
+
+    if (isSupabaseConfigured && supabase) {
+      if (battleChannelRef.current) supabase.removeChannel(battleChannelRef.current);
+      const ch = supabase.channel(`ev_battle_${clean}`);
+      ch.on('broadcast', { event: 'score_update' }, (payload) => {
+        if (typeof payload.payload?.score === 'number') setOppScore(payload.payload.score);
+      }).subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          ch.send({
+            type: 'broadcast',
+            event: 'player_join',
+            payload: { name: userName, rank: isBn ? myRank.fullTitleBn : myRank.fullTitleEn },
+          });
+        }
+      });
+      battleChannelRef.current = ch;
+    }
+
+    setMyScore(0);
+    setOppScore(0);
+    setBattleQIdx(0);
+    setBattleLockedAns(null);
+    setBattleTimeLeft(15);
+    setBattleStage('playing');
   };
 
   useEffect(() => {
     if (battleStage !== 'playing') return;
-    const timer = setInterval(() => {
-      setBattleTimeLeft((prev) => (prev <= 1 ? 0 : prev - 1));
+    const timer = window.setInterval(() => {
+      setBattleTimeLeft((prev) => {
+        if (prev <= 1) {
+          handleBattleNextQuestion(null);
+          return 15;
+        }
+        return prev - 1;
+      });
     }, 1000);
-    return () => clearInterval(timer);
-  }, [battleStage, battleQIndex]);
+    return () => window.clearInterval(timer);
+  }, [battleStage, battleQIdx]);
 
-  useEffect(() => {
-    if (battleStage === 'playing' && battleTimeLeft === 0 && battleSelectedOpt === null) {
-      handleNextBattleQuestion(null);
+  const handleBattleNextQuestion = (chosenIdx: number | null) => {
+    const currentQ = battleQuestions[battleQIdx];
+    if (!currentQ) return;
+
+    let nextMyScore = myScore;
+    if (chosenIdx !== null && chosenIdx === currentQ.ans) {
+      nextMyScore = myScore + 10 + Math.max(0, battleTimeLeft);
+      setMyScore(nextMyScore);
     }
-  }, [battleTimeLeft, battleStage, battleSelectedOpt]);
 
-  /* =====================================================================
-     4. FLASHCARDS, PLANNER & FORUM STATE
-     ===================================================================== */
+    if (battleChannelRef.current) {
+      battleChannelRef.current.send({ type: 'broadcast', event: 'score_update', payload: { score: nextMyScore } });
+    } else if (Math.random() > 0.34) {
+      setOppScore((s) => s + 10 + Math.floor(Math.random() * 9));
+    }
+
+    if (battleQIdx + 1 >= battleQuestions.length) {
+      setBattleStage('finished');
+      addXp(nextMyScore >= oppScore ? 60 : 25);
+    } else {
+      setBattleQIdx((i) => i + 1);
+      setBattleLockedAns(null);
+      setBattleTimeLeft(15);
+    }
+  };
+
+  const handleSelectBattleOption = (idx: number) => {
+    if (battleLockedAns !== null) return;
+    setBattleLockedAns(idx);
+    setTimeout(() => handleBattleNextQuestion(idx), 550);
+  };
+
+  /* 4. FLASHCARDS, PLANNER, COMMUNITY & ADMIN STATES */
   const [fcIndex, setFcIndex] = useState(0);
   const [fcFlipped, setFcFlipped] = useState(false);
   const [newFcFront, setNewFcFront] = useState('');
   const [newFcBack, setNewFcBack] = useState('');
 
   const [taskTitle, setTaskTitle] = useState('');
-  const [taskSubject, setTaskSubject] = useState(subjects[0]?.name.bn || 'হিসাববিজ্ঞান ১ম পত্র');
-  const [taskMinutes, setTaskMinutes] = useState(40);
+  const [taskSubject, setTaskSubject] = useState(subjects[0]?.name.bn || 'পদার্থবিজ্ঞান');
+  const [taskMinutes, setTaskMinutes] = useState(30);
 
   const [postTitle, setPostTitle] = useState('');
   const [postBody, setPostBody] = useState('');
-  const [postSubj, setPostSubj] = useState(subjects[0]?.name.bn || 'সাধারণ');
+  const [postSubj, setPostSubj] = useState(subjects[0]?.name.bn || 'পদার্থবিজ্ঞান');
   const [replyTextMap, setReplyTextMap] = useState<Record<string, string>>({});
 
-  /* =====================================================================
-     5. FULL-POWER ADMIN PANEL STATE
-     ===================================================================== */
-  const [pinInput, setPinInput] = useState('');
-  const [pinError, setPinError] = useState('');
+  const [adminPinInput, setAdminPinInput] = useState('');
+  const [adminPinError, setAdminPinError] = useState('');
   const [adminSubTab, setAdminSubTab] = useState<'bulk' | 'single' | 'reports' | 'manage' | 'users'>('bulk');
-
-  const [admClass, setAdmClass] = useState<string>('HSC');
-  const [admGroup, setAdmGroup] = useState<string>('Business Studies');
-  const [admSubjectId, setAdmSubjectId] = useState<string>('hsc-acc-1');
-  const [admCustomSubjNameBn, setAdmCustomSubjNameBn] = useState<string>('');
-  const [admCustomSubjNameEn, setAdmCustomSubjNameEn] = useState<string>('');
-  const [admRawText, setAdmRawText] = useState<string>('');
-  const [admStatusBanner, setAdmStatusBanner] = useState<string | null>(null);
+  const [admClass, setAdmClass] = useState<string>(selectedClass || 'HSC');
+  const [admGroup, setAdmGroup] = useState<string>(selectedGroup || 'Science');
+  const admSubjects = getSubjectsForSelection(admClass, admGroup);
+  const [admSubjectId, setAdmSubjectId] = useState<string>(admSubjects[0]?.id || 'hsc-phy1');
+  const [admCustomSubjNameBn, setAdmCustomSubjNameBn] = useState('');
+  const [admCustomSubjNameEn, setAdmCustomSubjNameEn] = useState('');
+  const [admRawText, setAdmRawText] = useState('');
+  const [admStatusBanner, setAdmStatusBanner] = useState('');
+  const [newPinValue, setNewPinValue] = useState('');
 
   const [singleChap, setSingleChap] = useState('অধ্যায় ১');
   const [singleQ, setSingleQ] = useState('');
@@ -270,360 +750,936 @@ export const ExtraFeaturesView: React.FC = () => {
   const [singleOptC, setSingleOptC] = useState('');
   const [singleOptD, setSingleOptD] = useState('');
   const [singleAns, setSingleAns] = useState(0);
-  const [singleBoard, setSingleBoard] = useState('');
+  const [singleBoard, setSingleBoard] = useState("ঢা. বো. '২৩");
   const [singleExp, setSingleExp] = useState('');
-
-  const [cloudUsers, setCloudUsers] = useState<any[]>([]);
-  const [loadingUsers, setLoadingUsers] = useState(false);
-  const [newPinValue, setNewPinValue] = useState('');
 
   const [editingReportId, setEditingReportId] = useState<string | null>(null);
   const [editRepQ, setEditRepQ] = useState('');
   const [editRepOpts, setEditRepOpts] = useState<string[]>(['', '', '', '']);
   const [editRepAns, setEditRepAns] = useState(0);
 
+  const [cloudUsers, setCloudUsers] = useState<any[]>([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+
   const fetchAdminCloudUsers = async () => {
     setLoadingUsers(true);
     try {
-      const { data } = await supabase
-        .from('user_profiles')
-        .select('*')
-        .order('xp', { ascending: false })
-        .limit(100);
-      setCloudUsers(Array.isArray(data) ? data : []);
-    } catch {
-      setCloudUsers([]);
+      const list = await fetchLeaderboardUsers();
+      setCloudUsers(list);
     } finally {
       setLoadingUsers(false);
     }
   };
 
-  const renderPeerAvatarContent = (peer: { name: string; avatar?: string; isMe?: boolean }) => {
-    if (peer.isMe && userAvatar && userAvatar.startsWith('http')) {
-      return (
-        <img
-          src={userAvatar}
-          alt={peer.name}
-          style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }}
-        />
-      );
-    }
-    if (peer.isMe && (peer.name === 'শিক্ষার্থী' || peer.name === 'শিক্ষার্থী (Scholar)')) {
-      return <EvIcon name="user" size={16} />;
-    }
-    const clean = (peer.name || 'S').trim();
-    const firstAscii = clean.match(/[A-Za-z0-9]/);
-    if (firstAscii) return firstAscii[0].toUpperCase();
-    return <EvIcon name="user" size={16} />;
-  };
-
-  /* =====================================================================
-     VIEW 1: LEADERBOARD & RANKING MODE (Single-Button Dropdowns!)
-     ===================================================================== */
-  if (activeTab === 'leaderboard') {
-    const periodLabels: Record<typeof lbPeriod, string> = {
-      today: trKey('filter_today', language),
-      weekly: trKey('filter_weekly', language),
-      monthly: trKey('filter_monthly', language),
-      alltime: trKey('filter_alltime', language),
-    };
-
-    const selectedSubjObj = subjects.find((s) => s.id === lbSubject);
-    const subjectLabel =
-      lbSubject === 'all'
-        ? isBn
-          ? 'সকল বিষয় (All)'
-          : 'All Subjects'
-        : selectedSubjObj
-        ? trText(selectedSubjObj.name, language)
-        : lbSubject;
-
-    const periodMultiplier =
-      lbPeriod === 'today' ? 0.25 : lbPeriod === 'weekly' ? 0.6 : lbPeriod === 'monthly' ? 0.85 : 1;
-
-    const combinedMap = new Map<string, any>();
-
-    cloudPeers.forEach((p) => {
-      combinedMap.set(p.name, {
-        name: p.name,
-        handle: p.handle || '@scholar',
-        avatar: p.avatar || '🎓',
-        baseXp: Number(p.xp) || 0,
-        acc: 80,
-        streak: Number(p.streak) || 1,
-        isFriend: friendsList.includes(p.name),
-        isMe: p.name === userName,
-      });
-    });
-
-    const mySubjExams =
-      lbSubject === 'all' ? examHistory : examHistory.filter((h) => h.subjectId === lbSubject);
-    const mySubjXp =
-      lbSubject === 'all' ? xp : mySubjExams.reduce((sum, h) => sum + (h.xpEarned || 0), 0);
-
-    combinedMap.set(userName, {
-      name: userName,
-      handle: userEmail ? `@${userEmail.split('@')[0]}` : '@scholar',
-      avatar: userAvatar,
-      baseXp: mySubjXp,
-      acc: myRank.accuracyPct,
-      streak,
-      isFriend: true,
-      isMe: true,
-    });
-
-    friendsList.forEach((fName) => {
-      if (!combinedMap.has(fName)) {
-        combinedMap.set(fName, {
-          name: fName,
-          handle: '@friend',
-          avatar: '🧑‍🎓',
-          baseXp: 0,
-          acc: 0,
-          streak: 0,
-          isFriend: true,
-          isMe: false,
-        });
-      }
-    });
-
-    const filteredPeers = Array.from(combinedMap.values())
-      .filter((p) => (lbScope === 'friends' ? p.isFriend || p.isMe : true))
-      .map((p) => {
-        const displayXp = Math.round(p.baseXp * periodMultiplier);
-        const peerRank = p.isMe
-          ? myRank
-          : calculateUserRank({
-              xp: displayXp,
-              accuracyPct: p.acc,
-              masteredChaptersCount: Math.round(displayXp / 200),
-              streakDays: p.streak,
-              examsCompleted: displayXp > 0 ? 3 : 0,
-            });
-        return { ...p, displayXp, rankInfo: peerRank };
-      })
-      .sort((a, b) => b.displayXp - a.displayXp);
-
-    const myPosition = filteredPeers.findIndex((p) => p.isMe) + 1 || 1;
-    const top1 = filteredPeers[0];
-    const top2 = filteredPeers[1];
-    const top3 = filteredPeers[2];
+  /* VIEW 1: FORMULAS (Math & Quantitative Only) */
+  if (activeTab === 'formulas') {
+    const filteredSubjects =
+      activeFormulaSubjId === 'all' ? mathSubjects : mathSubjects.filter((s) => s.id === activeFormulaSubjId);
+    const activeSingleSubject =
+      activeFormulaSubjId !== 'all' ? mathSubjects.find((s) => s.id === activeFormulaSubjId) : null;
 
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-        <div className="ev-lb-me">
-          <div className="ev-lb-me-rank">#{myPosition}</div>
-          <div className="ev-lb-me-text" style={{ flex: 1 }}>
+        <div className="ev-card">
+          <div className="ev-section-header" style={{ marginBottom: 12 }}>
             <div>
-              <b>{userName}</b> •{' '}
-              <span style={{ color: myRank.colorHex, fontWeight: 800 }}>
-                🛡️ {isBn ? myRank.fullTitleBn : myRank.fullTitleEn} ({myRank.rankScore} RP)
-              </span>
-            </div>
-            <div>
-              {xp} XP • {trKey('accuracy', language)}: {myRank.accuracyPct}% • 🔥 {streak}d
+              <h2 className="ev-section-title">
+                📐 {isBn ? 'গাণিতিক ও হিসাবভিত্তিক সূত্রাবলি (Math & Formula Vault)' : 'Math & Quantitative Formula Vault'}
+              </h2>
+              <p className="ev-section-subtitle">
+                {isBn
+                  ? `${selectedClass} • ${selectedGroup} — শুধুমাত্র গাণিতিক সমীকরণ ও হিসাবযুক্ত বিষয়সমূহের অধ্যায়ভিত্তিক সূত্র`
+                  : `${selectedClass} • ${selectedGroup} — Formulas strictly for mathematical & quantitative chapters`}
+              </p>
             </div>
           </div>
-          <button
-            type="button"
-            className="ev-btn ev-btn-secondary ev-btn-sm"
-            onClick={() => loadCloudLeaderboard(lbSubject)}
-          >
-            {loadingLb ? '...' : '🔄'}
-          </button>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10 }}>
+            <select className="ev-select" value={activeFormulaSubjId} onChange={(e) => setFormulaFilter(e.target.value, 'all')}>
+              <option value="all">📚 {isBn ? 'সকল গাণিতিক বিষয়' : 'All Math Subjects'}</option>
+              {mathSubjects.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.icon} {trText(s.name, language)}
+                </option>
+              ))}
+            </select>
+
+            <select
+              className="ev-select"
+              value={activeFormulaChapId}
+              onChange={(e) => setFormulaFilter(activeFormulaSubjId, e.target.value)}
+              disabled={!activeSingleSubject}
+            >
+              <option value="all">📑 {isBn ? 'সকল গাণিতিক অধ্যায়' : 'All Quantitative Chapters'}</option>
+              {activeSingleSubject?.chapters
+                .filter((ch) => (ch.formulas?.length || 0) > 0)
+                .map((ch, idx) => (
+                  <option key={ch.id} value={ch.id}>
+                    {idx + 1}. {trText(ch.name, language)}
+                  </option>
+                ))}
+            </select>
+
+            <input
+              type="text"
+              className="ev-input"
+              placeholder={isBn ? '🔍 সূত্র, প্রতীক বা অধ্যায় খুঁজুন...' : '🔍 Search formula or symbol...'}
+              value={formulaSearch}
+              onChange={(e) => setFormulaSearch(e.target.value)}
+            />
+          </div>
         </div>
 
-        <div className="ev-card" style={{ overflow: 'visible' }}>
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: 10,
-              flexWrap: 'wrap',
-              marginBottom: 16,
-            }}
-          >
-            <div style={{ display: 'flex', gap: 6 }}>
+        {filteredSubjects.length === 0 ? (
+          <div className="ev-card" style={{ textAlign: 'center', padding: 28 }}>
+            <p style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>
+              {isBn ? 'এই বিভাগে কোনো গাণিতিক সূত্রযুক্ত বিষয় নেই।' : 'No mathematical formula subjects in this group.'}
+            </p>
+          </div>
+        ) : (
+          filteredSubjects.map((subj) => {
+            const chaptersToShow = (
+              activeFormulaChapId === 'all' ? subj.chapters : subj.chapters.filter((c) => c.id === activeFormulaChapId)
+            ).filter((c) => (c.formulas?.length || 0) > 0);
+
+            if (chaptersToShow.length === 0) return null;
+
+            return (
+              <div key={subj.id} className="ev-card" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    borderBottom: '1px solid var(--border-subtle)',
+                    paddingBottom: 10,
+                    flexWrap: 'wrap',
+                    gap: 8,
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <span style={{ fontSize: 22 }}>{subj.icon}</span>
+                    <div>
+                      <h3 style={{ fontSize: 17, fontWeight: 800 }}>{trText(subj.name, language)}</h3>
+                      <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>
+                        {chaptersToShow.length} {isBn ? 'টি গাণিতিক অধ্যায়' : 'Math Chapters'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {chaptersToShow.map((chap) => {
+                  const formulas: ChapterFormulaItem[] = (chap.formulas || []).filter((f) => {
+                    if (!formulaSearch.trim()) return true;
+                    const q = formulaSearch.toLowerCase();
+                    return (
+                      f.title.bn.toLowerCase().includes(q) ||
+                      f.title.en.toLowerCase().includes(q) ||
+                      f.equation.toLowerCase().includes(q) ||
+                      f.note.bn.toLowerCase().includes(q) ||
+                      chap.name.bn.toLowerCase().includes(q)
+                    );
+                  });
+
+                  if (formulas.length === 0) return null;
+
+                  return (
+                    <div
+                      key={chap.id}
+                      style={{
+                        background: 'var(--bg-surface-muted)',
+                        border: '1px solid var(--border-subtle)',
+                        borderRadius: 14,
+                        padding: 14,
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontWeight: 800,
+                          fontSize: 14.5,
+                          color: 'var(--brand-primary)',
+                          marginBottom: 10,
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          flexWrap: 'wrap',
+                          gap: 6,
+                        }}
+                      >
+                        <span>📘 {trText(chap.name, language)}</span>
+                        <span className="ev-badge-pill ev-badge-indigo">{formulas.length}টি সূত্র</span>
+                      </div>
+
+                      <div className="ev-grid-2">
+                        {formulas.map((f) => (
+                          <div
+                            key={f.id}
+                            style={{
+                              background: 'var(--bg-surface)',
+                              border: '1px solid var(--border-default)',
+                              borderRadius: 12,
+                              padding: '12px 14px',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: 6,
+                            }}
+                          >
+                            <div style={{ fontWeight: 800, fontSize: 13.5, color: 'var(--text-primary)' }}>
+                              {trText(f.title, language)}
+                            </div>
+                            <div
+                              className="font-mono"
+                              style={{
+                                padding: '8px 10px',
+                                borderRadius: 8,
+                                background: 'var(--brand-primary-soft)',
+                                color: 'var(--brand-primary)',
+                                fontWeight: 800,
+                                fontSize: 13.5,
+                                borderLeft: '3px solid var(--brand-primary)',
+                                overflowX: 'auto',
+                              }}
+                            >
+                              {f.equation}
+                            </div>
+                            <div style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 600 }}>
+                              💡 {trText(f.note, language)}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })
+        )}
+      </div>
+    );
+  }
+
+  /* VIEW 2: 1v1 LIVE QUIZ BATTLE (⚔️ activeTab === 'battle') */
+  if (activeTab === 'battle') {
+    const currentQ = battleQuestions[battleQIdx];
+    const currentQExplanation = currentQ ? getComplexMathOrRuleExplanation(currentQ, language) : '';
+    const availableGroupsForBattle = getAvailableGroups(selectedClass);
+
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingBottom: 24 }}>
+        <div className="ev-card" style={{ overflow: 'hidden' }}>
+          <div className="ev-section-header" style={{ flexWrap: 'wrap', gap: 8 }}>
+            <div>
+              <h2 className="ev-section-title">⚔️ {isBn ? 'কুইজ ব্যাটল (1v1 Live Arena)' : '1v1 Live Quiz Battle'}</h2>
+              <p className="ev-section-subtitle">
+                {isBn
+                  ? `${selectedClass} (${selectedGroup}) — সেরা বোর্ড ও গাণিতিক MCQ দিয়ে লাইভ প্রতিযোগিতা`
+                  : `${selectedClass} (${selectedGroup}) — Compete live with curated top Board MCQs`}
+              </p>
+            </div>
+            <span className="ev-badge-pill ev-badge-indigo">
+              🛡️ {isBn ? myRank.fullTitleBn : myRank.fullTitleEn}
+            </span>
+          </div>
+
+          {battleStage === 'lobby' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 8 }}>
+                <button
+                  type="button"
+                  className={`ev-btn ${battleModeTab === 'online' ? 'ev-btn-primary' : 'ev-btn-secondary'}`}
+                  style={{ width: '100%', whiteSpace: 'normal', padding: '10px 12px', fontSize: 13.5 }}
+                  onClick={() => setBattleModeTab('online')}
+                >
+                  🌐 {isBn ? 'অনলাইন প্লেয়ার (Online)' : 'Search Online'}
+                </button>
+                <button
+                  type="button"
+                  className={`ev-btn ${battleModeTab === 'friend' ? 'ev-btn-primary' : 'ev-btn-secondary'}`}
+                  style={{ width: '100%', whiteSpace: 'normal', padding: '10px 12px', fontSize: 13.5 }}
+                  onClick={() => setBattleModeTab('friend')}
+                >
+                  👥 {isBn ? 'বন্ধুর সাথে 1v1 (Friend)' : 'Play with Friend'}
+                </button>
+              </div>
+
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))',
+                  gap: 10,
+                  background: 'var(--bg-surface-muted)',
+                  padding: 12,
+                  borderRadius: 14,
+                  border: '1px solid var(--border-subtle)',
+                }}
+              >
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 800, display: 'block', marginBottom: 4, color: 'var(--text-secondary)' }}>
+                    🎓 {isBn ? 'শ্রেণি ও বিভাগ (Group)' : 'Class & Group'}
+                  </label>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <select
+                      className="ev-select"
+                      style={{ width: '42%', padding: '0 8px', fontSize: 13, fontWeight: 700 }}
+                      value={selectedClass}
+                      onChange={(e) => {
+                        const nextCls = e.target.value;
+                        const firstGrp = getAvailableGroups(nextCls)[0] || 'Science';
+                        setClassAndGroup(nextCls, firstGrp);
+                        setBattleSubjId('all');
+                      }}
+                    >
+                      {getAvailableClasses().map((cls) => (
+                        <option key={cls} value={cls}>
+                          {cls}
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      className="ev-select"
+                      style={{ flex: 1, padding: '0 8px', fontSize: 13, fontWeight: 700 }}
+                      value={selectedGroup}
+                      onChange={(e) => {
+                        setClassAndGroup(selectedClass, e.target.value);
+                        setBattleSubjId('all');
+                      }}
+                    >
+                      {availableGroupsForBattle.map((grp) => (
+                        <option key={grp} value={grp}>
+                          {grp}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 800, display: 'block', marginBottom: 4, color: 'var(--text-secondary)' }}>
+                    📖 {isBn ? 'ব্যাটলের বিষয় (সকল বিষয় বা যেকোনো ১টি)' : 'Battle Subject (All or 1 Subject)'}
+                  </label>
+                  <select
+                    className="ev-select"
+                    style={{ width: '100%', fontSize: 13, fontWeight: 700 }}
+                    value={battleSubjId}
+                    onChange={(e) => setBattleSubjId(e.target.value)}
+                  >
+                    <option value="all">
+                      📚 {isBn ? `সকল বিষয় — ${selectedGroup} সেরা MCQ মিশ্রণ` : `All Subjects (${selectedGroup} Best Mix)`}
+                    </option>
+                    {subjects.map((s) => {
+                      const cnt = s.chapters.reduce((sum, c) => sum + (c.mcqs?.length || 0), 0);
+                      return (
+                        <option key={s.id} value={s.id}>
+                          {s.icon} {trText(s.name, language)} ({cnt > 0 ? `${cnt} MCQs` : 'Board Curated'})
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
+
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 800, display: 'block', marginBottom: 4, color: 'var(--text-secondary)' }}>
+                    🎯 {isBn ? 'প্রশ্ন সংখ্যা (Questions)' : 'Question Count'}
+                  </label>
+                  <select
+                    className="ev-select"
+                    style={{ width: '100%', fontSize: 13, fontWeight: 700 }}
+                    value={battleQuestionCount}
+                    onChange={(e) => setBattleQuestionCount(Number(e.target.value))}
+                  >
+                    <option value={5}>⚡ 5টি সেরা MCQ (Rapid Battle)</option>
+                    <option value={10}>🔥 10টি সেরা MCQ (Standard Battle)</option>
+                    <option value={15}>🏆 15টি সেরা MCQ (Championship)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div
+                style={{
+                  padding: '10px 14px',
+                  borderRadius: 12,
+                  background: 'var(--brand-primary-soft)',
+                  border: '1px solid var(--brand-primary-border)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  flexWrap: 'wrap',
+                  gap: 8,
+                  fontSize: 12.5,
+                }}
+              >
+                <div style={{ fontWeight: 700, color: 'var(--text-primary)' }}>
+                  ✨ <strong>{isBn ? 'স্মার্ট প্রশ্ন সিলেকশন:' : 'Smart Curated Pool:'}</strong>{' '}
+                  {isBn ? activeBattlePoolStats.labelBn : activeBattlePoolStats.labelEn}
+                </div>
+                <span className="ev-badge-pill ev-badge-indigo" style={{ fontSize: 11.5 }}>
+                  🎯 {activeBattlePoolStats.totalAvailable}+ Top Board MCQs
+                </span>
+              </div>
+
+              {battleModeTab === 'online' ? (
+                <div
+                  style={{
+                    padding: '20px 16px',
+                    borderRadius: 16,
+                    background: 'var(--bg-surface-muted)',
+                    border: '1px solid var(--border-default)',
+                    textAlign: 'center',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: 10,
+                  }}
+                >
+                  <h3 style={{ fontSize: 17, fontWeight: 800, lineHeight: 1.35 }}>
+                    🌐 {isBn ? 'তোমার র‍্যাঙ্ক টিয়ার অনুযায়ী অনলাইন প্রতিদ্বন্দ্বী খুঁজুন' : 'Find an Online Opponent in Your Rank Tier'}
+                  </h3>
+                  <p style={{ fontSize: 13, color: 'var(--text-secondary)', maxWidth: 460, lineHeight: 1.5 }}>
+                    {isBn
+                      ? `নির্বাচিত ${battleSubjId === 'all' ? `${selectedGroup} বিভাগের সকল বিষয়ের` : 'বিষয়ের'} সবচেয়ে গুরুত্বপূর্ণ বোর্ড ও গাণিতিক MCQ দিয়ে কুইজ সাজানো হবে। প্রতিটি প্রশ্নের জন্য ১৫ সেকেন্ড সময় পাবে!`
+                      : 'Each question has a 15-second timer. Answer fast with high accuracy to earn Speed Bonus points and +60 XP!'}
+                  </p>
+                  <button
+                    type="button"
+                    className="ev-btn ev-btn-primary"
+                    style={{
+                      width: '100%',
+                      maxWidth: 340,
+                      whiteSpace: 'normal',
+                      lineHeight: 1.3,
+                      padding: '12px 18px',
+                      fontSize: 14.5,
+                      marginTop: 4,
+                    }}
+                    onClick={startOnlineSearch}
+                  >
+                    ⚡ {isBn ? 'অনলাইন ম্যাচ শুরু করুন' : 'Find Online Match'}
+                  </button>
+                </div>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
+                  <div
+                    style={{
+                      padding: 16,
+                      borderRadius: 14,
+                      background: 'var(--bg-surface-muted)',
+                      border: '1px solid var(--border-default)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'space-between',
+                      gap: 12,
+                    }}
+                  >
+                    <div>
+                      <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 4 }}>
+                        ➕ {isBn ? 'বন্ধুর জন্য ব্যাটল রুম তৈরি করো' : 'Create a Battle Room'}
+                      </div>
+                      <p style={{ fontSize: 12.5, color: 'var(--text-secondary)', lineHeight: 1.45 }}>
+                        {isBn
+                          ? 'একটি রুম কোড তৈরি করে বন্ধুকে শেয়ার করো। দুজনেই একই সেরা বোর্ড প্রশ্নে লাইভ ব্যাটল খেলবে!'
+                          : 'Generate a room code and share it with your friend for a synchronized 1v1 match.'}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className="ev-btn ev-btn-primary"
+                      style={{ width: '100%', whiteSpace: 'normal', padding: '10px 14px' }}
+                      onClick={createFriendBattleRoom}
+                    >
+                      🔑 {isBn ? 'রুম কোড তৈরি করো' : 'Create Room Code'}
+                    </button>
+                  </div>
+
+                  <div
+                    style={{
+                      padding: 16,
+                      borderRadius: 14,
+                      background: 'var(--bg-surface-muted)',
+                      border: '1px solid var(--border-default)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'space-between',
+                      gap: 10,
+                    }}
+                  >
+                    <div>
+                      <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 6 }}>
+                        🔗 {isBn ? 'বন্ধুর রুম কোডে জয়েন করো' : 'Join Friend Room Code'}
+                      </div>
+                      <input
+                        type="text"
+                        className="ev-input font-mono"
+                        placeholder="EV-4829"
+                        value={joinRoomInput}
+                        onChange={(e) => setJoinRoomInput(e.target.value)}
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      className="ev-btn ev-btn-primary"
+                      style={{ width: '100%', whiteSpace: 'normal', padding: '10px 14px' }}
+                      onClick={joinFriendBattleRoom}
+                    >
+                      🚀 {isBn ? 'রুমে জয়েন ও ব্যাটল শুরু' : 'Join & Start Battle'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {battleStage === 'searching' && (
+            <div style={{ textAlign: 'center', padding: '36px 16px' }}>
+              <div style={{ fontSize: 38, marginBottom: 10 }}>🔎</div>
+              <h3 style={{ fontSize: 18, fontWeight: 800 }}>
+                {isBn ? 'অনলাইন প্রতিদ্বন্দ্বী খোঁজা হচ্ছে ও সেরা প্রশ্ন সাজানো হচ্ছে...' : 'Matching Opponent & Curating Best MCQs...'}
+              </h3>
+              <p style={{ fontSize: 13.5, color: 'var(--text-secondary)', marginTop: 4 }}>
+                {isBn ? activeBattlePoolStats.labelBn : activeBattlePoolStats.labelEn}
+              </p>
+            </div>
+          )}
+
+          {battleStage === 'waiting_room' && (
+            <div style={{ textAlign: 'center', padding: '26px 16px', background: 'var(--bg-surface-muted)', borderRadius: 16 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)' }}>
+                {isBn ? 'তোমার ব্যাটল রুম কোড (বন্ধুকে পাঠাও):' : 'Your Battle Room Code (Share with friend):'}
+              </div>
+              <div
+                className="font-mono"
+                style={{ fontSize: 28, fontWeight: 900, color: 'var(--brand-primary)', margin: '10px 0', letterSpacing: '0.08em' }}
+              >
+                {battleRoomCode}
+              </div>
+              <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 16 }}>
+                {isBn
+                  ? 'বন্ধু এই কোড দিয়ে জয়েন করলেই অটোমেটিক কুইজ শুরু হবে। অথবা এখনই প্র্যাকটিস সিমুলেশন শুরু করতে পারো:'
+                  : 'Battle starts automatically when your friend joins, or start now:'}
+              </p>
+              <div style={{ display: 'flex', justifyContent: 'center', gap: 10, flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  className="ev-btn ev-btn-primary"
+                  onClick={() => {
+                    setOpponentName('বন্ধু (Live Opponent)');
+                    setMyScore(0);
+                    setOppScore(0);
+                    setBattleQIdx(0);
+                    setBattleStage('playing');
+                  }}
+                >
+                  ⚔️ {isBn ? 'এখনই ব্যাটল শুরু করো' : 'Start Battle Now'}
+                </button>
+                <button type="button" className="ev-btn ev-btn-secondary" onClick={() => setBattleStage('lobby')}>
+                  {isBn ? 'বাতিল' : 'Cancel'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {battleStage === 'playing' && currentQ && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '12px 14px',
+                  borderRadius: 14,
+                  background: 'var(--bg-surface-muted)',
+                  border: '1px solid var(--border-default)',
+                  flexWrap: 'wrap',
+                  gap: 8,
+                }}
+              >
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)' }}>
+                    {userName} ({isBn ? 'তুমি' : 'You'})
+                  </div>
+                  <div className="font-mono" style={{ fontSize: 20, fontWeight: 900, color: 'var(--brand-primary)' }}>
+                    {myScore} pts
+                  </div>
+                </div>
+
+                <div style={{ textAlign: 'center' }}>
+                  <span className="ev-badge-pill ev-badge-warning" style={{ fontSize: 13 }}>
+                    ⏱️ {battleTimeLeft}s • Q {battleQIdx + 1}/{battleQuestions.length}
+                  </span>
+                </div>
+
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)' }}>
+                    {opponentName} ({opponentRankTitle})
+                  </div>
+                  <div className="font-mono" style={{ fontSize: 20, fontWeight: 900, color: 'var(--status-danger)' }}>
+                    {oppScore} pts
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ padding: '16px', borderRadius: 14, border: '1px solid var(--border-default)' }}>
+                {currentQ.board && !currentQ.board.includes('NCTB ও বোর্ড প্রশ্ন') && (
+                  <div style={{ marginBottom: 8 }}>
+                    <span className="ev-badge-pill ev-badge-warning" style={{ fontSize: 11.5 }}>
+                      🏅 {currentQ.board}
+                    </span>
+                  </div>
+                )}
+
+                <div style={{ fontSize: 16, fontWeight: 800, marginBottom: 14, lineHeight: 1.5 }}>
+                  {trText(currentQ.q, language)}
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {(currentQ.options.bn?.length ? currentQ.options.bn : currentQ.options.en).map((opt, idx) => {
+                    const isPicked = battleLockedAns === idx;
+                    const isRight = battleLockedAns !== null && idx === currentQ.ans;
+                    const isWrong = isPicked && idx !== currentQ.ans;
+
+                    return (
+                      <button
+                        key={idx}
+                        type="button"
+                        className={`ev-option-btn ${isRight ? 'is-correct' : ''} ${isWrong ? 'is-wrong' : ''} ${isPicked ? 'is-selected' : ''}`}
+                        onClick={() => handleSelectBattleOption(idx)}
+                      >
+                        <span className="ev-option-index">{['ক', 'খ', 'গ', 'ঘ'][idx]}</span>
+                        <span className="ev-option-text">{opt}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {battleLockedAns !== null && currentQExplanation && (
+                  <div
+                    style={{
+                      marginTop: 12,
+                      padding: '10px 12px',
+                      borderRadius: 10,
+                      background: 'var(--bg-surface-muted)',
+                      borderLeft: '3px solid var(--brand-primary)',
+                      fontSize: 13,
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    <strong>💡 {isBn ? 'গাণিতিক ও নিয়মভিত্তিক ব্যাখ্যা:' : 'Explanation:'}</strong> {currentQExplanation}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {battleStage === 'finished' && (
+            <div style={{ textAlign: 'center', padding: '24px 16px' }}>
+              <div style={{ fontSize: 44, marginBottom: 8 }}>{myScore >= oppScore ? '🏆' : '⚔️'}</div>
+              <h3 style={{ fontSize: 21, fontWeight: 800 }}>
+                {myScore > oppScore
+                  ? isBn
+                    ? 'অভিনন্দন! তুমি ব্যাটলে জয়ী হয়েছ!'
+                    : 'Victory! You won the Quiz Battle!'
+                  : myScore === oppScore
+                  ? isBn
+                    ? 'হাড্ডাহাড্ডি লড়াই! ম্যাচ ড্র হয়েছে!'
+                    : 'Match Tied!'
+                  : isBn
+                  ? 'ভালো খেলেছ! পরের ম্যাচেই জয় আসবে!'
+                  : 'Good effort! Try again!'}
+              </h3>
+              <p className="font-mono" style={{ fontSize: 16, fontWeight: 800, margin: '10px 0 18px' }}>
+                {isBn ? 'তোমার স্কোর' : 'Your Score'}: {myScore} pts &nbsp;|&nbsp; {opponentName}: {oppScore} pts
+              </p>
+              <button type="button" className="ev-btn ev-btn-primary" style={{ width: '100%', maxWidth: 280 }} onClick={() => setBattleStage('lobby')}>
+                🔄 {isBn ? 'আবার ব্যাটল খেলো' : 'Play Another Battle'}
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  /* VIEW 3: LEADERBOARD (🏆 activeTab === 'leaderboard') */
+  if (activeTab === 'leaderboard') {
+    const timeMult = lbTimeframe === 'weekly' ? 0.35 : lbTimeframe === 'monthly' ? 0.72 : 1;
+    const subjSeed = lbSubjectFilter === 'all' ? 1 : Math.max(0.45, ((lbSubjectFilter.charCodeAt(4) || 68) % 10) / 10);
+    const myComputedXp = Math.max(0, Math.round(xp * timeMult * subjSeed));
+
+    const cloudEntries = liveCloudLb
+      .filter((u) => u.id !== userId && u.full_name !== userName)
+      .map((u, idx) => {
+        const rawUserXp = Number(u.xp || 0) > 0 ? Number(u.xp) : Math.max(15, 35 - idx * 8);
+        const scaledXp = Math.max(5, Math.round(rawUserXp * timeMult * subjSeed));
+        const rScore = Math.min(1000, Math.round(scaledXp / 10));
+        const tierBn = rScore >= 850 ? 'এলিট' : rScore >= 650 ? 'প্লাটিনাম I' : rScore >= 400 ? 'গোল্ড I' : rScore >= 200 ? 'সিলভার I' : 'ব্রোঞ্জ I';
+        const tierEn = rScore >= 850 ? 'Elite' : rScore >= 650 ? 'Platinum I' : rScore >= 400 ? 'Gold I' : rScore >= 200 ? 'Silver I' : 'Bronze I';
+
+        return {
+          id: u.id,
+          name: u.full_name || u.username || 'Scholar',
+          avatar: u.avatar_url || '',
+          xp: scaledXp,
+          rankScore: rScore,
+          tierBn,
+          tierEn,
+          streak: Number(u.streak_days || 1),
+          isMe: false,
+        };
+      });
+
+    const friendEntries = friendList.map((f) => ({
+      id: f.id,
+      name: f.name,
+      avatar: f.avatar,
+      xp: Math.round(f.xp * timeMult * subjSeed),
+      rankScore: f.rankScore,
+      tierBn: f.rankTitleBn,
+      tierEn: f.rankTitleEn,
+      streak: f.streak,
+      isMe: false,
+    }));
+
+    const meEntry = {
+      id: userId || 'me',
+      name: `${userName} (${isBn ? 'তুমি' : 'You'})`,
+      shortName: userName,
+      avatar: userAvatar,
+      xp: myComputedXp,
+      rankScore: myRank.rankScore,
+      tierBn: myRank.fullTitleBn,
+      tierEn: myRank.fullTitleEn,
+      streak,
+      isMe: true,
+    };
+
+    const fallbackPeers =
+      cloudEntries.length > 0
+        ? cloudEntries
+        : [
+            { id: 'peer-1', name: 'তানভীর আহমেদ', avatar: '', xp: Math.round(32 * timeMult), rankScore: 15, tierBn: 'ব্রোঞ্জ I', tierEn: 'Bronze I', streak: 2, isMe: false },
+            { id: 'peer-2', name: 'সাদিয়া ইসলাম', avatar: '', xp: Math.round(24 * timeMult), rankScore: 12, tierBn: 'ব্রোঞ্জ I', tierEn: 'Bronze I', streak: 1, isMe: false },
+          ];
+
+    const combined = (lbMode === 'friends' ? [...friendEntries, meEntry] : [...fallbackPeers, meEntry]).sort(
+      (a, b) => b.xp - a.xp || b.rankScore - a.rankScore
+    );
+
+    const myPosition = combined.findIndex((item) => item.isMe) + 1;
+    const topThree = combined.slice(0, 3);
+
+    const renderAvatarCircle = (entry: any, size = 38) => {
+      const hasPhoto = entry.avatar && String(entry.avatar).startsWith('http');
+      return (
+        <div
+          style={{
+            width: size,
+            height: size,
+            borderRadius: '50%',
+            background: 'var(--brand-primary)',
+            color: '#fff',
+            display: 'grid',
+            placeItems: 'center',
+            fontWeight: 800,
+            overflow: 'hidden',
+            flexShrink: 0,
+          }}
+        >
+          {hasPhoto ? (
+            <img src={entry.avatar} alt={entry.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          ) : (
+            <span>{String(entry.shortName || entry.name || 'S').charAt(0).toUpperCase()}</span>
+          )}
+        </div>
+      );
+    };
+
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14, paddingBottom: 32 }}>
+        <div className="ev-card ev-hero" style={{ padding: '14px 16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div className="font-mono" style={{ fontSize: 22, fontWeight: 900, color: 'var(--brand-primary)', minWidth: 38 }}>
+                #{myPosition}
+              </div>
+              <div>
+                <div style={{ fontWeight: 800, fontSize: 15 }}>
+                  {userName} • <span style={{ color: myRank.color }}>🛡️ {isBn ? myRank.fullTitleBn : myRank.fullTitleEn} ({myRank.rankScore} RP)</span>
+                </div>
+                <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', fontWeight: 600 }}>
+                  {myComputedXp} XP • {trKey('accuracy', language)}: {myRank.accuracyPct}% • 🔥 {streak}d
+                </div>
+              </div>
+            </div>
+
+            <button type="button" className="ev-btn ev-btn-secondary ev-btn-sm" onClick={refreshLiveLeaderboard}>
+              {loadingLb ? '...' : isBn ? '↻ রিফ্রেশ' : '↻ Refresh'}
+            </button>
+          </div>
+        </div>
+
+        <div className="ev-card" style={{ paddingBottom: 22 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, marginBottom: 16 }}>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <button
                 type="button"
-                className={`ev-btn ev-btn-sm ${lbScope === 'global' ? 'ev-btn-primary' : 'ev-btn-secondary'}`}
-                onClick={() => setLbScope('global')}
+                className={`ev-btn ev-btn-sm ${lbMode === 'global' ? 'ev-btn-primary' : 'ev-btn-secondary'}`}
+                onClick={() => setLbMode('global')}
               >
-                🌍 {trKey('global_ranking', language)}
+                🌍 {trKey('global_board', language)}
               </button>
               <button
                 type="button"
-                className={`ev-btn ev-btn-sm ${lbScope === 'friends' ? 'ev-btn-primary' : 'ev-btn-secondary'}`}
-                onClick={() => setLbScope('friends')}
+                className={`ev-btn ev-btn-sm ${lbMode === 'friends' ? 'ev-btn-primary' : 'ev-btn-secondary'}`}
+                onClick={() => setLbMode('friends')}
               >
-                👥 {trKey('friends_ranking', language)}
+                👥 {trKey('friends_board', language)}
               </button>
             </div>
 
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              <div className="ev-dropdown-wrap">
-                <button
-                  type="button"
-                  className="ev-dropdown-trigger"
-                  onClick={() => {
-                    setPeriodDropdownOpen(!periodDropdownOpen);
-                    setSubjectDropdownOpen(false);
-                  }}
-                >
-                  <span>📅 {periodLabels[lbPeriod]}</span>
-                  <span>▾</span>
-                </button>
-                {periodDropdownOpen && (
-                  <div className="ev-dropdown-menu">
-                    {(['today', 'weekly', 'monthly', 'alltime'] as const).map((p) => (
-                      <button
-                        key={p}
-                        type="button"
-                        className={`ev-dropdown-item ${lbPeriod === p ? 'active' : ''}`}
-                        onClick={() => {
-                          setLbPeriod(p);
-                          setPeriodDropdownOpen(false);
-                        }}
-                      >
-                        <span>{periodLabels[p]}</span>
-                        {lbPeriod === p && <span>✓</span>}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
+              <select
+                className="ev-select"
+                style={{ width: 'auto', minHeight: 36, padding: '0 10px', fontSize: 13 }}
+                value={lbTimeframe}
+                onChange={(e) => setLbTimeframe(e.target.value as any)}
+              >
+                <option value="all">📅 {trKey('all_time', language)}</option>
+                <option value="monthly">🗓️ {trKey('monthly', language)}</option>
+                <option value="weekly">⚡ {trKey('weekly', language)}</option>
+              </select>
 
-              <div className="ev-dropdown-wrap">
-                <button
-                  type="button"
-                  className="ev-dropdown-trigger"
-                  onClick={() => {
-                    setSubjectDropdownOpen(!subjectDropdownOpen);
-                    setPeriodDropdownOpen(false);
-                  }}
-                >
-                  <span>📚 {subjectLabel}</span>
-                  <span>▾</span>
-                </button>
-                {subjectDropdownOpen && (
-                  <div className="ev-dropdown-menu" style={{ minWidth: 250 }}>
-                    <button
-                      type="button"
-                      className={`ev-dropdown-item ${lbSubject === 'all' ? 'active' : ''}`}
-                      onClick={() => {
-                        setLbSubject('all');
-                        setSubjectDropdownOpen(false);
-                      }}
-                    >
-                      <span>{isBn ? 'সকল বিষয় (All Subjects)' : 'All Subjects'}</span>
-                      {lbSubject === 'all' && <span>✓</span>}
-                    </button>
-                    {subjects.map((s) => (
-                      <button
-                        key={s.id}
-                        type="button"
-                        className={`ev-dropdown-item ${lbSubject === s.id ? 'active' : ''}`}
-                        onClick={() => {
-                          setLbSubject(s.id);
-                          setSubjectDropdownOpen(false);
-                        }}
-                      >
-                        <span>
-                          {s.icon} {trText(s.name, language)}
-                        </span>
-                        {lbSubject === s.id && <span>✓</span>}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
+              <select
+                className="ev-select"
+                style={{ width: 'auto', minHeight: 36, padding: '0 10px', fontSize: 13 }}
+                value={lbSubjectFilter}
+                onChange={(e) => setLbSubjectFilter(e.target.value)}
+              >
+                <option value="all">📚 {isBn ? 'সকল বিষয় (All)' : 'All Subjects'}</option>
+                {subjects.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.icon} {trText(s.name, language)}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
 
-          {lbScope === 'friends' && (
-            <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+          {topThree.length >= 1 && (
+            <div className="ev-podium-stage" style={{ marginBottom: 18 }}>
+              {[topThree[1], topThree[0], topThree[2]].map((p, idx) => {
+                if (!p) return <div key={idx} style={{ width: 96 }} />;
+                const place = idx === 1 ? 1 : idx === 0 ? 2 : 3;
+                const displayName = p.shortName || p.name;
+                return (
+                  <div key={p.id} className={`ev-podium-col is-${place}`}>
+                    <div className="ev-podium-avatar-wrap">
+                      {place === 1 && (
+                        <svg className="ev-podium-crown" width="24" height="24" viewBox="0 0 24 24" fill="#F59E0B">
+                          <path d="M2 19h20v3H2v-3zM2 7l5 5 5-7 5 7 5-5v10H2V7z" />
+                        </svg>
+                      )}
+                      {renderAvatarCircle(p, place === 1 ? 52 : 42)}
+                    </div>
+                    <div
+                      className="ev-podium-name"
+                      style={{
+                        maxWidth: 115,
+                        whiteSpace: 'normal',
+                        lineHeight: 1.2,
+                        fontSize: 12.5,
+                        display: '-webkit-box',
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: 'vertical',
+                        overflow: 'hidden',
+                      }}
+                    >
+                      {displayName}
+                    </div>
+                    <div className="ev-podium-xp">{p.xp} XP</div>
+                    <div className="ev-podium-pedestal">{place}</div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {lbMode === 'friends' && (
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', padding: 12, borderRadius: 12, background: 'var(--bg-surface-muted)', marginBottom: 14 }}>
               <input
                 type="text"
                 className="ev-input"
-                placeholder={isBn ? 'বন্ধুর নাম বা ইউজারনেম লিখুন...' : 'Enter friend name...'}
-                value={friendInput}
-                onChange={(e) => setFriendInput(e.target.value)}
+                style={{ flex: 1, minWidth: 140 }}
+                placeholder={isBn ? 'বন্ধুর কোড (যেমন: EV-204)' : 'Friend Code (EV-204)'}
+                value={friendCodeInput}
+                onChange={(e) => setFriendCodeInput(e.target.value)}
+              />
+              <input
+                type="text"
+                className="ev-input"
+                style={{ flex: 1, minWidth: 140 }}
+                placeholder={isBn ? 'বন্ধুর নাম' : 'Friend Name'}
+                value={friendNameInput}
+                onChange={(e) => setFriendNameInput(e.target.value)}
               />
               <button
                 type="button"
-                className="ev-btn ev-btn-primary"
+                className="ev-btn ev-btn-primary ev-btn-sm"
                 onClick={() => {
-                  if (friendInput.trim()) {
-                    addFriendByCode(friendInput.trim());
-                    setFriendInput('');
-                  }
+                  if (!friendCodeInput.trim()) return;
+                  addFriendByCode(friendCodeInput, friendNameInput);
+                  setFriendCodeInput('');
+                  setFriendNameInput('');
                 }}
               >
-                + {isBn ? 'যোগ করুন' : 'Add'}
+                + {trKey('add_friend', language)}
               </button>
             </div>
           )}
 
-          <div className="ev-podium">
-            <div className={`ev-pod rank-2 ${top2?.isMe ? 'is-you' : ''}`}>
-              <div className="ev-pod-av">
-                <div className="ev-avatar-sm" style={{ overflow: 'hidden' }}>
-                  {top2 ? renderPeerAvatarContent(top2) : '—'}
-                </div>
-              </div>
-              <div className="ev-pod-name">{top2 ? top2.name : '—'}</div>
-              <div className="ev-pod-xp">{top2 ? `${top2.displayXp} XP` : '0 XP'}</div>
-              <div className="ev-pod-base">2</div>
-            </div>
-
-            <div className={`ev-pod rank-1 ${top1?.isMe ? 'is-you' : ''}`}>
-              <div className="ev-pod-av">
-                <svg className="ev-crown" viewBox="0 0 36 26" fill="#F59E0B">
-                  <path d="M2 22L6 6l12 9 12-9 4 16H2z" />
-                </svg>
-                <div className="ev-avatar-sm" style={{ overflow: 'hidden' }}>
-                  {top1 ? renderPeerAvatarContent(top1) : '—'}
-                </div>
-              </div>
-              <div className="ev-pod-name">{top1 ? top1.name : '—'}</div>
-              <div className="ev-pod-xp">{top1 ? `${top1.displayXp} XP` : '0 XP'}</div>
-              <div className="ev-pod-base">1</div>
-            </div>
-
-            <div className={`ev-pod rank-3 ${top3?.isMe ? 'is-you' : ''}`}>
-              <div className="ev-pod-av">
-                <div className="ev-avatar-sm" style={{ overflow: 'hidden' }}>
-                  {top3 ? renderPeerAvatarContent(top3) : '—'}
-                </div>
-              </div>
-              <div className="ev-pod-name">{top3 ? top3.name : '—'}</div>
-              <div className="ev-pod-xp">{top3 ? `${top3.displayXp} XP` : '0 XP'}</div>
-              <div className="ev-pod-base">3</div>
-            </div>
-          </div>
-
-          <div className="ev-lb-list">
-            {filteredPeers.map((peer, idx) => (
-              <div key={peer.name + idx} className={`ev-lb-row ${peer.isMe ? 'is-current-user' : ''}`}>
-                <div className="ev-lb-rank">#{idx + 1}</div>
-                <div className="ev-avatar-sm" style={{ width: 36, height: 36, overflow: 'hidden' }}>
-                  {renderPeerAvatarContent(peer)}
-                </div>
-                <div style={{ minWidth: 0 }}>
-                  <div className="ev-lb-name">
-                    {peer.name} {peer.isMe ? (isBn ? '(তুমি)' : '(You)') : ''}
-                  </div>
-                  <div className="ev-lb-sub">
-                    <span style={{ color: peer.rankInfo.colorHex, fontWeight: 700 }}>
-                      {isBn ? peer.rankInfo.fullTitleBn : peer.rankInfo.fullTitleEn}
-                    </span>
-                    <span className="ev-lb-track">🔥 {peer.streak}d</span>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {combined.map((entry, idx) => (
+              <div
+                key={entry.id}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 10,
+                  padding: '12px 14px',
+                  borderRadius: 12,
+                  background: entry.isMe ? 'var(--brand-primary-soft)' : 'var(--bg-surface-muted)',
+                  border: entry.isMe ? '1.5px solid var(--brand-primary)' : '1px solid var(--border-subtle)',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flex: 1 }}>
+                  <span className="font-mono" style={{ width: 26, fontWeight: 900, color: 'var(--text-muted)', flexShrink: 0 }}>
+                    #{idx + 1}
+                  </span>
+                  {renderAvatarCircle(entry, 36)}
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div style={{ fontWeight: 800, fontSize: 14, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {entry.name}
+                    </div>
+                    <div style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 600 }}>
+                      {isBn ? entry.tierBn : entry.tierEn} • 🔥 {entry.streak}d
+                    </div>
                   </div>
                 </div>
-                <div className="ev-lb-xp">
-                  {peer.displayXp} XP
-                  <small>{peer.rankInfo.rankScore} RP</small>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                  <div style={{ textAlign: 'right' }}>
+                    <div className="font-mono" style={{ fontWeight: 800, fontSize: 14, color: 'var(--brand-primary)' }}>
+                      {entry.xp} XP
+                    </div>
+                    <div className="font-mono" style={{ fontSize: 11.5, color: 'var(--text-muted)', fontWeight: 700 }}>
+                      {entry.rankScore} RP
+                    </div>
+                  </div>
+                  {lbMode === 'friends' && !entry.isMe && (
+                    <button type="button" className="ev-btn ev-btn-danger ev-btn-sm" onClick={() => removeFriend(entry.id)}>
+                      ✕
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
@@ -633,577 +1689,58 @@ export const ExtraFeaturesView: React.FC = () => {
     );
   }
 
-  /* =====================================================================
-     VIEW 2: INTERACTIVE CHAPTER-WISE FORMULA MASTERBOOK (📐 সূত্রসমূহ)
-     ===================================================================== */
-  if (activeTab === 'formulas') {
-    const activeFormulaSubj: SubjectData | undefined = formulaSubjectId
-      ? subjects.find((s) => s.id === formulaSubjectId)
-      : undefined;
-
-    const searchClean = formulaSearch.trim().toLowerCase();
-
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-        <div className="ev-card">
-          <div className="ev-section-header">
-            <div>
-              {activeFormulaSubj && (
-                <button
-                  type="button"
-                  className="ev-btn ev-btn-secondary ev-btn-sm"
-                  style={{ marginBottom: 8 }}
-                  onClick={() => setFormulaTarget(null, 'all')}
-                >
-                  ← {isBn ? 'সকল বিষয়ে ফিরে যাও' : 'All Subjects'}
-                </button>
-              )}
-              <h2 className="ev-section-title">
-                📐{' '}
-                {activeFormulaSubj
-                  ? `${activeFormulaSubj.icon} ${trText(activeFormulaSubj.name, language)} — ${isBn ? 'অধ্যায়ভিত্তিক সূত্র ও নিয়মাবলি' : 'Chapter-wise Formulas'}`
-                  : isBn
-                  ? `${selectedClass} (${selectedGroup}) — অধ্যায়ভিত্তিক সূত্র ও নিয়মাবলি`
-                  : `${selectedClass} (${selectedGroup}) — Chapter-wise Formula Sheet`}
-              </h2>
-            </div>
-
-            <div style={{ minWidth: 240 }}>
-              <input
-                type="text"
-                className="ev-input"
-                placeholder={isBn ? '🔍 যেকোনো সূত্র বা অধ্যায় খুঁজুন...' : '🔍 Search formulas...'}
-                value={formulaSearch}
-                onChange={(e) => setFormulaSearch(e.target.value)}
-              />
-            </div>
-          </div>
-
-          {activeFormulaSubj || searchClean ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              {activeFormulaSubj && !searchClean && (
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                  <button
-                    type="button"
-                    className={`ev-btn ev-btn-sm ${formulaChapterId === 'all' ? 'ev-btn-primary' : 'ev-btn-secondary'}`}
-                    onClick={() => setFormulaTarget(activeFormulaSubj.id, 'all')}
-                  >
-                    {isBn ? `সকল অধ্যায় (${activeFormulaSubj.chapters.length})` : `All Chapters (${activeFormulaSubj.chapters.length})`}
-                  </button>
-                  {activeFormulaSubj.chapters.map((ch, idx) => (
-                    <button
-                      key={ch.id}
-                      type="button"
-                      className={`ev-btn ev-btn-sm ${formulaChapterId === ch.id ? 'ev-btn-primary' : 'ev-btn-secondary'}`}
-                      onClick={() => setFormulaTarget(activeFormulaSubj.id, ch.id)}
-                    >
-                      {isBn ? `অধ্যায় ${idx + 1}` : `Ch ${idx + 1}`}
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              {(activeFormulaSubj ? [activeFormulaSubj] : subjects).map((subj) =>
-                subj.chapters
-                  .filter((ch) => (activeFormulaSubj && formulaChapterId !== 'all' ? ch.id === formulaChapterId : true))
-                  .map((ch) => {
-                    const formulas = (ch.formulas || []).filter((f) => {
-                      if (!searchClean) return true;
-                      return (
-                        f.title.bn.toLowerCase().includes(searchClean) ||
-                        f.title.en.toLowerCase().includes(searchClean) ||
-                        f.formula.toLowerCase().includes(searchClean) ||
-                        (f.note?.bn || '').toLowerCase().includes(searchClean) ||
-                        ch.name.bn.toLowerCase().includes(searchClean)
-                      );
-                    });
-
-                    if (formulas.length === 0) return null;
-
-                    return (
-                      <div
-                        key={ch.id}
-                        className="ev-card"
-                        style={{ background: 'var(--bg-surface-muted)', border: '1px solid var(--border-default)' }}
-                      >
-                        <div className="ev-section-header" style={{ marginBottom: 10 }}>
-                          <div style={{ fontWeight: 800, fontSize: 15.5, color: 'var(--brand-primary)' }}>
-                            {subj.icon} {trText(subj.name, language)} • {trText(ch.name, language)}
-                          </div>
-                          {ch.mcqs && ch.mcqs.length > 0 && (
-                            <button
-                              type="button"
-                              className="ev-btn ev-btn-primary ev-btn-sm"
-                              onClick={() =>
-                                startQuiz({
-                                  mode: 'practice',
-                                  examType: 'mcq',
-                                  subjectId: subj.id,
-                                  subjectName: subj.name,
-                                  chapterId: ch.id,
-                                  chapterName: ch.name,
-                                  questions: ch.mcqs,
-                                  cqs: ch.cqs || [],
-                                  durationSec: Math.max(300, ch.mcqs.length * 45),
-                                  negativeMarking: 0,
-                                })
-                              }
-                            >
-                              ⚡ {isBn ? `MCQ অনুশীলন (${ch.mcqs.length})` : `Practice MCQ (${ch.mcqs.length})`}
-                            </button>
-                          )}
-                        </div>
-
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                          {formulas.map((f) => (
-                            <div
-                              key={f.id}
-                              style={{
-                                padding: 14,
-                                borderRadius: 12,
-                                background: 'var(--bg-surface)',
-                                border: '1px solid var(--border-subtle)',
-                              }}
-                            >
-                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                                <div style={{ fontWeight: 800, fontSize: 14.5 }}>{trText(f.title, language)}</div>
-                                <button
-                                  type="button"
-                                  className="ev-btn ev-btn-secondary ev-btn-sm"
-                                  onClick={() => {
-                                    navigator.clipboard?.writeText(`${trText(f.title, language)}: ${f.formula}`);
-                                    setCopiedFormulaId(f.id);
-                                    setTimeout(() => setCopiedFormulaId(null), 1200);
-                                  }}
-                                >
-                                  {copiedFormulaId === f.id ? (isBn ? '✅ কপি হয়েছে' : '✅ Copied') : isBn ? '📋 কপি' : '📋 Copy'}
-                                </button>
-                              </div>
-
-                              <div
-                                className="font-mono"
-                                style={{
-                                  padding: '10px 12px',
-                                  borderRadius: 9,
-                                  background: 'var(--brand-primary-soft)',
-                                  color: 'var(--brand-primary)',
-                                  fontWeight: 700,
-                                  fontSize: 14,
-                                  overflowX: 'auto',
-                                }}
-                              >
-                                {f.formula}
-                              </div>
-
-                              {f.note && (
-                                <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 6, fontWeight: 500 }}>
-                                  💡 {trText(f.note, language)}
-                                </div>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    );
-                  })
-              )}
-            </div>
-          ) : (
-            <div className="ev-grid-3">
-              {subjects.map((sub) => {
-                const totalFormulas = sub.chapters.reduce((sum, c) => sum + (c.formulas?.length || 0), 0);
-                return (
-                  <div
-                    key={sub.id}
-                    className="ev-card ev-card-interactive"
-                    style={{ cursor: 'pointer', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: 10 }}
-                    onClick={() => setFormulaTarget(sub.id, 'all')}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <span style={{ fontSize: 26 }}>{sub.icon}</span>
-                      <span className="ev-badge-pill ev-badge-indigo">
-                        {sub.chapters.length} {isBn ? 'অধ্যায়' : 'Ch'} • {totalFormulas} {isBn ? 'সূত্র' : 'Formulas'}
-                      </span>
-                    </div>
-                    <div>
-                      <div style={{ fontWeight: 800, fontSize: 16 }}>{sub.name.bn}</div>
-                      <div style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>{sub.name.en}</div>
-                    </div>
-                    <button type="button" className="ev-btn ev-btn-soft ev-btn-sm" style={{ width: '100%' }}>
-                      📐 {isBn ? 'অধ্যায়ভিত্তিক সূত্রগুলো দেখুন →' : 'Open Chapter Formulas →'}
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  }
-
-  /* =====================================================================
-     VIEW 3: 1v1 MCQ BATTLE ARENA (With Friends Room Code & Online Search)
-     ===================================================================== */
-  if (activeTab === 'battle') {
-    const curBattleQ = battleQuestions[battleQIndex];
-    const optionLabels = isBn ? ['ক', 'খ', 'গ', 'ঘ'] : ['A', 'B', 'C', 'D'];
-
-    return (
-      <div className="ev-card">
-        <div className="ev-section-header">
-          <h2 className="ev-section-title">⚔️ {trKey('nav_battle', language)} (1v1 Live Arena)</h2>
-          <span className="ev-badge-pill ev-badge-indigo">
-            🛡️ {isBn ? myRank.fullTitleBn : myRank.fullTitleEn}
-          </span>
-        </div>
-
-        {battleStage === 'lobby' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              <button
-                type="button"
-                className={`ev-btn ${battleModeTab === 'online' ? 'ev-btn-primary' : 'ev-btn-secondary'}`}
-                onClick={() => setBattleModeTab('online')}
-              >
-                🌐 {isBn ? 'অনলাইন প্লেয়ার খুঁজুন (Search Online)' : 'Search Online Player'}
-              </button>
-              <button
-                type="button"
-                className={`ev-btn ${battleModeTab === 'friend' ? 'ev-btn-primary' : 'ev-btn-secondary'}`}
-                onClick={() => setBattleModeTab('friend')}
-              >
-                👥 {isBn ? 'বন্ধুর সাথে ১v১ ব্যাটল (Play with Friend)' : 'Play with Friend'}
-              </button>
-            </div>
-
-            <div className="ev-grid-2">
-              <div>
-                <label style={{ fontSize: 13, fontWeight: 700, display: 'block', marginBottom: 6 }}>
-                  {isBn ? 'ব্যাটলের বিষয় নির্বাচন করো' : 'Select Battle Subject'}
-                </label>
-                <select
-                  className="ev-select"
-                  value={battleSubjId}
-                  onChange={(e) => setBattleSubjId(e.target.value)}
-                >
-                  {subjects.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.icon} {trText(s.name, language)}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label style={{ fontSize: 13, fontWeight: 700, display: 'block', marginBottom: 6 }}>
-                  {isBn ? 'প্রশ্ন সংখ্যা (Questions)' : 'Question Count'}
-                </label>
-                <select
-                  className="ev-select"
-                  value={battleQCount}
-                  onChange={(e) => setBattleQCount(Number(e.target.value))}
-                >
-                  <option value={5}>5 MCQs (Rapid Battle)</option>
-                  <option value={10}>10 MCQs (Standard Match)</option>
-                </select>
-              </div>
-            </div>
-
-            {battleModeTab === 'online' ? (
-              <div
-                style={{
-                  padding: 22,
-                  borderRadius: 16,
-                  background: 'var(--bg-surface-muted)',
-                  border: '1px solid var(--border-default)',
-                  textAlign: 'center',
-                }}
-              >
-                <div style={{ fontSize: 16, fontWeight: 800, marginBottom: 6 }}>
-                  🌐 {isBn ? 'তোমার র‍্যাঙ্ক টিয়ার অনুযায়ী অনলাইন প্রতিদ্বন্দ্বী খুঁজুন' : 'Match with an Online Peer'}
-                </div>
-                <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 14 }}>
-                  {isBn
-                    ? 'প্রতিটি প্রশ্নের জন্য ১৫ সেকেন্ড সময় পাবে। দ্রুত সঠিক উত্তর দিলে স্পিড বোনাস পয়েন্ট ও +60 XP পাবে!'
-                    : '15 seconds per MCQ. Win to earn +60 XP!'}
-                </p>
-                <button
-                  type="button"
-                  className="ev-btn ev-btn-primary"
-                  onClick={() => {
-                    setBattleStage('searching');
-                    setTimeout(() => {
-                      startLiveBattle(isBn ? 'অনলাইন প্রতিদ্বন্দ্বী' : 'Online Challenger');
-                    }, 1200);
-                  }}
-                >
-                  ⚡ {isBn ? 'অনলাইন ম্যাচ শুরু করুন (Find Online Match)' : 'Find Match Now'}
-                </button>
-              </div>
-            ) : (
-              <div className="ev-grid-2">
-                <div
-                  style={{
-                    padding: 18,
-                    borderRadius: 16,
-                    background: 'var(--bg-surface-muted)',
-                    border: '1px solid var(--border-default)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 10,
-                  }}
-                >
-                  <div style={{ fontWeight: 800, fontSize: 15 }}>
-                    ➕ {isBn ? 'বন্ধুর জন্য ব্যাটল রুম তৈরি করো' : 'Create Friend Battle Room'}
-                  </div>
-                  {!roomCode ? (
-                    <button
-                      type="button"
-                      className="ev-btn ev-btn-primary"
-                      onClick={() => setRoomCode(`EV-${Math.floor(1000 + Math.random() * 9000)}`)}
-                    >
-                      🔑 {isBn ? 'রুম কোড তৈরি করো' : 'Generate Room Code'}
-                    </button>
-                  ) : (
-                    <>
-                      <div
-                        className="font-mono"
-                        style={{
-                          padding: 12,
-                          borderRadius: 10,
-                          background: 'var(--brand-primary-soft)',
-                          color: 'var(--brand-primary)',
-                          fontSize: 20,
-                          fontWeight: 800,
-                          textAlign: 'center',
-                          letterSpacing: '0.08em',
-                        }}
-                      >
-                        {roomCode}
-                      </div>
-                      <div style={{ display: 'flex', gap: 8 }}>
-                        <button
-                          type="button"
-                          className="ev-btn ev-btn-secondary"
-                          style={{ flex: 1 }}
-                          onClick={() => navigator.clipboard?.writeText(roomCode)}
-                        >
-                          📋 {isBn ? 'কোড কপি' : 'Copy Code'}
-                        </button>
-                        <button
-                          type="button"
-                          className="ev-btn ev-btn-primary"
-                          style={{ flex: 1 }}
-                          onClick={() => startLiveBattle(`Friend (${roomCode})`)}
-                        >
-                          ⚔️ {isBn ? 'ব্যাটল শুরু' : 'Start Battle'}
-                        </button>
-                      </div>
-                    </>
-                  )}
-                </div>
-
-                <div
-                  style={{
-                    padding: 18,
-                    borderRadius: 16,
-                    background: 'var(--bg-surface-muted)',
-                    border: '1px solid var(--border-default)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 10,
-                  }}
-                >
-                  <div style={{ fontWeight: 800, fontSize: 15 }}>
-                    🔗 {isBn ? 'বন্ধুর রুম কোডে জয়েন করো' : "Join Friend's Room Code"}
-                  </div>
-                  <input
-                    type="text"
-                    className="ev-input font-mono"
-                    placeholder="EV-4829"
-                    value={joinCodeInput}
-                    onChange={(e) => setJoinCodeInput(e.target.value.toUpperCase())}
-                  />
-                  <button
-                    type="button"
-                    className="ev-btn ev-btn-primary"
-                    onClick={() => {
-                      if (!joinCodeInput.trim()) return;
-                      startLiveBattle(`Friend (${joinCodeInput.trim()})`);
-                    }}
-                  >
-                    🚀 {isBn ? 'রুমে জয়েন ও ব্যাটল শুরু' : 'Join & Start Battle'}
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {battleStage === 'searching' && (
-          <div style={{ padding: 36, textAlign: 'center' }}>
-            <div style={{ fontSize: 34, marginBottom: 10 }}>🛰️</div>
-            <div style={{ fontWeight: 800, fontSize: 17 }}>
-              {isBn ? 'অনলাইন প্রতিদ্বন্দ্বী খোঁজা হচ্ছে...' : 'Searching for online opponent...'}
-            </div>
-          </div>
-        )}
-
-        {battleStage === 'playing' && curBattleQ && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                padding: 14,
-                borderRadius: 14,
-                background: 'var(--bg-surface-muted)',
-                border: '1px solid var(--border-default)',
-              }}
-            >
-              <div>
-                <div style={{ fontWeight: 800, fontSize: 14.5 }}>
-                  {userName} ({isBn ? 'তুমি' : 'You'})
-                </div>
-                <div className="font-mono" style={{ fontWeight: 800, fontSize: 18, color: 'var(--brand-primary)' }}>
-                  {myBattleScore} pts
-                </div>
-              </div>
-
-              <div className="ev-timer-badge is-urgent font-mono">⏱️ {battleTimeLeft}s</div>
-
-              <div style={{ textAlign: 'right' }}>
-                <div style={{ fontWeight: 800, fontSize: 14.5 }}>{opponentName}</div>
-                <div className="font-mono" style={{ fontWeight: 800, fontSize: 18, color: 'var(--status-danger)' }}>
-                  {oppBattleScore} pts
-                </div>
-              </div>
-            </div>
-
-            <div className="ev-question-text">
-              #{battleQIndex + 1}/{battleQuestions.length}. {trText(curBattleQ.q, language)}
-            </div>
-
-            <div className="ev-options-list">
-              {(language === 'en'
-                ? curBattleQ.options.en?.length
-                  ? curBattleQ.options.en
-                  : curBattleQ.options.bn
-                : curBattleQ.options.bn?.length
-                ? curBattleQ.options.bn
-                : curBattleQ.options.en
-              ).map((opt, idx) => (
-                <button
-                  key={idx}
-                  type="button"
-                  disabled={battleSelectedOpt !== null}
-                  className={`ev-option-btn ${
-                    battleSelectedOpt !== null
-                      ? idx === curBattleQ.ans
-                        ? 'is-correct'
-                        : battleSelectedOpt === idx
-                        ? 'is-incorrect'
-                        : ''
-                      : ''
-                  }`}
-                  onClick={() => {
-                    setBattleSelectedOpt(idx);
-                    setTimeout(() => handleNextBattleQuestion(idx), 550);
-                  }}
-                >
-                  <span className="ev-option-key">{optionLabels[idx]}</span>
-                  <span>{opt}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {battleStage === 'finished' && (
-          <div style={{ padding: 24, textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
-            <div style={{ fontSize: 40 }}>{myBattleScore >= oppBattleScore ? '🏆' : '⚔️'}</div>
-            <h3 style={{ fontSize: 22, fontWeight: 800 }}>
-              {myBattleScore > oppBattleScore
-                ? isBn
-                  ? 'অভিনন্দন! তুমি ১v১ ব্যাটলে জয়ী হয়েছো! (+60 XP)'
-                  : 'Victory! You won the 1v1 Battle! (+60 XP)'
-                : myBattleScore === oppBattleScore
-                ? isBn
-                  ? 'ম্যাচ ড্র হয়েছে!'
-                  : 'Match Tied!'
-                : isBn
-                ? 'হাড্ডাহাড্ডি লড়াই হয়েছে! (+20 XP)'
-                : 'Good Fight! (+20 XP)'}
-            </h3>
-            <div className="font-mono" style={{ fontSize: 16, fontWeight: 800 }}>
-              {userName}: {myBattleScore} pts 🆚 {opponentName}: {oppBattleScore} pts
-            </div>
-            <button type="button" className="ev-btn ev-btn-primary" onClick={() => setBattleStage('lobby')}>
-              🔄 {isBn ? 'আবার খেলুন (Play Again)' : 'Play Again'}
-            </button>
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  /* =====================================================================
-     VIEW 4: FULL-POWER HIDDEN ADMIN PANEL (🔐 activeTab === 'admin')
-     ===================================================================== */
+  /* VIEW 4: SECRET ADMIN PANEL (🔐 activeTab === 'admin') */
   if (activeTab === 'admin') {
     if (!isAdminUnlocked) {
       return (
-        <div className="ev-card" style={{ maxWidth: 440, margin: '24px auto', textAlign: 'center', padding: 26 }}>
-          <div style={{ fontSize: 36, marginBottom: 8 }}>🔐</div>
-          <h2 style={{ fontSize: 20, fontWeight: 800, marginBottom: 6 }}>
-            {isBn ? 'অ্যাডমিন প্যানেল লগইন' : 'Admin Security Gate'}
+        <div className="ev-card" style={{ maxWidth: 440, margin: '32px auto', textAlign: 'center', padding: 28 }}>
+          <div style={{ fontSize: 38, marginBottom: 8 }}>🔐</div>
+          <h2 className="ev-section-title" style={{ justifyContent: 'center' }}>
+            {isBn ? 'অ্যাডমিন সিকিউরিটি ভেরিফিকেশন' : 'Admin Security Verification'}
           </h2>
-          <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 14 }}>
-            {isBn ? 'শুধুমাত্র অ্যাডমিন প্রবেশের জন্য গোপন পিন দিন' : 'Enter Admin Passcode to unlock'}
+          <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: '6px 0 16px' }}>
+            {isBn ? 'শুধুমাত্র অনুমোদিত অ্যাডমিনের জন্য। গোপন পিন কোড প্রবেশ করান:' : 'Authorized administrators only. Enter master PIN:'}
           </p>
-          <input
-            type="password"
-            className="ev-input font-mono"
-            style={{ textAlign: 'center', marginBottom: 10 }}
-            placeholder="Admin PIN"
-            value={pinInput}
-            onChange={(e) => setPinInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                if (!unlockAdmin(pinInput)) setPinError('ভুল পিন! সঠিক অ্যাডমিন পিন দিন।');
-                else setPinError('');
+
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              const ok = unlockAdmin(adminPinInput);
+              if (!ok) {
+                setAdminPinError(isBn ? '❌ ভুল পিন কোড!' : '❌ Invalid PIN!');
+              } else {
+                setAdminPinError('');
+                setAdminPinInput('');
+                fetchAdminCloudUsers();
               }
             }}
-          />
-          {pinError && <div style={{ color: 'var(--status-danger)', fontSize: 12.5, fontWeight: 700, marginBottom: 8 }}>{pinError}</div>}
-          <button
-            type="button"
-            className="ev-btn ev-btn-primary"
-            style={{ width: '100%' }}
-            onClick={() => {
-              if (!unlockAdmin(pinInput)) setPinError('ভুল পিন! সঠিক অ্যাডমিন পিন দিন।');
-              else setPinError('');
-            }}
+            style={{ display: 'flex', flexDirection: 'column', gap: 10 }}
           >
-            🔓 {isBn ? 'আনলক করুন' : 'Unlock Admin'}
-          </button>
+            <input
+              type="password"
+              className="ev-input font-mono"
+              style={{ textAlign: 'center', fontSize: 18, letterSpacing: '0.18em' }}
+              placeholder="••••••••"
+              value={adminPinInput}
+              onChange={(e) => setAdminPinInput(e.target.value)}
+            />
+            {adminPinError && <div style={{ color: 'var(--status-danger)', fontSize: 13, fontWeight: 700 }}>{adminPinError}</div>}
+            <button type="submit" className="ev-btn ev-btn-primary">
+              🔓 {isBn ? 'আনলক করুন' : 'Unlock Admin Panel'}
+            </button>
+          </form>
         </div>
       );
     }
 
     const admGroupOptions = getAvailableGroups(admClass);
-    const admSubjects = getSubjectsForSelection(admClass, admGroup);
     const selectedAdmSubj = admSubjects.find((s) => s.id === admSubjectId) || admSubjects[0];
 
     const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (!file) return;
       const reader = new FileReader();
-      reader.onload = (ev) => {
-        setAdmRawText(String(ev.target?.result || ''));
-      };
+      reader.onload = (ev) => setAdmRawText(String(ev.target?.result || ''));
       reader.readAsText(file);
     };
 
@@ -1234,32 +1771,16 @@ export const ExtraFeaturesView: React.FC = () => {
           </div>
 
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
-            <button
-              type="button"
-              className={`ev-btn ev-btn-sm ${adminSubTab === 'bulk' ? 'ev-btn-primary' : 'ev-btn-secondary'}`}
-              onClick={() => setAdminSubTab('bulk')}
-            >
+            <button type="button" className={`ev-btn ev-btn-sm ${adminSubTab === 'bulk' ? 'ev-btn-primary' : 'ev-btn-secondary'}`} onClick={() => setAdminSubTab('bulk')}>
               📥 এক্সেল / CSV বাল্ক আপলোড
             </button>
-            <button
-              type="button"
-              className={`ev-btn ev-btn-sm ${adminSubTab === 'single' ? 'ev-btn-primary' : 'ev-btn-secondary'}`}
-              onClick={() => setAdminSubTab('single')}
-            >
+            <button type="button" className={`ev-btn ev-btn-sm ${adminSubTab === 'single' ? 'ev-btn-primary' : 'ev-btn-secondary'}`} onClick={() => setAdminSubTab('single')}>
               ➕ একক প্রশ্ন যোগ
             </button>
-            <button
-              type="button"
-              className={`ev-btn ev-btn-sm ${adminSubTab === 'reports' ? 'ev-btn-primary' : 'ev-btn-secondary'}`}
-              onClick={() => setAdminSubTab('reports')}
-            >
+            <button type="button" className={`ev-btn ev-btn-sm ${adminSubTab === 'reports' ? 'ev-btn-primary' : 'ev-btn-secondary'}`} onClick={() => setAdminSubTab('reports')}>
               🚨 ভুল প্রশ্নের রিপোর্ট ({questionReports.filter((r) => r.status === 'pending').length})
             </button>
-            <button
-              type="button"
-              className={`ev-btn ev-btn-sm ${adminSubTab === 'manage' ? 'ev-btn-primary' : 'ev-btn-secondary'}`}
-              onClick={() => setAdminSubTab('manage')}
-            >
+            <button type="button" className={`ev-btn ev-btn-sm ${adminSubTab === 'manage' ? 'ev-btn-primary' : 'ev-btn-secondary'}`} onClick={() => setAdminSubTab('manage')}>
               🗂️ প্রশ্ন ও উত্তর সংশোধন
             </button>
             <button
@@ -1353,20 +1874,8 @@ export const ExtraFeaturesView: React.FC = () => {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               {admSubjectId === 'new-custom-subject' && (
                 <div className="ev-grid-2">
-                  <input
-                    type="text"
-                    className="ev-input"
-                    placeholder="নতুন বিষয়ের বাংলা নাম (যেমন: কৃষিশিক্ষা ১ম পত্র)"
-                    value={admCustomSubjNameBn}
-                    onChange={(e) => setAdmCustomSubjNameBn(e.target.value)}
-                  />
-                  <input
-                    type="text"
-                    className="ev-input"
-                    placeholder="ইংরেজি নাম (Agriculture 1st Paper)"
-                    value={admCustomSubjNameEn}
-                    onChange={(e) => setAdmCustomSubjNameEn(e.target.value)}
-                  />
+                  <input type="text" className="ev-input" placeholder="নতুন বিষয়ের বাংলা নাম" value={admCustomSubjNameBn} onChange={(e) => setAdmCustomSubjNameBn(e.target.value)} />
+                  <input type="text" className="ev-input" placeholder="ইংরেজি নাম" value={admCustomSubjNameEn} onChange={(e) => setAdmCustomSubjNameEn(e.target.value)} />
                 </div>
               )}
 
@@ -1390,18 +1899,9 @@ export const ExtraFeaturesView: React.FC = () => {
                   className="ev-btn ev-btn-primary"
                   onClick={() => {
                     if (!admRawText.trim()) return;
-                    const finalId =
-                      admSubjectId === 'new-custom-subject'
-                        ? `custom-${Date.now()}`
-                        : selectedAdmSubj?.id || admSubjectId;
-                    const finalBn =
-                      admSubjectId === 'new-custom-subject'
-                        ? admCustomSubjNameBn || 'নতুন বিষয়'
-                        : selectedAdmSubj?.name.bn || 'বিষয়';
-                    const finalEn =
-                      admSubjectId === 'new-custom-subject'
-                        ? admCustomSubjNameEn || finalBn
-                        : selectedAdmSubj?.name.en || finalBn;
+                    const finalId = admSubjectId === 'new-custom-subject' ? `custom-${Date.now()}` : selectedAdmSubj?.id || admSubjectId;
+                    const finalBn = admSubjectId === 'new-custom-subject' ? admCustomSubjNameBn || 'নতুন বিষয়' : selectedAdmSubj?.name.bn || 'বিষয়';
+                    const finalEn = admSubjectId === 'new-custom-subject' ? admCustomSubjNameEn || finalBn : selectedAdmSubj?.name.en || finalBn;
 
                     const res = importBulkMcqs({
                       targetClass: admClass,
@@ -1412,14 +1912,11 @@ export const ExtraFeaturesView: React.FC = () => {
                       rawText: admRawText,
                     });
                     setAdmRawText('');
-                    setAdmStatusBanner(
-                      `✅ ${admClass} (${admGroup}) → ${finalBn}-এ ${res.addedQuestions}টি প্রশ্ন এবং ${res.addedChapters}টি অধ্যায় ডাটাবেস ও অ্যাপে যুক্ত হয়েছে!`
-                    );
+                    setAdmStatusBanner(`✅ ${admClass} (${admGroup}) → ${finalBn}-এ ${res.addedQuestions}টি প্রশ্ন এবং ${res.addedChapters}টি অধ্যায় যুক্ত হয়েছে!`);
                   }}
                 >
                   🚀 ডাটাবেস ও প্রজেক্টে আপলোড করুন
                 </button>
-
                 <button type="button" className="ev-btn ev-btn-secondary" onClick={handleDownloadProjectCode}>
                   💾 প্রজেক্ট ফাইল (syllabusData.ts) ডাউনলোড
                 </button>
@@ -1429,20 +1926,8 @@ export const ExtraFeaturesView: React.FC = () => {
 
           {adminSubTab === 'single' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <input
-                type="text"
-                className="ev-input"
-                placeholder="অধ্যায়ের নাম (যেমন: অধ্যায় ১: ভৌত জগৎ ও পরিমাপ)"
-                value={singleChap}
-                onChange={(e) => setSingleChap(e.target.value)}
-              />
-              <input
-                type="text"
-                className="ev-input"
-                placeholder="প্রশ্নটি লিখুন..."
-                value={singleQ}
-                onChange={(e) => setSingleQ(e.target.value)}
-              />
+              <input type="text" className="ev-input" placeholder="অধ্যায়ের নাম" value={singleChap} onChange={(e) => setSingleChap(e.target.value)} />
+              <input type="text" className="ev-input" placeholder="প্রশ্নটি লিখুন..." value={singleQ} onChange={(e) => setSingleQ(e.target.value)} />
               <div className="ev-grid-2">
                 <input type="text" className="ev-input" placeholder="অপশন ক" value={singleOptA} onChange={(e) => setSingleOptA(e.target.value)} />
                 <input type="text" className="ev-input" placeholder="অপশন খ" value={singleOptB} onChange={(e) => setSingleOptB(e.target.value)} />
@@ -1456,7 +1941,7 @@ export const ExtraFeaturesView: React.FC = () => {
                   <option value={2}>সঠিক উত্তর: গ</option>
                   <option value={3}>সঠিক উত্তর: ঘ</option>
                 </select>
-                <input type="text" className="ev-input" placeholder="বোর্ড ট্যাগ (যেমন: ঢা. বো. '১৯)" value={singleBoard} onChange={(e) => setSingleBoard(e.target.value)} />
+                <input type="text" className="ev-input" placeholder="বোর্ড ট্যাগ" value={singleBoard} onChange={(e) => setSingleBoard(e.target.value)} />
                 <input type="text" className="ev-input" placeholder="ব্যাখ্যা (ঐচ্ছিক)" value={singleExp} onChange={(e) => setSingleExp(e.target.value)} />
               </div>
               <button
@@ -1493,9 +1978,7 @@ export const ExtraFeaturesView: React.FC = () => {
           {adminSubTab === 'reports' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               {questionReports.length === 0 ? (
-                <p style={{ color: 'var(--text-secondary)', fontSize: 14 }}>
-                  বর্তমানে স্টুডেন্টদের কোনো অমীমাংসিত প্রশ্ন রিপোর্ট নেই।
-                </p>
+                <p style={{ color: 'var(--text-secondary)', fontSize: 14 }}>বর্তমানে স্টুডেন্টদের কোনো অমীমাংসিত প্রশ্ন রিপোর্ট নেই।</p>
               ) : (
                 questionReports.map((rep) => (
                   <div
@@ -1538,7 +2021,7 @@ export const ExtraFeaturesView: React.FC = () => {
                             />
                           ))}
                         </div>
-                        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                           <span style={{ fontSize: 13, fontWeight: 700 }}>সঠিক উত্তর:</span>
                           {['ক', 'খ', 'গ', 'ঘ'].map((lbl, i) => (
                             <button
@@ -1592,19 +2075,11 @@ export const ExtraFeaturesView: React.FC = () => {
                           ✏️ প্রশ্ন ও উত্তর সংশোধন করুন
                         </button>
                         {rep.status !== 'resolved' && (
-                          <button
-                            type="button"
-                            className="ev-btn ev-btn-soft ev-btn-sm"
-                            onClick={() => resolveQuestionReport(rep.id)}
-                          >
+                          <button type="button" className="ev-btn ev-btn-soft ev-btn-sm" onClick={() => resolveQuestionReport(rep.id)}>
                             ✅ সমাধানকৃত মার্ক করুন
                           </button>
                         )}
-                        <button
-                          type="button"
-                          className="ev-btn ev-btn-danger ev-btn-sm"
-                          onClick={() => deleteQuestionReport(rep.id)}
-                        >
+                        <button type="button" className="ev-btn ev-btn-danger ev-btn-sm" onClick={() => deleteQuestionReport(rep.id)}>
                           🗑️ মুছুন
                         </button>
                       </div>
@@ -1617,15 +2092,11 @@ export const ExtraFeaturesView: React.FC = () => {
 
           {adminSubTab === 'manage' && selectedAdmSubj && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
                 <div style={{ fontWeight: 800, fontSize: 15 }}>
                   {selectedAdmSubj.icon} {selectedAdmSubj.name.bn} — মোট অধ্যায়: {selectedAdmSubj.chapters.length}
                 </div>
-                <button
-                  type="button"
-                  className="ev-btn ev-btn-danger ev-btn-sm"
-                  onClick={() => deleteCustomSubject(admClass, admGroup, selectedAdmSubj.id)}
-                >
+                <button type="button" className="ev-btn ev-btn-danger ev-btn-sm" onClick={() => deleteCustomSubject(admClass, admGroup, selectedAdmSubj.id)}>
                   🗑️ কাস্টম পরিবর্তন রিসেট
                 </button>
               </div>
@@ -1661,18 +2132,12 @@ export const ExtraFeaturesView: React.FC = () => {
                               type="button"
                               className={`ev-btn ev-btn-sm ${q.ans === oIdx ? 'ev-btn-primary' : 'ev-btn-secondary'}`}
                               style={{ minWidth: 32, padding: '0 8px' }}
-                              onClick={() =>
-                                updateCustomMcqAnswer(admClass, admGroup, selectedAdmSubj.id, ch.id, q.id, oIdx)
-                              }
+                              onClick={() => updateCustomMcqAnswer(admClass, admGroup, selectedAdmSubj.id, ch.id, q.id, oIdx)}
                             >
                               {optLbl}
                             </button>
                           ))}
-                          <button
-                            type="button"
-                            className="ev-btn ev-btn-danger ev-btn-sm"
-                            onClick={() => deleteCustomMcq(admClass, admGroup, selectedAdmSubj.id, ch.id, q.id)}
-                          >
+                          <button type="button" className="ev-btn ev-btn-danger ev-btn-sm" onClick={() => deleteCustomMcq(admClass, admGroup, selectedAdmSubj.id, ch.id, q.id)}>
                             🗑️
                           </button>
                         </div>
@@ -1695,9 +2160,7 @@ export const ExtraFeaturesView: React.FC = () => {
                 </div>
 
                 {cloudUsers.length === 0 ? (
-                  <p style={{ fontSize: 13.5, color: 'var(--text-secondary)' }}>
-                    বর্তমানে ক্লাউড টেবিলে কোনো ইউজার পাওয়া যায়নি অথবা লোড হচ্ছে।
-                  </p>
+                  <p style={{ fontSize: 13.5, color: 'var(--text-secondary)' }}>বর্তমানে ক্লাউড টেবিলে কোনো ইউজার পাওয়া যায়নি অথবা লোড হচ্ছে।</p>
                 ) : (
                   <div className="ev-table-wrap">
                     <table className="ev-table">
@@ -1728,10 +2191,11 @@ export const ExtraFeaturesView: React.FC = () => {
 
               <div className="ev-card" style={{ background: 'var(--bg-surface-muted)' }}>
                 <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 8 }}>🔑 অ্যাডমিন গোপন পিন পরিবর্তন</div>
-                <div style={{ display: 'flex', gap: 8 }}>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   <input
                     type="password"
                     className="ev-input"
+                    style={{ flex: 1, minWidth: 200 }}
                     placeholder="নতুন পিন লিখুন (কমপক্ষে ৪ অক্ষর)"
                     value={newPinValue}
                     onChange={(e) => setNewPinValue(e.target.value)}
@@ -1758,9 +2222,7 @@ export const ExtraFeaturesView: React.FC = () => {
     );
   }
 
-  /* =====================================================================
-     VIEW 5: RANK & BADGES (🛡️ activeTab === 'achievements')
-     ===================================================================== */
+  /* VIEW 5: RANK & BADGES (🛡️ activeTab === 'achievements') */
   if (activeTab === 'achievements') {
     const allTiers = [
       { id: 'bronze', nameBn: 'ব্রোঞ্জ র‍্যাঙ্ক (I – III)', nameEn: 'Bronze Rank (I – III)', range: '0 – 199 RP', color: '#B45309', div: 'I' },
@@ -1786,10 +2248,7 @@ export const ExtraFeaturesView: React.FC = () => {
               <div
                 key={t.id}
                 className="ev-badge-card"
-                style={{
-                  border: isCurrent ? `2px solid ${t.color}` : '1px solid var(--border-subtle)',
-                  justifyContent: 'space-between',
-                }}
+                style={{ border: isCurrent ? `2px solid ${t.color}` : '1px solid var(--border-subtle)', justifyContent: 'space-between' }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                   <MetallicBadgeSvg color={t.color} label={t.div} />
@@ -1810,9 +2269,7 @@ export const ExtraFeaturesView: React.FC = () => {
     );
   }
 
-  /* =====================================================================
-     VIEW 6: ANALYTICS (📊 activeTab === 'Analytics')
-     ===================================================================== */
+  /* VIEW 6: ANALYTICS (📊 activeTab === 'Analytics') */
   if (activeTab === 'Analytics') {
     return (
       <div className="ev-card">
@@ -1849,9 +2306,7 @@ export const ExtraFeaturesView: React.FC = () => {
 
         {examHistory.length === 0 ? (
           <p style={{ color: 'var(--text-secondary)', fontSize: 14 }}>
-            {isBn
-              ? 'তুমি এখনো কোনো পরীক্ষায় অংশ নাওনি। যেকোনো বিষয়ে ক্লিক করে কুইজ শুরু করো!'
-              : 'You have not taken any exams yet. Click any subject to start practicing!'}
+            {isBn ? 'তুমি এখনো কোনো পরীক্ষায় অংশ নাওনি। যেকোনো বিষয়ে ক্লিক করে কুইজ শুরু করো!' : 'You have not taken any exams yet. Click any subject to start practicing!'}
           </p>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -1887,9 +2342,7 @@ export const ExtraFeaturesView: React.FC = () => {
     );
   }
 
-  /* =====================================================================
-     VIEW 7: MISTAKE BANK (🎯 activeTab === 'mistakes')
-     ===================================================================== */
+  /* VIEW 7: MISTAKE BANK (🎯 activeTab === 'mistakes') */
   if (activeTab === 'mistakes') {
     const activeMistakes = mistakes.filter((m) => !m.mastered);
     return (
@@ -1901,9 +2354,7 @@ export const ExtraFeaturesView: React.FC = () => {
         </div>
         {activeMistakes.length === 0 ? (
           <p style={{ color: 'var(--text-secondary)', fontSize: 14 }}>
-            {isBn
-              ? 'ভুলের খাতায় বর্তমানে কোনো প্রশ্ন নেই। কুইজে কোনো প্রশ্ন ভুল হলে তা এখানে অটোমেটিক জমা হবে।'
-              : 'No pending mistakes in your Mistake Bank.'}
+            {isBn ? 'ভুলের খাতায় বর্তমানে কোনো প্রশ্ন নেই। কুইজে কোনো প্রশ্ন ভুল হলে তা এখানে অটোমেটিক জমা হবে।' : 'No pending mistakes in your Mistake Bank.'}
           </p>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -1916,12 +2367,7 @@ export const ExtraFeaturesView: React.FC = () => {
                 <div style={{ fontSize: 13.5, color: 'var(--status-success)', fontWeight: 700 }}>
                   ✅ {isBn ? 'সঠিক উত্তর:' : 'Correct Answer:'} {(m.options.bn?.length ? m.options.bn : m.options.en)[m.correctIndex]}
                 </div>
-                <button
-                  type="button"
-                  className="ev-btn ev-btn-secondary ev-btn-sm"
-                  style={{ marginTop: 8 }}
-                  onClick={() => markMistakeMastered(m.id)}
-                >
+                <button type="button" className="ev-btn ev-btn-secondary ev-btn-sm" style={{ marginTop: 8 }} onClick={() => markMistakeMastered(m.id)}>
                   ✔️ {isBn ? 'আয়ত্ত করেছি (Remove)' : 'Mastered (Remove)'}
                 </button>
               </div>
@@ -1932,9 +2378,7 @@ export const ExtraFeaturesView: React.FC = () => {
     );
   }
 
-  /* =====================================================================
-     VIEW 8: FLASHCARDS (🗂️ activeTab === 'flashcards')
-     ===================================================================== */
+  /* VIEW 8: FLASHCARDS (🗂️ activeTab === 'flashcards') */
   if (activeTab === 'flashcards') {
     const card = flashcards[fcIndex % Math.max(1, flashcards.length)];
     return (
@@ -1976,9 +2420,7 @@ export const ExtraFeaturesView: React.FC = () => {
 
         {flashcards.length === 0 ? (
           <p style={{ color: 'var(--text-secondary)', fontSize: 14 }}>
-            {isBn
-              ? 'তোমার নিজস্ব ফ্ল্যাশকার্ড তৈরি করতে ওপরে প্রশ্ন ও উত্তর লিখে "+ যোগ" বাটনে ক্লিক করো।'
-              : 'Create your own flashcards above to review key formulas and concepts.'}
+            {isBn ? 'তোমার নিজস্ব ফ্ল্যাশকার্ড তৈরি করতে ওপরে প্রশ্ন ও উত্তর লিখে "+ যোগ" বাটনে ক্লিক করো।' : 'Create your own flashcards above to review key formulas and concepts.'}
           </p>
         ) : (
           <div style={{ textAlign: 'center' }}>
@@ -2025,9 +2467,7 @@ export const ExtraFeaturesView: React.FC = () => {
     );
   }
 
-  /* =====================================================================
-     VIEW 9: STUDY PLANNER (📅 activeTab === 'planner')
-     ===================================================================== */
+  /* VIEW 9: STUDY PLANNER (📅 activeTab === 'planner') */
   if (activeTab === 'planner') {
     return (
       <div className="ev-card">
@@ -2044,24 +2484,14 @@ export const ExtraFeaturesView: React.FC = () => {
             value={taskTitle}
             onChange={(e) => setTaskTitle(e.target.value)}
           />
-          <select
-            className="ev-select"
-            style={{ width: 'auto' }}
-            value={taskSubject}
-            onChange={(e) => setTaskSubject(e.target.value)}
-          >
+          <select className="ev-select" style={{ width: 'auto' }} value={taskSubject} onChange={(e) => setTaskSubject(e.target.value)}>
             {subjects.map((s) => (
               <option key={s.id} value={s.name.bn}>
                 {trText(s.name, language)}
               </option>
             ))}
           </select>
-          <select
-            className="ev-select"
-            style={{ width: 'auto' }}
-            value={taskMinutes}
-            onChange={(e) => setTaskMinutes(Number(e.target.value))}
-          >
+          <select className="ev-select" style={{ width: 'auto' }} value={taskMinutes} onChange={(e) => setTaskMinutes(Number(e.target.value))}>
             <option value={25}>25 {isBn ? 'মিনিট' : 'mins'}</option>
             <option value={40}>40 {isBn ? 'মিনিট' : 'mins'}</option>
             <option value={60}>60 {isBn ? 'মিনিট' : 'mins'}</option>
@@ -2086,9 +2516,7 @@ export const ExtraFeaturesView: React.FC = () => {
 
         {studyTasks.length === 0 ? (
           <p style={{ color: 'var(--text-secondary)', fontSize: 14 }}>
-            {isBn
-              ? 'তোমার পড়ার রুটিনে এখনো কোনো টাস্ক নেই। ওপরে টার্গেট লিখে যোগ করো!'
-              : 'No study tasks yet. Add your daily study goals above!'}
+            {isBn ? 'তোমার পড়ার রুটিনে এখনো কোনো টাস্ক নেই। ওপরে টার্গেট লিখে যোগ করো!' : 'No study tasks yet. Add your daily study goals above!'}
           </p>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -2121,9 +2549,7 @@ export const ExtraFeaturesView: React.FC = () => {
     );
   }
 
-  /* =====================================================================
-     VIEW 10: DOUBT FORUM (💬 activeTab === 'community')
-     ===================================================================== */
+  /* VIEW 10: DOUBT FORUM (💬 activeTab === 'community') */
   return (
     <div className="ev-card">
       <div className="ev-section-header">
@@ -2140,12 +2566,7 @@ export const ExtraFeaturesView: React.FC = () => {
             value={postTitle}
             onChange={(e) => setPostTitle(e.target.value)}
           />
-          <select
-            className="ev-select"
-            style={{ width: 'auto' }}
-            value={postSubj}
-            onChange={(e) => setPostSubj(e.target.value)}
-          >
+          <select className="ev-select" style={{ width: 'auto' }} value={postSubj} onChange={(e) => setPostSubj(e.target.value)}>
             {subjects.map((s) => (
               <option key={s.id} value={s.name.bn}>
                 {trText(s.name, language)}
@@ -2154,10 +2575,11 @@ export const ExtraFeaturesView: React.FC = () => {
           </select>
         </div>
 
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <input
             type="text"
             className="ev-input"
+            style={{ flex: 1, minWidth: 200 }}
             placeholder={isBn ? 'বিস্তারিত প্রশ্ন বা সমস্যা লেখো...' : 'Describe your academic question...'}
             value={postBody}
             onChange={(e) => setPostBody(e.target.value)}
@@ -2186,15 +2608,13 @@ export const ExtraFeaturesView: React.FC = () => {
 
       {communityPosts.length === 0 ? (
         <p style={{ color: 'var(--text-secondary)', fontSize: 14 }}>
-          {isBn
-            ? 'ফোরামে এখনো কোনো প্রশ্ন পোস্ট করা হয়নি। তোমার যেকোনো একাডেমিক প্রশ্ন ওপরে লিখে পোস্ট করতে পারো!'
-            : 'No questions posted yet. Ask your first academic doubt above!'}
+          {isBn ? 'ফোরামে এখনো কোনো প্রশ্ন পোস্ট করা হয়নি। তোমার যেকোনো একাডেমিক প্রশ্ন ওপরে লিখে পোস্ট করতে পারো!' : 'No questions posted yet. Ask your first academic doubt above!'}
         </p>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {communityPosts.map((post) => (
             <div key={post.id} className="ev-card" style={{ background: 'var(--bg-surface-muted)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 4 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 4, flexWrap: 'wrap', gap: 4 }}>
                 <span>
                   {post.authorAvatar || '🎓'} {post.authorName} • <strong style={{ color: 'var(--brand-primary)' }}>{post.authorRank}</strong> • {post.subjectName}
                 </span>
