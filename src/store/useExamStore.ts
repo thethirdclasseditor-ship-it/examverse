@@ -677,3 +677,162 @@ if (window.location.hash.includes('access_token=') && window.history?.replaceSta
 client.auth.getSession().then(({ data }: any) => { if (data?.session?.user) applySupabaseSessionUser(data.session.user); });
 client.auth.onAuthStateChange((_event: string, session: any) => { if (session?.user) applySupabaseSessionUser(session.user); }); }
 initSupabaseAuthAndHashSync();
+// ... existing code ...
+export function subjectSupportsFormulas(subj: SubjectData | string | null | undefined): boolean {
+  if (!subj) return false;
+  const id = typeof subj === 'string' ? subj : subj.id;
+  if (FORMULA_SUBJECT_IDS.has(id)) return true;
+  if (typeof subj !== 'string' && Array.isArray(subj.chapters)) {
+    return subj.chapters.some((c) => Array.isArray(c.formulas) && c.formulas.length > 0);
+  }
+  return false;
+}
+const NON_MATH_CHAPTER_IDS = new Set(['acc1-c5']);
+function convertLegacyChapters( chapters: Chapter[], subjPrefix: string, allowFormulas = true ): ChapterData[] { return (chapters || []).map((ch, cIdx): ChapterData => { const rawFormulas =
+allowFormulas && !NON_MATH_CHAPTER_IDS.has(ch.id) ? ch.formulas || [] : [];
+const formulas: ChapterFormula[] = rawFormulas.map((fStr, fIdx) => { const parts = fStr.split(':');
+const hasTitle = parts.length > 1 && parts[0].length < 52;
+const titleText = hasTitle ? parts[0].trim() : `গাণিতিক সূত্র #${fIdx + 1}`;
+const bodyText = hasTitle ? parts.slice(1).join(':').trim() : fStr;
+return {
+  id: `${subjPrefix}-f-${cIdx + 1}-${fIdx + 1}`,
+  title: { bn: titleText, en: titleText },
+  formula: bodyText,
+  equation: bodyText,
+  note: { bn: ch.name, en: ch.name },
+}; });
+const mcqs: MCQQuestion[] = (ch.mcqs || []).map((m): MCQQuestion => ({ id: m.id, q: { bn: m.question, en: m.question }, options: { bn: [...m.options], en: [...m.options] }, ans: m.correctIndex,
+explanation: { bn: m.explanation || '', en: m.explanation || '' }, boardTag: m.board, board: m.board, } as any));
+const cqs: CQQuestion[] = (ch.cqs || []).map((c): CQQuestion => ({ id: c.id, stem: { bn: c.stem, en: c.stem }, a: { bn: c.qA, en: c.qA }, b: { bn: c.qB, en: c.qB }, c: { bn: c.qC, en: c.qC }, d: { bn: c.qD, en: c.qD },
+ansA: { bn: c.ansA, en: c.ansA }, ansB: { bn: c.ansB, en: c.ansB }, ansC: { bn: c.ansC, en: c.ansC }, ansD: { bn: c.ansD, en: c.ansD }, boardTag: c.board, }));
+return { id: ch.id, name: { bn: ch.name, en: ch.name }, mcqs, cqs, formulas, }; }); }
+const ch = (id: string, name: string, formulas: string[] = []): Chapter => ({ id, name, mcqs: [], cqs: [], formulas, });
+// ... existing code ...
+let division: RankProgressInfo['division'] = 'I';
+if (current.id === 'elite' && progressPct >= 95) division = 'MAX';
+else if (progressPct >= 67) division = 'III';
+else if (progressPct >= 34) division = 'II';
+return { tierId: current.id, tierNameEn: current.en, tierNameBn: current.bn, division, fullTitleEn: division === 'MAX' ? `${current.en} Grandmaster` : `${current.en} ${division}`,
+fullTitleBn: division === 'MAX' ? `${current.bn} গ্র্যান্ডমাস্টার` : `${current.bn} ${division}`, rankScore, nextTierScore: current.max + 1, progressPct, colorHex: current.colorHex, color: current.colorHex, bgSoft: current.bgSoft, xpScore: xp,
+accuracyPct: Math.round(accuracyPct), masteryPct, consistencyPct, } as any; }
+export function getAvailableClasses(): string[] { return Object.keys(storeState?.syllabusDB || INITIAL_SYLLABUS_DB); }
+// ... existing code ...
+submit_exam: { en: 'Submit Exam', bn: 'পরীক্ষা জমা দাও' }, prev_q: { en: 'Previous', bn: 'পূর্ববর্তী' }, next_q: { en: 'Next', bn: 'পরবর্তী' }, flag_q: { en: 'Flag', bn: 'মার্ক করো' },
+answered: { en: 'Answered', bn: 'উত্তর দেওয়া' }, unanswered: { en: 'Unanswered', bn: 'বাকি আছে' }, global_ranking: { en: 'Global Ranking', bn: 'সর্বজনীন র‍্যাঙ্কিং' },
+friends_ranking: { en: 'Friends Ranking', bn: 'বন্ধুদের র‍্যাঙ্কিং' }, subject_ranking: { en: 'Subject-wise', bn: 'বিষয়ভিত্তিক' }, filter_today: { en: 'Today', bn: 'আজ' },
+filter_weekly: { en: 'Weekly', bn: 'সাপ্তাহিক' }, filter_monthly: { en: 'Monthly', bn: 'মাসিক' }, filter_alltime: { en: 'All-Time', bn: 'সর্বমোট' },
+global_board: { en: 'Global Board', bn: 'গ্লোবাল বোর্ড' }, friends_board: { en: 'Friends Board', bn: 'বন্ধুদের বোর্ড' },
+all_time: { en: 'All-Time', bn: 'সর্বমোট' }, monthly: { en: 'Monthly', bn: 'মাসিক' }, weekly: { en: 'Weekly', bn: 'সাপ্তাহিক' },
+add_friend: { en: 'Add Friend', bn: 'বন্ধু যোগ করো' }, };
+export function trKey(key: keyof typeof UI_DICT | string, lang: LanguageMode): string { const item = UI_DICT[key as keyof typeof UI_DICT];
+if (!item) return String(key);
+// ... existing code ...
+studyTasks: StudyTask[];
+communityPosts: CommunityPost[];
+friendsList: string[];
+friendList: { id: string; code: string; name: string; avatar: string; xp: number; rankScore: number; rankTitleBn: string; rankTitleEn: string; streak: number }[];
+questionReports: QuestionErrorReport[];
+syllabusDB: Record<string, Record<string, SubjectData[]>>;
+activeQuiz: ActiveQuizConfig | null;
+settingsOpen: boolean;
+isSettingsModalOpen: boolean;
+authModalOpen: boolean;
+isAuthModalOpen: boolean;
+isAdminUnlocked: boolean;
+adminPin: string;
+setActiveTab: (tab: NavTabId) => void;
+setSelectedSubjectId: (id: string | null) => void;
+setFormulaTarget: (subjectId: string | null, chapterId: string | null) => void;
+setFormulaFilter: (subjectId: string | null, chapterId: string | null) => void;
+openSubjectFormulas: (subjectId: string, chapterId?: string) => void;
+setLanguage: (lang: LanguageMode) => void;
+toggleDarkMode: () => void;
+setClassAndGroup: (cls: string, grp: string) => void;
+setUserProfile: (profile: { id?: string; name: string; email?: string; avatar?: string; isAuthenticated?: boolean }) => void;
+logoutUser: () => Promise<void>;
+setSettingsOpen: (open: boolean) => void;
+setSettingsModalOpen: (open: boolean) => void;
+setAuthModalOpen: (open: boolean) => void;
+startQuiz: (config: ActiveQuizConfig) => void;
+closeQuiz: () => void;
+addXp: (amount: number) => void;
+recordExamResult: (result: any, newMistakes?: MistakeItem[]) => void;
+markMistakeMastered: (id: string) => void;
+addFlashcard: (front: string, back: string, subjectId?: string) => void;
+deleteFlashcard: (id: string) => void;
+updateFlashcardBox: (id: string, box: 1 | 2 | 3 | 4 | 5) => void;
+addStudyTask: (task: Omit<StudyTask, 'id' | 'completed'>) => void;
+toggleStudyTask: (id: string) => void;
+deleteStudyTask: (id: string) => void;
+addCommunityPost: (post: { authorName?: string; authorAvatar?: string; authorRank?: string; subjectName: string; title: string; body: string }) => void;
+addCommunityReply: (postId: string, authorOrText: string, maybeText?: string) => void;
+likeCommunityPost: (postId: string) => void;
+togglePostLike: (postId: string) => void;
+addFriendByCode: (codeOrName: string, friendName?: string) => void;
+removeFriend: (id: string) => void;
+fetchLeaderboardUsers: () => Promise<any[]>;
+reportQuestionError: (payload: any) => void;
+// ... existing code ...
+flashcards: Array.isArray(persisted.flashcards) ? persisted.flashcards : [], studyTasks: Array.isArray(persisted.studyTasks) ? persisted.studyTasks : [],
+communityPosts: Array.isArray(persisted.communityPosts) ? persisted.communityPosts : [], friendsList: Array.isArray(persisted.friendsList) ? persisted.friendsList : ['তানভীর আহমেদ', 'সাদিয়া ইসলাম', 'রাকিবুল হাসান'],
+friendList: [
+  { id: 'fr-1', code: 'EV-101', name: 'তানভীর আহমেদ', avatar: '', xp: 45, rankScore: 22, rankTitleBn: 'ব্রোঞ্জ I', rankTitleEn: 'Bronze I', streak: 2 },
+  { id: 'fr-2', code: 'EV-102', name: 'সাদিয়া ইসলাম', avatar: '', xp: 30, rankScore: 15, rankTitleBn: 'ব্রোঞ্জ I', rankTitleEn: 'Bronze I', streak: 1 },
+],
+questionReports: Array.isArray(persisted.questionReports) ? persisted.questionReports : [], syllabusDB: mergeBuiltInSubjects(persisted.syllabusDB), activeQuiz: null, settingsOpen: false, isSettingsModalOpen: false,
+authModalOpen: false, isAuthModalOpen: false, isAdminUnlocked: false, adminPin: typeof persisted.adminPin === 'string' && persisted.adminPin ? persisted.adminPin : '1234', setActiveTab: (tab) => {
+if (typeof window !== 'undefined' && tab && window.history?.replaceState) { const currHash = window.location.hash.replace(/^#/, '');
+if (!currHash.startsWith('access_token=') && currHash !== tab) { window.history.replaceState(null, '', `#${tab}`); } }
+setState({ activeTab: tab }); }, setSelectedSubjectId: (id) => setState({ selectedSubjectId: id }), setFormulaTarget: (subjectId, chapterId) => setState({ formulaSubjectId: subjectId, formulaChapterId: chapterId }),
+setFormulaFilter: (subjectId, chapterId) => setState({ formulaSubjectId: subjectId, formulaChapterId: chapterId }),
+openSubjectFormulas: (subjectId, chapterId = 'all') => { setState({ formulaSubjectId: subjectId, formulaChapterId: chapterId || 'all', selectedSubjectId: null, activeTab: 'formulas', }); },
+// ... existing code ...
+setAuthModalOpen: (open) => setState({ authModalOpen: open, isAuthModalOpen: open }), startQuiz: (activeQuiz) => setState({ activeQuiz }), closeQuiz: () => setState({ activeQuiz: null }),
+addXp: (amount) => {
+  const newXp = Math.max(0, storeState.xp + (Number(amount) || 0));
+  const newLevel = getLevelProgress(newXp).level;
+  setState({ xp: newXp, level: newLevel });
+},
+recordExamResult: (result, newMistakesArg) => { const accuracy = typeof result.accuracy === 'number' ? result.accuracy : result.total > 0 ? Math.round((result.score / result.total) * 100) : 0;
+// ... existing code ...
+likeCommunityPost: (postId) => setState({ communityPosts: storeState.communityPosts.map((p) => (p.id === postId ? { ...p, likes: p.likes + 1 } : p)) }),
+togglePostLike: (postId) => setState({ communityPosts: storeState.communityPosts.map((p) => (p.id === postId ? { ...p, likes: p.likes + 1 } : p)) }), addFriendByCode: (codeOrName, friendName) => {
+const clean = (codeOrName || '').trim();
+if (!clean) return;
+const displayName = (friendName || clean).trim();
+const newFriendObj = {
+  id: `fr-${Date.now()}`,
+  code: clean.toUpperCase(),
+  name: displayName,
+  avatar: '',
+  xp: 25,
+  rankScore: 12,
+  rankTitleBn: 'ব্রোঞ্জ I',
+  rankTitleEn: 'Bronze I',
+  streak: 1,
+};
+setState({
+  friendsList: storeState.friendsList.includes(displayName) ? storeState.friendsList : [...storeState.friendsList, displayName],
+  friendList: [...storeState.friendList, newFriendObj],
+}); },
+removeFriend: (id) => {
+  setState({ friendList: storeState.friendList.filter((f) => f.id !== id) });
+},
+fetchLeaderboardUsers: async () => {
+  const supaMod = RawSupabase as any;
+  const client = supaMod?.supabase;
+  if (!client) return [];
+  try {
+    const { data, error } = await client
+      .from('user_profiles')
+      .select('id, username, full_name, avatar_initials, target_track, level, xp, streak_days')
+      .order('xp', { ascending: false })
+      .limit(50);
+    if (error || !Array.isArray(data)) return [];
+    return data;
+  } catch {
+    return [];
+  }
+},
+reportQuestionError: (payload) => { const nowStr = new Date().toLocaleString('bn-BD');
+// ... existing code ...
