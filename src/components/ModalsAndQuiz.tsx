@@ -349,16 +349,20 @@ const t = boardTag.trim();
 if (!t) return null;
 if ( t === 'NCTB ও বোর্ড প্রশ্ন' || t === 'বো. প্রশ্ন' || t.startsWith('HSC বাংলা ১ম পত্র') || t.includes('Batch') ) { return null; }
 return t; }
-function getComplexMathOrRuleExplanation(q: MCQQuestion, lang: 'bn' | 'en' | 'bilingual'): string | null { if (!q) return null;
-if (EXACT_MATH_EXPLANATIONS[q.id]) { return EXACT_MATH_EXPLANATIONS[q.id]; }
-const qText = trText(q.q, 'bn');
-const rawExp = trText(q.explanation, lang).trim();
-if ( !rawExp || rawExp.includes('বোর্ড স্ট্যান্ডার্ড সমাধান') || rawExp.startsWith('HSC বাংলা') ) { return null; }
-if (q.id.startsWith('BN1-') || q.id.startsWith('bn')) { return null; }
-const isMathOrRule =
-/[০-৯0-9=+÷×%⊕′̅<>]|printf|main\s*\(|for\s*\(|SELECT|WHERE|INSERT|UPDATE|colspan|rowspan|cellpadding|cellspacing|bgcolor|href|src|কম্প্লিমেন্ট|পরিপূরক|বাইনারি|অক্টাল|হেক্সা|গেইট|টপোলজি|ব্যান্ডউইথ|ফ্রিকোয়েন্সি|বাইট|বিট|সমীকরণ|অনুপাত|অবচয়|সুদ|কমিশন|মজুদ|মূলধন|সমচ্ছেদ/i.test(
-qText + ' ' + rawExp );
-return isMathOrRule ? rawExp : null; }
+export function getComplexMathOrRuleExplanation(q: MCQQuestion | any, lang: 'bn' | 'en' | 'bilingual' = 'bn'): string {
+  if (!q) return '';
+  if (EXACT_MATH_EXPLANATIONS[q.id]) { return EXACT_MATH_EXPLANATIONS[q.id]; }
+  const qText = trText(q.q, 'bn');
+  const rawExp = trText(q.explanation, lang).trim();
+  if (!rawExp || rawExp.includes('বোর্ড স্ট্যান্ডার্ড সমাধান') || rawExp.startsWith('HSC বাংলা')) { return ''; }
+  if (q.id && (q.id.startsWith('BN1-') || q.id.startsWith('bn'))) { return ''; }
+  if (q.id && q.id.startsWith('FBI-')) { return rawExp; }
+  const isMathOrRule =
+    /[০-৯0-9=+÷×%⊕′̅<>]|npv|irr|arr|pbp|capm|ytm|ear|eir|wacc|printf|main\s*\(|for\s*\(|SELECT|WHERE|INSERT|UPDATE|colspan|rowspan|cellpadding|cellspacing|bgcolor|href|src|কম্প্লিমেন্ট|পরিপূরক|বাইনারি|অক্টাল|হেক্সা|গেইট|টপোলজি|ব্যান্ডউইথ|ফ্রিকোয়েন্সি|বাইট|বিট|সমীকরণ|অনুপাত|অবচয়|সুদ|কমিশন|মজুদ|মূলধন|সমচ্ছেদ|চক্রবৃদ্ধি|বাট্টা|বিভেদাঙ্ক|পে-ব্যাক|কিস্তি|উদ্দীপক/i.test(
+      qText + ' ' + rawExp
+    );
+  return isMathOrRule ? rawExp : '';
+}
 export const QuizRunnerModal: React.FC = () => { const { activeQuiz, closeQuiz, recordExamResult, submitQuestionReport, userName, language } = useExamStore();
 const [currentIndex, setCurrentIndex] = useState(0);
 const [answers, setAnswers] = useState<Record<number, number>>({});
