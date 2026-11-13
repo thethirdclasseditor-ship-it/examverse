@@ -4,7 +4,6 @@ import {
   VALID_TABS,
   getAvailableClasses,
   getAvailableGroups,
-  getBangladeshWeekdayIndex,
   getLevelProgress,
   getSubjectsForSelection,
   getTodayIsoDate,
@@ -18,7 +17,6 @@ import {
   AuthModal,
   EvIcon,
   ExamVerseLogo,
-  FlameBigSvg,
   FlameMiniSvg,
   HeroSketchSvg,
   LevelRingSvg,
@@ -139,7 +137,6 @@ export function App() {
     isAuthenticated,
     xp,
     streak,
-    weeklyActivity,
     mistakes,
     examHistory,
     chapterMastery,
@@ -157,7 +154,6 @@ export function App() {
   const logoResetTimerRef = useRef<any>(null);
 
   const todayIso = getTodayIsoDate();
-  const todayWeekdayIdx = getBangladeshWeekdayIndex();
 
   useEffect(() => {
     const syncFromHash = () => {
@@ -185,21 +181,12 @@ export function App() {
     };
     window.addEventListener('keydown', onKeyDown);
 
-    try {
-      const lastSprintPopupDate = window.localStorage.getItem('ev_sprint_dismissed_date');
-      if (window.innerWidth <= 820 && lastSprintPopupDate !== todayIso) {
-        setMobileSprintPopupOpen(true);
-      }
-    } catch {
-      // ignore
-    }
-
     return () => {
       window.removeEventListener('hashchange', syncFromHash);
       window.removeEventListener('keydown', onKeyDown);
       if (logoResetTimerRef.current) clearTimeout(logoResetTimerRef.current);
     };
-  }, [setActiveTab, todayIso]);
+  }, [setActiveTab]);
 
   const handleBrandLogoClick = () => {
     if (logoResetTimerRef.current) clearTimeout(logoResetTimerRef.current);
@@ -221,11 +208,6 @@ export function App() {
   };
 
   const handleDismissMobileSprint = () => {
-    try {
-      window.localStorage.setItem('ev_sprint_dismissed_date', todayIso);
-    } catch {
-      // ignore
-    }
     setMobileSprintPopupOpen(false);
   };
 
@@ -303,8 +285,8 @@ export function App() {
       subjectName: { bn: 'ডেইলি মেরিট স্প্রিন্ট', en: 'Daily Merit Sprint' },
       chapterId: `daily-${todayIso}`,
       chapterName: {
-        bn: `${selectedClass} • ${selectedGroup} (${todayIso})`,
-        en: `${selectedClass} • ${selectedGroup} (${todayIso})`,
+        bn: `${selectedClass} • ${selectedGroup}`,
+        en: `${selectedClass} • ${selectedGroup}`,
       },
       questions: sprintQuestions,
       cqs: [],
@@ -314,8 +296,6 @@ export function App() {
     handleDismissMobileSprint();
   };
 
-  const weekDaysBn = ['শনি', 'রবি', 'সোম', 'মঙ্গল', 'বুধ', 'বৃহঃ', 'শুক্র'];
-  const weekDaysEn = ['Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
   const hasPhotoAvatar = isAuthenticated && userAvatar && userAvatar.startsWith('http');
 
   return (
@@ -595,11 +575,7 @@ export function App() {
                             disabled={mcqCount === 0}
                             onClick={() => handleLaunchSubjectPractice(selectedSubject, idx, 'mcq')}
                           >
-                            {mcqCount > 0
-                              ? `⚡ MCQ (${mcqCount})`
-                              : isBn
-                              ? 'প্রশ্ন সংযোজন চলছে'
-                              : 'Coming Soon'}
+                            {mcqCount > 0 ? `⚡ MCQ (${mcqCount})` : isBn ? 'শীঘ্রই আসছে' : 'Soon'}
                           </button>
                         </div>
                       </div>
@@ -611,14 +587,15 @@ export function App() {
               <>
                 {activeTab === 'dashboard' && (
                   <div className="ev-home-top-grid">
+                    {/* Compact Notepad Rank Card matching Screenshot 1 */}
                     <div className="ev-card ev-hero">
                       <HeroSketchSvg />
 
                       <div className="ev-hero-main">
                         <div className="ev-hero-ring">
-                          <LevelRingSvg size={88} strokeWidth={7} pct={lvInfo.progressPct} />
+                          <LevelRingSvg size={78} strokeWidth={6} pct={rank.progressPct} />
                           <div className="ev-hero-ring-num">
-                            <small>LEVEL</small>
+                            <small>RANK</small>
                             <b>{lvInfo.level}</b>
                           </div>
                         </div>
@@ -631,10 +608,10 @@ export function App() {
                             <span className="ev-badge-pill ev-badge-warning">🔥 {streak}d</span>
                           </div>
 
-                          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 2 }}>
+                          <div style={{ display: 'flex', gap: 6, flexWrap: 'nowrap', marginTop: 2 }}>
                             <select
                               className="ev-select"
-                              style={{ width: 'auto', minHeight: 34, padding: '0 8px', fontSize: 12.5, fontWeight: 700 }}
+                              style={{ width: 'auto', minHeight: 32, padding: '0 8px', fontSize: 12.5, fontWeight: 700 }}
                               value={selectedClass}
                               onChange={(e) => {
                                 const nextCls = e.target.value;
@@ -651,7 +628,7 @@ export function App() {
 
                             <select
                               className="ev-select"
-                              style={{ width: 'auto', minHeight: 34, padding: '0 8px', fontSize: 12.5, fontWeight: 700 }}
+                              style={{ width: 'auto', flex: 1, minWidth: 0, minHeight: 32, padding: '0 8px', fontSize: 12.5, fontWeight: 700 }}
                               value={selectedGroup}
                               onChange={(e) => setClassAndGroup(selectedClass, e.target.value)}
                             >
@@ -667,46 +644,18 @@ export function App() {
 
                       <div>
                         <div className="ev-xp-ruler">
-                          <div className="ev-xp-ruler-fill" style={{ width: `${Math.max(4, rank.progressPct)}%` }} />
+                          <div className="ev-xp-ruler-fill" style={{ width: `${Math.max(5, rank.progressPct)}%` }} />
                         </div>
                         <div className="ev-xp-caption">
-                          <span>
-                            {xp} XP (Lv.{lvInfo.level})
-                          </span>
+                          <span>{xp} XP</span>
                           <span>
                             {trKey('accuracy', language)}: {rank.accuracyPct}% • {rank.rankScore}/{rank.nextTierScore} RP
                           </span>
                         </div>
                       </div>
-
-                      <div className={`ev-streak-strip ${streak === 0 ? 'is-cold' : ''}`}>
-                        <div className="ev-streak-lead">
-                          <FlameBigSvg />
-                          <div className="ev-streak-num">
-                            {streak} {isBn ? 'দিনের স্ট্রিক' : 'Day Streak'}
-                          </div>
-                        </div>
-
-                        <div className="ev-wk">
-                          {(isBn ? weekDaysBn : weekDaysEn).map((d, i) => {
-                            const isLit = Boolean(weeklyActivity[i]);
-                            const isToday = i === todayWeekdayIdx;
-                            return (
-                              <div
-                                key={d}
-                                className={`ev-wk-day ${isLit ? 'is-lit' : ''}`}
-                                style={isToday && !isLit ? { border: '1.5px dashed var(--brand-primary)' } : undefined}
-                                title={isToday ? (isBn ? 'আজ' : 'Today') : undefined}
-                              >
-                                <i>{isLit ? '✓' : '•'}</i>
-                                <em>{d}</em>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
                     </div>
 
+                    {/* Desktop Daily Merit Sprint Card */}
                     <div className="ev-card ev-daily-card ev-daily-inline">
                       <div className="ev-daily-head">
                         <div className="ev-daily-ic">
@@ -714,11 +663,9 @@ export function App() {
                         </div>
                         <div style={{ flex: 1 }}>
                           <div className="ev-daily-title">{trKey('daily_challenge', language)}</div>
-                          <div className="ev-daily-sub">
-                            10 MCQs • -0.25 Neg • {selectedClass}
-                          </div>
+                          <div className="ev-daily-sub">10 MCQs • {selectedClass}</div>
                         </div>
-                        <span className="ev-xp-chip">{isBn ? 'সর্বোচ্চ +১২৫ XP' : 'Up to +125 XP'}</span>
+                        <span className="ev-xp-chip">+120 XP</span>
                       </div>
 
                       <div className="ev-seg">
@@ -825,9 +772,7 @@ export function App() {
                             <div className="ev-subject-icon-box" data-subj={subjAttr}>
                               <EvIcon name={iconName} size={20} />
                             </div>
-                            <span className="ev-mcq-pill">
-                              {rawTotalMcqs > 0 ? `${rawTotalMcqs} MCQs` : isBn ? 'শীঘ্রই আসছে' : 'Soon'}
-                            </span>
+                            <span className="ev-mcq-pill">{rawTotalMcqs} MCQs</span>
                           </div>
 
                           <div className="ev-subject-names">
@@ -933,7 +878,7 @@ export function App() {
               <div style={{ flex: 1 }}>
                 <div className="ev-daily-title">{trKey('daily_challenge', language)}</div>
                 <div className="ev-daily-sub">
-                  {selectedClass} • {selectedGroup} • {isBn ? 'সর্বোচ্চ +১২৫ XP' : 'Up to +125 XP'}
+                  {selectedClass} • {selectedGroup} • +120 XP
                 </div>
               </div>
               <button
