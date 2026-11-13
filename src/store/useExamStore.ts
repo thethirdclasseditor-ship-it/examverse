@@ -8,6 +8,7 @@ import { HSC_FINANCE_1ST_PART1_CHAPTERS } from '../data/Finance1part1data';
 import { HSC_FINANCE_1ST_PART2_CHAPTERS } from '../data/Finance1part2data';
 import { HSC_FINANCE_2ND_PART1_CHAPTERS } from '../data/Finance2part1data';
 import { HSC_FINANCE_2ND_PART2_CHAPTERS } from '../data/Finance2part2data';
+import { HSC_BOM_1ST_PAPER_CHAPTERS } from '../data/bom1Part3Data';
 import {
   ActiveQuizConfig,
   ChapterData,
@@ -272,20 +273,14 @@ const _S07: SubjectData = {
   chapters: convertLegacyChapters(HSC_ACCOUNTING_2ND_PAPER_CHAPTERS, 'acc2', true),
 };
 
-const _S08 = mkSubj(
-  'bom-1',
-  'ব্যবসায় সংগঠন ও ব্যবস্থাপনা ১ম পত্র (Code: 277)',
-  'Business Org. & Management 1st Paper (HSC - 277)',
-  '🏢',
-  '#059669',
-  '5, 150, 105',
-  [
-    ch('bom1-c1', '১ম–৪র্থ অধ্যায়: ব্যবসায়ের মৌলিক ধারণা, পরিবেশ, একমালিকানা ও অংশীদারি ব্যবসায়'),
-    ch('bom1-c2', '৫ম–৭ম অধ্যায়: যৌথ মূলধনী ব্যবসায় (কোম্পানি), সমবায় সমিতি ও রাষ্ট্রীয় ব্যবসায়'),
-    ch('bom1-c3', '৮ম–১২শ অধ্যায়: আইনগত দিক, সহায়ক সেবা, ব্যবসায় উদ্যোগ, তথ্যপ্রযুক্তি ও ব্যবসায় নৈতিকতা (CSR)'),
-  ],
-  false
-);
+const _S08: SubjectData = {
+  id: 'bom-1',
+  name: { bn: 'ব্যবসায় সংগঠন ও ব্যবস্থাপনা ১ম পত্র (Code: 277)', en: 'Business Org. & Management 1st Paper (HSC - 277)' },
+  icon: '🏢',
+  color: '#059669',
+  rgb: '5, 150, 105',
+  chapters: convertLegacyChapters(HSC_BOM_1ST_PAPER_CHAPTERS, 'bom1', true),
+};
 
 const _S09 = mkSubj(
   'bom-2',
