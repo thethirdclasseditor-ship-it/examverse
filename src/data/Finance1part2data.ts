@@ -1,5 +1,5 @@
 import type { Chapter, MCQ } from '../store/useExamStore';
-import { HSC_FINANCE_1ST_PART1_CHAPTERS } from './finance1Part1Data';
+import { HSC_FINANCE_1ST_PART1_CHAPTERS } from './Finance1part1data';
 const fq = (id: string, question: string, options: [string, string, string, string], correctIndex: number, explanation = '', board = 'বোর্ড প্রশ্ন'): MCQ => ({ id, question, options, correctIndex, explanation, board });
 export const HSC_FINANCE_1ST_PART2_CHAPTERS: Chapter[] = [
   { id: "fin1-c6", name: "৬ষ্ঠ অধ্যায়: দীর্ঘমেয়াদি অর্থায়ন", cqs: [], formulas: ["বন্ডের বর্তমান মূল্য: চিরস্থায়ী বন্ড Vb = I ÷ kd | পরিশোধযোগ্য বন্ড Vb = I × [{1 - (1 + kd)⁻ⁿ} ÷ kd] + [MV ÷ (1 + kd)ⁿ]", "মেয়াদপূর্তিতে আয়ের হার (YTM): YTM ≈ [I + {(RV - SV) ÷ n}] ÷ [(RV + SV) ÷ 2] × 100%"], mcqs: [
