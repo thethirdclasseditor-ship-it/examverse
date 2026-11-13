@@ -1,5 +1,5 @@
 import type { Chapter, MCQ } from '../store/useExamStore';
-import { HSC_FINANCE_2ND_PART1_CHAPTERS } from './finance2Part1Data';
+import { HSC_FINANCE_2ND_PART1_CHAPTERS } from './Finance2part1data';
 const fq = (id: string, question: string, options: [string, string, string, string], correctIndex: number, explanation = '', board = 'বোর্ড প্রশ্ন'): MCQ => ({ id, question, options, correctIndex, explanation, board });
 export const HSC_FINANCE_2ND_PART2_CHAPTERS: Chapter[] = [
   { id: "fin2-c7", name: "৭ম অধ্যায়: ব্যাংক তহবিলের উৎস ও ব্যবহার", cqs: [], formulas: [], mcqs: [
