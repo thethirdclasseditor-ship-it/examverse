@@ -1,4 +1,7 @@
 import type { Chapter, MCQ } from '../store/useExamStore';
+import { HSC_ACC_1ST_PART1_CHAPTERS } from './acc1Part1Data';
+import { HSC_ACC_1ST_PART2_CHAPTERS } from './acc1Part2Data';
+import { HSC_ACC_1ST_PART3_CHAPTERS } from './acc1Part3Data';
 
 const aq = (
   id: number | string,
@@ -10,11 +13,11 @@ const aq = (
   question,
   options,
   correctIndex,
-  explanation: 'NCTB হিসাববিজ্ঞান ১ম পত্র বোর্ড স্ট্যান্ডার্ড সমাধান।',
-  board: 'NCTB ও বোর্ড প্রশ্ন',
+  explanation: '',
+  board: 'বোর্ড প্রশ্ন',
 });
 
-export const HSC_ACCOUNTING_1ST_PAPER_CHAPTERS: Chapter[] = [
+const BASE_ACC1_CHAPTERS: Chapter[] = [
   {
     id: "acc1-c1",
     name: "১ম অধ্যায়: হিসাববিজ্ঞান পরিচিতি",
@@ -394,3 +397,43 @@ export const HSC_ACCOUNTING_1ST_PAPER_CHAPTERS: Chapter[] = [
     cqs: [],
   },
 ];
+
+const NEW_ACC1_CHAPTERS: Chapter[] = [
+  ...HSC_ACC_1ST_PART1_CHAPTERS,
+  ...HSC_ACC_1ST_PART2_CHAPTERS,
+  ...HSC_ACC_1ST_PART3_CHAPTERS,
+];
+
+function normalizeQuestionKey(text: string): string {
+  return (text || '')
+    .replace(/য়/g, 'য়')
+    .replace(/['"’‘`.,?!:;()\-—–\s]/g, '')
+    .toLowerCase();
+}
+
+export const HSC_ACCOUNTING_1ST_PAPER_CHAPTERS: Chapter[] = BASE_ACC1_CHAPTERS.map((baseChap) => {
+  const extraChap = NEW_ACC1_CHAPTERS.find((c) => c.id === baseChap.id);
+  const combinedRaw: MCQ[] = [
+    ...(extraChap?.mcqs || []),
+    ...(baseChap.mcqs || []),
+  ];
+
+  const seenQuestions = new Set<string>();
+  const uniqueMcqs: MCQ[] = [];
+
+  for (const item of combinedRaw) {
+    const qKey = normalizeQuestionKey(item.question);
+    if (!qKey || seenQuestions.has(qKey)) continue;
+    seenQuestions.add(qKey);
+    uniqueMcqs.push(item);
+  }
+
+  return {
+    ...baseChap,
+    formulas: extraChap?.formulas?.length ? extraChap.formulas : baseChap.formulas,
+    mcqs: uniqueMcqs.map((m, idx) => ({
+      ...m,
+      id: `${baseChap.id}-q-${idx + 1}`,
+    })),
+  };
+});
