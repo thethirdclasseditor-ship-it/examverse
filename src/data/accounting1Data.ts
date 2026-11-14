@@ -398,42 +398,57 @@ const BASE_ACC1_CHAPTERS: Chapter[] = [
   },
 ];
 
+// src/data/accounting1Data.ts এর নিচের অংশ (Line 402 থেকে শেষ পর্যন্ত) এটি দিয়ে রিপ্লেস করুন:
+
 const NEW_ACC1_CHAPTERS: Chapter[] = [
   ...HSC_ACC_1ST_PART1_CHAPTERS,
   ...HSC_ACC_1ST_PART2_CHAPTERS,
   ...HSC_ACC_1ST_PART3_CHAPTERS,
 ];
 
-function normalizeQuestionKey(text: string): string {
+function normalizeText(text: string): string {
   return (text || '')
     .replace(/য়/g, 'য়')
     .replace(/['"’‘`.,?!:;()\-—–\s]/g, '')
     .toLowerCase();
 }
 
+// প্রশ্ন এবং অপশন উভয়ই চেক করা হবে যাতে ভিন্ন অপশনের কোনো বোর্ড প্রশ্ন বাদ না পড়ে
+function createUniqueMcqSignature(item: MCQ): string {
+  const qNorm = normalizeText(item.question);
+  const optNorm = (item.options || []).map((o) => normalizeText(o)).join('|');
+  return `${qNorm}::${optNorm}`;
+}
+
 export const HSC_ACCOUNTING_1ST_PAPER_CHAPTERS: Chapter[] = BASE_ACC1_CHAPTERS.map((baseChap) => {
-  const extraChap = NEW_ACC1_CHAPTERS.find((c) => c.id === baseChap.id);
+  const matchingExtraChaps = NEW_ACC1_CHAPTERS.filter((c) => c.id === baseChap.id);
+  const extraMcqs = matchingExtraChaps.flatMap((c) => c.mcqs || []);
+  const extraFormulas = matchingExtraChaps.find((c) => c.formulas && c.formulas.length > 0)?.formulas;
+
+  // নতুন ও বেস সব প্রশ্ন একসাথে যুক্ত করা হচ্ছে
   const combinedRaw: MCQ[] = [
-    ...(extraChap?.mcqs || []),
+    ...extraMcqs,
     ...(baseChap.mcqs || []),
   ];
 
-  const seenQuestions = new Set<string>();
+  const seenSignatures = new Set<string>();
   const uniqueMcqs: MCQ[] = [];
 
   for (const item of combinedRaw) {
-    const qKey = normalizeQuestionKey(item.question);
-    if (!qKey || seenQuestions.has(qKey)) continue;
-    seenQuestions.add(qKey);
+    if (!item || !item.question) continue;
+    const sig = createUniqueMcqSignature(item);
+    if (seenSignatures.has(sig)) continue;
+    seenSignatures.add(sig);
     uniqueMcqs.push(item);
   }
 
   return {
     ...baseChap,
-    formulas: extraChap?.formulas?.length ? extraChap.formulas : baseChap.formulas,
+    formulas: extraFormulas?.length ? extraFormulas : baseChap.formulas,
     mcqs: uniqueMcqs.map((m, idx) => ({
       ...m,
       id: `${baseChap.id}-q-${idx + 1}`,
+      board: m.board || 'বোর্ড প্রশ্ন',
     })),
   };
 });
