@@ -9,6 +9,7 @@ import { HSC_FINANCE_1ST_PART2_CHAPTERS } from '../data/Finance1part2data';
 import { HSC_FINANCE_2ND_PART1_CHAPTERS } from '../data/Finance2part1data';
 import { HSC_FINANCE_2ND_PART2_CHAPTERS } from '../data/Finance2part2data';
 import { HSC_BOM_1ST_PAPER_CHAPTERS } from '../data/bom1Part3Data';
+import { HSC_MKT_1ST_PAPER_CHAPTERS } from '../data/mkt1Data';
 import {
   ActiveQuizConfig,
   ChapterData,
@@ -315,29 +316,14 @@ const _S11: SubjectData = {
   chapters: convertLegacyChapters(HSC_FINANCE_2ND_PAPER_CHAPTERS, 'fin2', false),
 };
 
-const _S12 = mkSubj(
-  'mkt-1',
-  'উৎপাদন ব্যবস্থাপনা ও বিপণন ১ম পত্র (Code: 286)',
-  'Production Management & Marketing 1st Paper (HSC - 286)',
-  '🏭',
-  '#D97706',
-  '217, 119, 6',
-  [
-    ch('mkt1-c1', '১ম অধ্যায়: উৎপাদন ও উৎপাদনশীলতা (গাণিতিক অধ্যায়)', [
-      'মোট ও আর্থিক উৎপাদনশীলতা: মোট উৎপাদনশীলতা = মোট উৎপাদনের মূল্য ÷ মোট উপাদানের মূল্য',
-      'শ্রম, যন্ত্র ও কাঁচামালের উৎপাদনশীলতা: শ্রম উৎপাদনশীলতা = মোট উৎপাদন একক ÷ মোট শ্রম ঘণ্টা | কাঁচামালের উৎপাদনশীলতা = উৎপাদনের মূল্য ÷ কাঁচামালের মূল্য',
-    ]),
-    ch('mkt1-c2', '২য় ও ৩য় অধ্যায়: উৎপাদনের উপকরণ ও উৎপাদনের মাত্রা'),
-    ch('mkt1-c4', '৪র্থ অধ্যায়: সামষ্টিক ও ব্যষ্টিক পর্যায়ে উৎপাদন (জাতীয় আয় অংক)', [
-      'জাতীয় আয় নির্ণয় সূত্র: GDP = C + I + G + (X - M) | GNP = GDP + নিট বৈদেশিক আয় | NNP = GNP - অবচয় (CCA)',
-    ]),
-    ch('mkt1-c5', '৫ম, ৬ষ্ঠ ও ৭ম অধ্যায়: উৎপাদন ব্যবস্থাপনা, পণ্য ডিজাইন ও মান ব্যবস্থাপনা'),
-    ch('mkt1-c8', '৮ম অধ্যায়: উৎপাদন ক্ষমতা (গাণিতিক অধ্যায়)', [
-      'উৎপাদন ক্ষমতা ব্যবহারের হার: দক্ষতা = (প্রকৃত উৎপাদন ÷ কার্যকর ক্ষমতা) × ১০০% | ক্ষমতা সদ্ব্যবহার = (প্রকৃত উৎপাদন ÷ সর্বোচ্চ ক্ষমতা) × ১০০%',
-    ]),
-    ch('mkt1-c9', '৯ম ও ১০ম অধ্যায়: ব্যবসায়ের অবস্থান ও বিন্যাস'),
-  ]
-);
+const _S12: SubjectData = {
+  id: 'mkt-1',
+  name: { bn: 'উৎপাদন ব্যবস্থাপনা ও বিপণন ১ম পত্র (Code: 286)', en: 'Production Management & Marketing 1st Paper (HSC - 286)' },
+  icon: '🏭',
+  color: '#D97706',
+  rgb: '217, 119, 6',
+  chapters: convertLegacyChapters(HSC_MKT_1ST_PAPER_CHAPTERS, 'mkt1', true),
+};
 
 const _S13 = mkSubj(
   'mkt-2',
