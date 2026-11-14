@@ -1133,7 +1133,7 @@ export interface ExamStoreState {
   getRankInfo: () => RankProgressInfo;
 }
 
-const STORAGE_KEY = 'examverse-v14-storage';
+const STORAGE_KEY = 'examverse-v15-storage';
 
 export const VALID_TABS: NavTabId[] = [
   'dashboard',
