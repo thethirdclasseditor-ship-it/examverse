@@ -7,7 +7,7 @@ export default defineConfig({
   plugins: [
     react(),
     {
-      name: 'generate-seo-files',
+      name: 'generate-seo-and-manifest',
       closeBundle() {
         const distDir = path.resolve(__dirname, 'dist');
         if (!fs.existsSync(distDir)) {
@@ -24,21 +24,12 @@ export default defineConfig({
   </url>
 </urlset>`;
 
-        const robotsTxt = `User-agent: *
-Allow: /
-
-Sitemap: https://examverse-1tw.pages.dev/sitemap.xml
-`;
-
         fs.writeFileSync(path.join(distDir, 'sitemap.xml'), sitemapXml, 'utf-8');
-        fs.writeFileSync(path.join(distDir, 'robots.txt'), robotsTxt, 'utf-8');
 
-        ['manifest.json', 'sw.js'].forEach((file) => {
-          const srcFile = path.resolve(__dirname, file);
-          if (fs.existsSync(srcFile)) {
-            fs.copyFileSync(srcFile, path.join(distDir, file));
-          }
-        });
+        const manifestSrc = path.resolve(__dirname, 'manifest.json');
+        if (fs.existsSync(manifestSrc)) {
+          fs.copyFileSync(manifestSrc, path.join(distDir, 'manifest.json'));
+        }
       },
     },
   ],
