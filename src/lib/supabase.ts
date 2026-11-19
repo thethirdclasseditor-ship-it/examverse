@@ -1,5 +1,4 @@
 import { createClient, User } from '@supabase/supabase-js';
-import { getLevelProgress } from '../store/useExamStore';
 
 export const SUPABASE_URL = 'https://muxgoubiqmussyydhekq.supabase.co';
 export const SUPABASE_ANON_KEY =
@@ -13,6 +12,20 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   },
 });
 
+function computeLevelProgress(xp: number) {
+  const safeXp = Math.max(0, Number(xp) || 0);
+  const xpPerLevel = 250;
+  const level = Math.max(1, Math.floor(safeXp / xpPerLevel) + 1);
+  const currentLevelXp = safeXp % xpPerLevel;
+  const progressPct = Math.min(100, Math.round((currentLevelXp / xpPerLevel) * 100));
+  return { level, currentLevelXp, xpForNext: xpPerLevel, progressPct };
+}
+
+function getBangladeshIsoDate(): string {
+  const bdNow = new Date(Date.now() + 6 * 60 * 60 * 1000);
+  return bdNow.toISOString().slice(0, 10);
+}
+
 const BLOCKED_FAKE_DOMAINS = [
   'mailinator.com', 'tempmail.com', 'temp-mail.org', '10minutemail.com',
   'guerrillamail.com', 'yopmail.com', 'trashmail.com', 'sharklasers.com',
@@ -25,14 +38,14 @@ export function validateAuthenticEmail(email: string): { valid: boolean; email?:
   const clean = String(email || '').trim().toLowerCase();
   const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
   if (!emailRegex.test(clean)) {
-    return { valid: false, reason: 'অনুগ্রহ করে একটি সঠিক ইমেইল দিন (যেমন: yourname@gmail.com)।' };
+    return { valid: false, reason: 'সঠিক ইমেইল দিন (যেমন: yourname@gmail.com)।' };
   }
   const [localPart, domain] = clean.split('@');
   if (localPart.length < 2 || /^(test|fake|abcd|12345)$/i.test(localPart)) {
-    return { valid: false, reason: 'ফেইক বা টেস্ট ইমেইল গ্রহণযোগ্য নয়। আপনার আসল ইমেইল ব্যবহার করুন।' };
+    return { valid: false, reason: 'টেস্ট বা ফেইক ইমেইল গ্রহণযোগ্য নয়। আপনার আসল ইমেইল দিন।' };
   }
   if (BLOCKED_FAKE_DOMAINS.includes(domain)) {
-    return { valid: false, reason: 'Temporary বা Fake ইমেইল গ্রহণযোগ্য নয়। আসল Gmail, Yahoo বা Outlook ইমেইল দিন।' };
+    return { valid: false, reason: 'টেম্পোরারি ইমেইল গ্রহণযোগ্য নয়। Gmail, Yahoo বা Outlook ইমেইল দিন।' };
   }
   return { valid: true, email: clean };
 }
@@ -60,13 +73,13 @@ export async function signUpWithVerifiedEmail(
   }
   const cleanName = fullName.trim();
   if (cleanName.length < 2) {
-    throw new Error('অনুগ্রহ করে আপনার আসল নাম লিখুন (কমপক্ষে ২ অক্ষর)।');
+    throw new Error('আপনার নাম লিখুন (কমপক্ষে ২ অক্ষর)।');
   }
   if (!password || password.length < 6) {
     throw new Error('পাসওয়ার্ড কমপক্ষে ৬ অক্ষরের হতে হবে।');
   }
-  const handle = '@' + check.email.split('@')[0].replace(/[^a-zA-Z0-9_]/g, '').slice(0, 15);
 
+  const handle = '@' + check.email.split('@')[0].replace(/[^a-zA-Z0-9_]/g, '').slice(0, 15);
   const { data, error } = await supabase.auth.signUp({
     email: check.email,
     password,
@@ -131,13 +144,17 @@ export async function upsertLiveUserProfile(params: {
   email?: string;
   avatar?: string;
   targetTrack?: string;
+  selectedClass?: string;
+  selectedGroup?: string;
+  level?: number;
   xp: number;
   streak: number;
   chapterMastery?: Record<string, number>;
 }) {
   try {
     if (!params.id || params.id.startsWith('local-')) return;
-    const lv = getLevelProgress(params.xp || 0);
+    const safeXp = Math.max(0, Number(params.xp) || 0);
+    const lv = computeLevelProgress(safeXp);
     const cleanEmail = params.email || '';
     const handle = cleanEmail
       ? '@' + cleanEmail.split('@')[0].replace(/[^a-zA-Z0-9_]/g, '').slice(0, 15)
@@ -145,25 +162,44 @@ export async function upsertLiveUserProfile(params: {
     const nameParts = (params.name || 'Scholar').trim().split(/\s+/);
     const initials = ((nameParts[0]?.[0] || 'S') + (nameParts[1]?.[0] || '')).toUpperCase();
 
+    const resolvedTrack =
+      params.targetTrack ||
+      (params.selectedClass
+        ? `${params.selectedClass}${params.selectedGroup ? ` • ${params.selectedGroup}` : ''}`
+        : 'HSC');
+
     const baseRow: Record<string, any> = {
       id: params.id,
       username: handle,
       full_name: params.name || 'Scholar',
       avatar_initials: initials,
-      target_track: params.targetTrack || 'HSC',
-      level: lv.level,
-      xp: Math.max(0, Number(params.xp) || 0),
-      streak_days: Math.max(1, Number(params.streak) || 1),
-      last_active_date: new Date().toISOString().slice(0, 10),
+      target_track: resolvedTrack,
+      level: params.level || lv.level,
+      xp: safeXp,
+      streak_days: Math.max(0, Number(params.streak) || 0),
+      last_active_date: getBangladeshIsoDate(),
       updated_at: new Date().toISOString(),
     };
 
-    const { error } = await supabase.from('user_profiles').upsert({
+    const fullRow: Record<string, any> = {
       ...baseRow,
       subject_mastery: params.chapterMastery || {},
-    });
+    };
+
+    if (params.avatar && params.avatar.startsWith('http')) {
+      fullRow.avatar_url = params.avatar;
+    }
+
+    const { error } = await supabase.from('user_profiles').upsert(fullRow);
     if (error) {
-      await supabase.from('user_profiles').upsert(baseRow);
+      // Fallback if optional columns (avatar_url / subject_mastery) don't exist in table schema
+      const { error: err2 } = await supabase.from('user_profiles').upsert({
+        ...baseRow,
+        subject_mastery: params.chapterMastery || {},
+      });
+      if (err2) {
+        await supabase.from('user_profiles').upsert(baseRow);
+      }
     }
   } catch {
     // Ignore transient network errors
@@ -191,8 +227,11 @@ export async function syncFullAccountStateFromCloud(
 
     if (row) {
       const mergedXp = Math.max(Number(localState?.user?.xp) || 0, Number(row.xp) || 0);
-      const lv = getLevelProgress(mergedXp);
-      const mergedStreak = Math.max(Number(localState?.user?.streakDays) || 0, Number(row.streak_days) || 0);
+      const lv = computeLevelProgress(mergedXp);
+      const mergedStreak = Math.max(
+        Number(localState?.user?.streakDays) || 0,
+        Number(row.streak_days) || 0
+      );
       const nameParts = (row.full_name || oauthName).split(/\s+/);
       const initials = ((nameParts[0]?.[0] || 'S') + (nameParts[1]?.[0] || '')).toUpperCase();
 
@@ -203,11 +242,11 @@ export async function syncFullAccountStateFromCloud(
           name: row.full_name || oauthName,
           username: row.username || defaultHandle,
           avatarInitials: row.avatar_initials || initials,
-          avatarUrl: oauthAvatar,
+          avatarUrl: row.avatar_url || oauthAvatar,
           targetTrack: row.target_track || meta.target_track || 'HSC',
           xp: mergedXp,
           level: lv.level,
-          xpForNextLevel: lv.xpForNextLevel,
+          xpForNextLevel: lv.xpForNext,
           streakDays: mergedStreak,
         },
       };
@@ -226,22 +265,28 @@ export async function syncUserProfileWithDatabase(authUser: User, localProfile: 
       .select('*')
       .eq('id', authUser.id)
       .maybeSingle();
+
     if (existingRows) {
       const mergedXp = Math.max(Number(localProfile?.xp) || 0, Number(existingRows.xp) || 0);
-      const lv = getLevelProgress(mergedXp);
+      const lv = computeLevelProgress(mergedXp);
       return {
         id: authUser.id,
         name: existingRows.full_name || localProfile?.name,
         username: existingRows.username || localProfile?.username,
         avatarInitials: existingRows.avatar_initials || localProfile?.avatarInitials,
+        avatarUrl: existingRows.avatar_url || localProfile?.avatarUrl || '',
         targetTrack: existingRows.target_track || localProfile?.targetTrack,
         xp: mergedXp,
         level: lv.level,
-        xpForNextLevel: lv.xpForNextLevel,
-        streakDays: Math.max(Number(localProfile?.streakDays) || 0, Number(existingRows.streak_days) || 0),
+        xpForNextLevel: lv.xpForNext,
+        streakDays: Math.max(
+          Number(localProfile?.streakDays) || 0,
+          Number(existingRows.streak_days) || 0
+        ),
         isAdmin: Boolean(existingRows.is_admin || authUser.user_metadata?.role === 'admin'),
       };
     }
+
     return null;
   } catch {
     return null;
@@ -254,11 +299,14 @@ export async function pushFullStateToCloud(authUser: User, state: any) {
       id: authUser.id,
       name: state?.user?.name || 'Scholar',
       email: authUser.email,
+      avatar: state?.user?.avatarUrl || '',
       targetTrack: state?.user?.targetTrack || 'HSC',
       xp: state?.user?.xp || 0,
-      streak: state?.user?.streakDays || 1,
+      streak: state?.user?.streakDays || 0,
     });
-  } catch {}
+  } catch {
+    // ignore
+  }
 }
 
 export async function pushProfileUpdateToCloud(authUser: User, profile: any) {
@@ -267,11 +315,14 @@ export async function pushProfileUpdateToCloud(authUser: User, profile: any) {
       id: authUser.id,
       name: profile?.name || 'Scholar',
       email: authUser.email,
+      avatar: profile?.avatarUrl || '',
       targetTrack: profile?.targetTrack || 'HSC',
       xp: profile?.xp || 0,
-      streak: profile?.streakDays || 1,
+      streak: profile?.streakDays || 0,
     });
-  } catch {}
+  } catch {
+    // ignore
+  }
 }
 
 /* Fetch Real User Leaderboard from Database */
@@ -289,6 +340,7 @@ export async function fetchRealCloudLeaderboard(subjectId = 'all'): Promise<any[
       const subjStats = row.app_state_json?.stats?.subjectStats || {};
       const subjMastery = row.subject_mastery || row.app_state_json?.stats?.subjectMastery || {};
       const subjectXpMap: Record<string, number> = {};
+
       Object.keys(subjStats).forEach((sId) => {
         const cor = Number(subjStats[sId]?.correct) || 0;
         const mast = Number(subjMastery[sId]) || 0;
@@ -302,14 +354,17 @@ export async function fetchRealCloudLeaderboard(subjectId = 'all'): Promise<any[
 
       const displayXp = subjectId === 'all' ? Number(row.xp) || 0 : subjectXpMap[subjectId] || 0;
       return {
+        id: row.id,
         rank: idx + 1,
         name: row.full_name || 'Scholar',
+        full_name: row.full_name || 'Scholar',
         handle: row.username || '@scholar',
         avatar: row.avatar_initials || '🎓',
         level: Number(row.level) || 1,
         xp: displayXp,
-        streak: Number(row.streak_days) || 1,
-        badge: row.target_track || 'ExamVerse Scholar',
+        streak: Math.max(0, Number(row.streak_days) || 0),
+        streak_days: Math.max(0, Number(row.streak_days) || 0),
+        badge: row.target_track || 'HSC',
         subjectXp: subjectXpMap,
       };
     });
