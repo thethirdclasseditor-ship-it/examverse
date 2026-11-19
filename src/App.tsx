@@ -1,10 +1,13 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   NavTabId,
+  VALID_TABS,
   getAvailableClasses,
   getAvailableGroups,
   getLevelProgress,
   getSubjectsForSelection,
+  getTodayIsoDate,
+  subjectSupportsFormulas,
   trKey,
   trText,
   useExamStore,
@@ -28,13 +31,35 @@ function getSubjectThemeAttr(subjId: string): string {
   const id = subjId.toLowerCase();
   if (id.includes('phy')) return 'physics';
   if (id.includes('chem')) return 'chemistry';
-  if (id.includes('math')) return 'math';
-  if (id.includes('bio')) return 'biology';
+  if (id.includes('math') || id.includes('stat')) return 'math';
+  if (id.includes('bio') || id.includes('agr') || id.includes('gsci') || id.includes('med')) return 'biology';
   if (id.includes('eng') || id.includes('en-')) return 'english';
   if (id.includes('ban') || id.includes('bn-')) return 'bangla';
   if (id.includes('ict')) return 'ict';
-  if (id.includes('acc') || id.includes('fin') || id.includes('bom') || id.includes('mkt') || id.includes('pmm') || id.includes('ent')) return 'accounting';
-  if (id.includes('eco') || id.includes('civ') || id.includes('his') || id.includes('isl') || id.includes('soc') || id.includes('log')) return 'economics';
+  if (
+    id.includes('acc') ||
+    id.includes('fin') ||
+    id.includes('bom') ||
+    id.includes('mkt') ||
+    id.includes('pmm') ||
+    id.includes('ent') ||
+    id.includes('com')
+  ) {
+    return 'accounting';
+  }
+  if (
+    id.includes('eco') ||
+    id.includes('civ') ||
+    id.includes('his') ||
+    id.includes('isl') ||
+    id.includes('ihc') ||
+    id.includes('soc') ||
+    id.includes('sw-') ||
+    id.includes('geo') ||
+    id.includes('log')
+  ) {
+    return 'economics';
+  }
   return 'physics';
 }
 
@@ -42,182 +67,44 @@ function getSubjectIconName(subjId: string): string {
   const id = subjId.toLowerCase();
   if (id.includes('phy')) return 'zap';
   if (id.includes('chem')) return 'layers';
-  if (id.includes('math')) return 'formula';
-  if (id.includes('bio')) return 'shield';
+  if (id.includes('math') || id.includes('stat')) return 'formula';
+  if (id.includes('bio') || id.includes('agr') || id.includes('med')) return 'shield';
   if (id.includes('ict')) return 'cloud';
   if (id.includes('acc') || id.includes('fin')) return 'chart';
   if (id.includes('bom') || id.includes('mkt') || id.includes('pmm') || id.includes('ent')) return 'calendar';
-  if (id.includes('ban') || id.includes('bn-') || id.includes('eng') || id.includes('en-')) return 'book';
   return 'book';
 }
 
-function subjectSupportsFormulas(subj: SubjectData): boolean {
-  return subj.chapters.some((c) => (c.formulas?.length || 0) > 0);
-}
-
-function getCuratedFallbackMcqsForSubject(subj: SubjectData, chapId: string): MCQQuestion[] {
-  const id = subj.id.toLowerCase();
-  if (id.includes('bn-2') || id.includes('ban2') || subj.name.bn.includes('বাংলা ২য়')) {
-    return [
-      {
-        id: `${chapId}-fb-1`,
-        q: { bn: 'বাংলা একাডেমি প্রমিত বাংলা বানানের নিয়ম কত সালে প্রথম প্রণীত হয়?', en: 'In which year was the Bangla Academy Standard Spelling Rule first formulated?' },
-        options: { bn: ['১৯৯০ সালে', '১৯৯২ সালে', '১৯৯৪ সালে', '১৯৯৬ সালে'], en: ['1990', '1992', '1994', '1996'] },
-        ans: 1,
-        boardTag: "ঢা. বো. '২৩",
-        explanation: { bn: '', en: '' },
-      },
-      {
-        id: `${chapId}-fb-2`,
-        q: { bn: '‘অতএব’ শব্দটির সঠিক সন্ধি বিচ্ছেদ কোনটি?', en: 'Which is the correct Sandhi split of "অতএব"?' },
-        options: { bn: ['অত + এব', 'অতঃ + এব', 'অতি + এব', 'অতএ + ব'], en: ['অত + এব', 'অতঃ + এব', 'অতি + এব', 'অতএ + ব'] },
-        ans: 1,
-        boardTag: "রা. বো. '২২",
-        explanation: { bn: 'বিসর্গ সন্ধির নিয়মানুসারে অ-কারের পর বিসর্গ (ঃ) এবং তারপরে ‘এ’ থাকলে বিসর্গ লোপ পায়: অতঃ + এব = অতএব।', en: 'অতঃ + এব = অতএব।' },
-      },
-      {
-        id: `${chapId}-fb-3`,
-        q: { bn: '‘পকেটমার’ কোন সমাসের উদাহরণ?', en: '"পকেটমার" is an example of which Samasa?' },
-        options: { bn: ['দ্বন্দ্ব সমাস', 'উপপদ তৎপুরুষ সমাস', 'কর্মধারয় সমাস', 'বহুব্রীহি সমাস'], en: ['Dwandwa', 'Upapada Tatpurusha', 'Karmadharaya', 'Bahuvrihi'] },
-        ans: 1,
-        boardTag: "চ. বো. '২৩",
-        explanation: { bn: 'পকেট মারে যে = পকেটমার; কৃদন্ত পদের সাথে উপপদের যে সমাস হয় তাকে উপপদ তৎপুরুষ সমাস বলে।', en: 'Upapada Tatpurusha Samasa.' },
-      },
-      {
-        id: `${chapId}-fb-4`,
-        q: { bn: 'নিচের কোন শব্দটিতে ষত্ব বিধানের নিয়মানুসারে ‘ষ’ ব্যবহৃত হয়েছে?', en: 'Which word uses "ষ" according to Shatva Bidhan?' },
-        options: { bn: ['ভাষা', 'আবিষ্কার', 'মানুষ', 'পৌষ'], en: ['ভাষা', 'আবিষ্কার', 'মানুষ', 'পৌষ'] },
-        ans: 1,
-        boardTag: "য. বো. '২২",
-        explanation: { bn: 'ই-কারান্ত বা উ-কারান্ত উপসর্গের পর কতগুলো ধাতুতে ‘স’ স্থানে ‘ষ’ হয় (আবিঃ + কার = আবিষ্কার)।', en: 'আবিঃ + কার = আবিষ্কার।' },
-      },
-      {
-        id: `${chapId}-fb-5`,
-        q: { bn: '‘সূর্য’ শব্দের সমার্থক শব্দ কোনটি?', en: 'Which is a synonym for "সূর্য" (Sun)?' },
-        options: { bn: ['শশধর', 'আদিত্য', 'সুধাংশু', 'বিধু'], en: ['শশধর', 'আদিত্য', 'সুধাংশু', 'বিধু'] },
-        ans: 1,
-        boardTag: "কু. বো. '২৩",
-        explanation: { bn: '', en: '' },
-      },
-    ];
+function selectDailySprintQuestions(subjects: SubjectData[], dateSeed: string, count = 10): MCQQuestion[] {
+  const pool: MCQQuestion[] = [];
+  for (const s of subjects) {
+    for (const c of s.chapters) {
+      if (Array.isArray(c.mcqs) && c.mcqs.length > 0) {
+        pool.push(...c.mcqs);
+      }
+    }
   }
-  if (id.includes('en-') || id.includes('eng')) {
-    return [
-      {
-        id: `${chapId}-fb-1`,
-        q: { bn: 'Identify the correct sentence: "Hardly had we reached the station ___ the train left."', en: 'Hardly had we reached the station ___ the train left.' },
-        options: { bn: ['than', 'when', 'then', 'after'], en: ['than', 'when', 'then', 'after'] },
-        ans: 1,
-        boardTag: "Dhaka Board '23",
-        explanation: { bn: 'Rule: "Hardly had / Scarcely had + Subject + V3" থাকলে পরের অংশে "when / before" বসে এবং "No sooner had" থাকলে "than" বসে।', en: 'Hardly had ... when + Past Indefinite.' },
-      },
-      {
-        id: `${chapId}-fb-2`,
-        q: { bn: 'Choose the right form of verb: "It is high time we ___ our bad habits."', en: 'It is high time we ___ our bad habits.' },
-        options: { bn: ['change', 'changed', 'have changed', 'changing'], en: ['change', 'changed', 'have changed', 'changing'] },
-        ans: 1,
-        boardTag: "Rajshahi Board '23",
-        explanation: { bn: 'Rule: "It is time / It is high time + Subject" থাকলে এর পরের Verb-টি সর্বদা Past Indefinite (V2) ফর্মে বসে।', en: 'It is high time + Subject + V2 (Past Subjunctive).' },
-      },
-      {
-        id: `${chapId}-fb-3`,
-        q: { bn: 'Had I possessed vast wealth, I ___ established a university.', en: 'Had I possessed vast wealth, I ___ established a university.' },
-        options: { bn: ['would', 'would have', 'will have', 'had'], en: ['would', 'would have', 'will have', 'had'] },
-        ans: 1,
-        boardTag: "Chattogram Board '22",
-        explanation: { bn: '3rd Conditional Rule: "Had + Subject + V3" (বা If + Past Perfect) থাকলে প্রিন্সিপাল ক্লজে "Subject + would/could/might have + V3" বসে।', en: '3rd Conditional: Had + Sub + V3 -> would have + V3.' },
-      },
-      {
-        id: `${chapId}-fb-4`,
-        q: { bn: 'One of the boys ___ absent from the class yesterday.', en: 'One of the boys ___ absent from the class yesterday.' },
-        options: { bn: ['were', 'was', 'are', 'have been'], en: ['were', 'was', 'are', 'have been'] },
-        ans: 1,
-        boardTag: "Jashore Board '23",
-        explanation: { bn: 'Rule: "One of the + Plural Noun" থাকলেও মূল Subject "One" হওয়ায় Verb-টি Singular (was) হয়।', en: 'One of the + Plural Noun takes a Singular Verb.' },
-      },
-      {
-        id: `${chapId}-fb-5`,
-        q: { bn: 'He died ___ overwork.', en: 'He died ___ overwork.' },
-        options: { bn: ['of', 'from', 'by', 'for'], en: ['of', 'from', 'by', 'for'] },
-        ans: 1,
-        boardTag: "Cumilla Board '22",
-        explanation: { bn: 'Rule: রোগে মারা গেলে "die of", অতিরিক্ত পরিশ্রম বা কোনো কারণে মারা গেলে "die from", এবং দেশের জন্য আত্মত্যাগ করলে "die for" বসে।', en: 'Die of disease; die from overwork/effect; die for country.' },
-      },
-    ];
-  }
-  return [
-    {
-      id: `${chapId}-fb-1`,
-      q: { bn: `${subj.name.bn} — বোর্ড পরীক্ষার জন্য নিচের কোন মৌলিক ধারণাটি সবচেয়ে গুরুত্বপূর্ণ?`, en: `Which core principle is essential in ${subj.name.en}?` },
-      options: {
-        bn: ['তাত্ত্বিক ও ব্যবহারিক সমন্বয়', 'কেবল মুখস্থ বিদ্যা', 'অপ্রাসঙ্গিক অনুমান', 'কোনোটিই নয়'],
-        en: ['Theoretical & Practical Integration', 'Rote Memorization Only', 'Irrelevant Estimation', 'None'],
-      },
-      ans: 0,
-      boardTag: "বো. প্র. '২৩",
-      explanation: { bn: '', en: '' },
-    },
-    {
-      id: `${chapId}-fb-2`,
-      q: { bn: `${subj.name.bn} বিষয়ে সঠিক বিশ্লেষণ ও সিদ্ধান্ত গ্রহণের প্রধান ভিত্তি কোনটি?`, en: `What is the primary basis of accurate analysis in ${subj.name.en}?` },
-      options: {
-        bn: ['প্রমাণভিত্তিক তথ্য ও নিয়ম', 'অযাচাইকৃত তথ্য', 'একপাক্ষিক ধারণা', 'কাল্পনিক উপাত্ত'],
-        en: ['Evidence-based Data & Rules', 'Unverified Data', 'One-sided Assumption', 'Fictional Data'],
-      },
-      ans: 0,
-      boardTag: "ঢা. বো. '২২",
-      explanation: { bn: '', en: '' },
-    },
-    {
-      id: `${chapId}-fb-3`,
-      q: { bn: 'জাতীয় শিক্ষাক্রম ও পাঠ্যপুস্তক বোর্ড (NCTB) অনুমোদিত মানদণ্ড অনুযায়ী বহুনির্বাচনি প্রশ্নের মূল উদ্দেশ্য কী?', en: 'What is the core objective of MCQs under NCTB standards?' },
-      options: {
-        bn: ['জ্ঞান, অনুধাবন, প্রয়োগ ও উচ্চতর দক্ষতা যাচাই', 'শুধু সংজ্ঞা মুখস্থ করা', 'সময় নষ্ট করা', 'লেখার গতি কমানো'],
-        en: ['Testing Knowledge, Comprehension, Application & Higher Order Skills', 'Memorizing definitions', 'Wasting time', 'Slowing writing speed'],
-      },
-      ans: 0,
-      boardTag: "সকল বোর্ড '২৩",
-      explanation: { bn: '', en: '' },
-    },
-    {
-      id: `${chapId}-fb-4`,
-      q: { bn: 'সৃজনশীল ও বহুনির্বাচনি পদ্ধতিতে ‘প্রয়োগ’ স্তরের প্রশ্নে কী যাচাই করা হয়?', en: 'What is evaluated in Application-level questions?' },
-      options: {
-        bn: ['পঠিত তত্ত্ব ও সূত্র নতুন পরিস্থিতিতে ব্যবহারের সক্ষমতা', 'হুবহু বইয়ের লাইন মনে রাখা', 'বানান দক্ষতা', 'হাতের লেখা'],
-        en: ['Ability to apply learned rules/formulas to new situations', 'Recalling exact textbook lines', 'Spelling skill', 'Handwriting'],
-      },
-      ans: 0,
-      boardTag: "রা. বো. '২৩",
-      explanation: { bn: '', en: '' },
-    },
-    {
-      id: `${chapId}-fb-5`,
-      q: { bn: 'পরীক্ষায় ১০০% নির্ভুল উত্তর নির্বাচনের সর্বোত্তম কৌশল কোনটি?', en: 'What is the best strategy for 100% accurate MCQ selection?' },
-      options: {
-        bn: ['মূল সূত্র ও কি-ওয়ার্ড বিশ্লেষণ করে অপশন এলিমিনেশন', 'আন্দাজে প্রথম অপশন দাগানো', 'প্রশ্ন না পড়েই উত্তর করা', 'সবগুলো অপশন এড়িয়ে যাওয়া'],
-        en: ['Analyzing core rules/keywords and option elimination', 'Guessing the first option', 'Answering without reading', 'Skipping all options'],
-      },
-      ans: 0,
-      boardTag: "চ. বো. '২২",
-      explanation: { bn: '', en: '' },
-    },
-  ];
-}
+  if (pool.length <= count) return pool;
 
-const VALID_HASH_TABS: NavTabId[] = [
-  'dashboard',
-  'subjects',
-  'leaderboard',
-  'Analytics',
-  'achievements',
-  'formulas',
-  'battle',
-  'mistakes',
-  'flashcards',
-  'planner',
-  'community',
-  'admin',
-];
+  let seed = 0;
+  for (let i = 0; i < dateSeed.length; i++) {
+    seed = (seed * 31 + dateSeed.charCodeAt(i)) >>> 0;
+  }
+
+  const picked: MCQQuestion[] = [];
+  const used = new Set<number>();
+  let attempts = 0;
+  while (picked.length < count && attempts < count * 8) {
+    seed = (seed * 1664525 + 1013904223) >>> 0;
+    const idx = seed % pool.length;
+    if (!used.has(idx)) {
+      used.add(idx);
+      picked.push(pool[idx]);
+    }
+    attempts++;
+  }
+  return picked;
+}
 
 export function App() {
   const {
@@ -238,6 +125,7 @@ export function App() {
     isAuthenticated,
     xp,
     streak,
+    weeklyActivity,
     mistakes,
     examHistory,
     chapterMastery,
@@ -251,7 +139,10 @@ export function App() {
 
   const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
   const [mobileSprintPopupOpen, setMobileSprintPopupOpen] = useState(false);
-  const [logoTapCount, setLogoTapCount] = useState(0);
+  const [, setLogoTapCount] = useState(0);
+  const logoResetTimerRef = useRef<any>(null);
+
+  const todayIso = getTodayIsoDate();
 
   useEffect(() => {
     const syncFromHash = () => {
@@ -260,7 +151,7 @@ export function App() {
         return;
       }
       const normalized: NavTabId = rawHash === 'analytics' ? 'Analytics' : (rawHash as NavTabId);
-      if (VALID_HASH_TABS.includes(normalized)) {
+      if (VALID_TABS.includes(normalized)) {
         setActiveTab(normalized);
       }
     };
@@ -272,35 +163,38 @@ export function App() {
       if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'a') {
         e.preventDefault();
         setActiveTab('admin');
+      } else if (e.key === 'Escape') {
+        setMobileMoreOpen(false);
+        setMobileSprintPopupOpen(false);
       }
     };
     window.addEventListener('keydown', onKeyDown);
 
-    if (window.innerWidth <= 820 && !window.sessionStorage.getItem('ev_sprint_dismissed')) {
-      setMobileSprintPopupOpen(true);
-    }
-
     return () => {
       window.removeEventListener('hashchange', syncFromHash);
       window.removeEventListener('keydown', onKeyDown);
+      if (logoResetTimerRef.current) clearTimeout(logoResetTimerRef.current);
     };
   }, [setActiveTab]);
 
   const handleBrandLogoClick = () => {
-    const next = logoTapCount + 1;
-    if (next >= 5) {
-      setLogoTapCount(0);
-      setActiveTab('admin');
-    } else {
-      setLogoTapCount(next);
-      setSelectedSubjectId(null);
+    if (logoResetTimerRef.current) clearTimeout(logoResetTimerRef.current);
+    setLogoTapCount((prev) => {
+      const next = prev + 1;
+      if (next >= 5) {
+        setSelectedSubjectId(null);
+        setActiveTab('admin');
+        return 0;
+      }
+      logoResetTimerRef.current = setTimeout(() => {
+        setLogoTapCount(0);
+      }, 2500);
+      return next;
+    });
+    setSelectedSubjectId(null);
+    if (activeTab !== 'admin') {
       setActiveTab('dashboard');
     }
-  };
-
-  const handleDismissMobileSprint = () => {
-    window.sessionStorage.setItem('ev_sprint_dismissed', '1');
-    setMobileSprintPopupOpen(false);
   };
 
   const isBn = language !== 'en';
@@ -309,13 +203,27 @@ export function App() {
 
   const classList = getAvailableClasses();
   const groupList = getAvailableGroups(selectedClass);
-  const subjects: SubjectData[] = getSubjectsForSelection(selectedClass, selectedGroup);
+  const subjects: SubjectData[] = getSubjectsForSelection(selectedClass, selectedGroup, true);
   const selectedSubject: SubjectData | null = selectedSubjectId
     ? subjects.find((s) => s.id === selectedSubjectId) || null
     : null;
 
   const pendingMistakesCount = mistakes.filter((m) => !m.mastered).length;
   const pendingReportsCount = questionReports.filter((r) => r.status === 'pending').length;
+
+  const dailySprintPool = useMemo(
+    () => selectDailySprintQuestions(subjects, `${todayIso}-${selectedClass}-${selectedGroup}`, 10),
+    [subjects, todayIso, selectedClass, selectedGroup]
+  );
+
+  const todaySprintDoneSegs = useMemo(() => {
+    const todayDaily = examHistory.filter(
+      (h) => h.date === todayIso && (h.mode === 'daily' || h.chapterId === `daily-${todayIso}`)
+    );
+    if (todayDaily.length === 0) return 0;
+    const best = Math.max(...todayDaily.map((e) => Math.round((e.score / Math.max(1, e.total)) * 10)));
+    return Math.min(10, Math.max(1, best));
+  }, [examHistory, todayIso]);
 
   const primaryNav: { id: NavTabId; icon: string; labelKey: string; count?: number }[] = [
     { id: 'dashboard', icon: 'home', labelKey: 'nav_dashboard' },
@@ -337,7 +245,8 @@ export function App() {
   const handleLaunchSubjectPractice = (subj: SubjectData, chapterIdx = 0, examType: 'mcq' | 'cq' = 'mcq') => {
     const chap = subj.chapters[chapterIdx] || subj.chapters[0];
     if (!chap) return;
-    const rawMcqs = chap.mcqs && chap.mcqs.length > 0 ? chap.mcqs : getCuratedFallbackMcqsForSubject(subj, chap.id);
+    const rawMcqs = chap.mcqs || [];
+    if (examType === 'mcq' && rawMcqs.length === 0) return;
     startQuiz({
       mode: 'practice',
       examType,
@@ -347,25 +256,26 @@ export function App() {
       chapterName: chap.name,
       questions: rawMcqs,
       cqs: chap.cqs || [],
-      durationSec: Math.max(300, rawMcqs.length * 45),
+      durationSec: Math.max(300, Math.max(1, rawMcqs.length) * 45),
       negativeMarking: 0,
     });
   };
 
   const handleLaunchDailySprint = () => {
-    const allMcqs = subjects.flatMap((s) =>
-      s.chapters.flatMap((c) => (c.mcqs && c.mcqs.length > 0 ? c.mcqs : getCuratedFallbackMcqsForSubject(s, c.id)))
-    );
+    if (dailySprintPool.length === 0) return;
     const firstWithMcqs = subjects.find((s) => s.chapters.some((c) => (c.mcqs?.length || 0) > 0)) || subjects[0];
     if (!firstWithMcqs) return;
     startQuiz({
-      mode: 'timed',
+      mode: 'daily',
       examType: 'mcq',
       subjectId: firstWithMcqs.id,
-      subjectName: { bn: 'ডেইলি মেরিট স্প্রিন্ট', en: 'Daily Merit Sprint' },
-      chapterId: firstWithMcqs.chapters[0]?.id || 'daily',
-      chapterName: { bn: `${selectedClass} • ${selectedGroup}`, en: `${selectedClass} • ${selectedGroup}` },
-      questions: allMcqs.slice(0, 10),
+      subjectName: { bn: 'আজকের চ্যালেঞ্জ', en: 'Daily Challenge' },
+      chapterId: `daily-${todayIso}`,
+      chapterName: {
+        bn: `${selectedClass} • ${selectedGroup}`,
+        en: `${selectedClass} • ${selectedGroup}`,
+      },
+      questions: dailySprintPool,
       cqs: [],
       durationSec: 450,
       negativeMarking: 0.25,
@@ -404,7 +314,7 @@ export function App() {
             </div>
           </button>
 
-          <div className="ev-nav-section-label">{isBn ? 'মূল প্ল্যাটফর্ম' : 'Core Platform'}</div>
+          <div className="ev-nav-section-label">{isBn ? 'মূল মেনু' : 'Core'}</div>
           <ul className="ev-nav-list">
             {primaryNav.map((item) => (
               <li key={item.id}>
@@ -427,7 +337,7 @@ export function App() {
           </ul>
 
           <div className="ev-nav-section-label" style={{ marginTop: '0.75rem' }}>
-            {isBn ? 'স্টাডি ভল্ট ও টুলস' : 'Study Tools'}
+            {isBn ? 'স্টাডি টুলস' : 'Study Tools'}
           </div>
           <ul className="ev-nav-list">
             {secondaryNav.map((item) => (
@@ -462,7 +372,7 @@ export function App() {
               >
                 <span className="ev-nav-btn-left">
                   <EvIcon name="shield" />
-                  <span>🔐 {isBn ? 'অ্যাডমিন প্যানেল' : 'Admin Panel'}</span>
+                  <span>{isBn ? 'অ্যাডমিন প্যানেল' : 'Admin Panel'}</span>
                 </span>
                 {pendingReportsCount > 0 && <span className="ev-nav-count">{pendingReportsCount}</span>}
               </button>
@@ -471,14 +381,14 @@ export function App() {
             <button type="button" className="ev-nav-btn" onClick={() => setAuthModalOpen(true)}>
               <span className="ev-nav-btn-left">
                 <EvIcon name="user" />
-                <span>{isAuthenticated ? `${userName} (${isBn ? 'প্রোফাইল' : 'Profile'})` : isBn ? 'সাইন ইন / অ্যাকাউন্ট' : 'Sign In / Account'}</span>
+                <span>{isAuthenticated ? userName : isBn ? 'সাইন ইন' : 'Sign In'}</span>
               </span>
             </button>
 
             <button type="button" className="ev-nav-btn" onClick={() => setSettingsModalOpen(true)}>
               <span className="ev-nav-btn-left">
                 <EvIcon name="settings" />
-                <span>{isBn ? 'সেটিংস ও ভাষা' : 'Settings'}</span>
+                <span>{isBn ? 'সেটিংস' : 'Settings'}</span>
               </span>
             </button>
           </div>
@@ -525,12 +435,17 @@ export function App() {
                 type="button"
                 className="ev-icon-btn"
                 onClick={() => setLanguage(language === 'bn' ? 'en' : language === 'en' ? 'bilingual' : 'bn')}
-                title="Switch Language"
+                title={isBn ? 'ভাষা পরিবর্তন' : 'Switch Language'}
               >
                 {language === 'bn' ? 'বাংলা' : language === 'en' ? 'EN' : 'বাং+EN'}
               </button>
 
-              <button type="button" className="ev-icon-btn" onClick={toggleDarkMode} title="Toggle Theme">
+              <button
+                type="button"
+                className="ev-icon-btn"
+                onClick={toggleDarkMode}
+                title={isBn ? 'থিম পরিবর্তন' : 'Toggle Theme'}
+              >
                 <EvIcon name={darkMode ? 'sun' : 'moon'} size={18} />
               </button>
 
@@ -575,11 +490,9 @@ export function App() {
                       style={{ marginBottom: 10 }}
                       onClick={() => setSelectedSubjectId(null)}
                     >
-                      ← {isBn ? 'সব বিষয়ে ফিরে যাও' : 'Back to Subjects'}
+                      ← {isBn ? 'সব বিষয়' : 'All Subjects'}
                     </button>
-                    <h2 className="ev-section-title">
-                      {trText(selectedSubject.name, language)}
-                    </h2>
+                    <h2 className="ev-section-title">{trText(selectedSubject.name, language)}</h2>
                   </div>
 
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -589,7 +502,7 @@ export function App() {
                         className="ev-btn ev-btn-soft ev-btn-sm"
                         onClick={() => openSubjectFormulas(selectedSubject.id, 'all')}
                       >
-                        📐 {isBn ? 'গাণিতিক সূত্র দেখো' : 'Math Formulas'}
+                        {isBn ? 'সূত্র দেখো' : 'Formulas'}
                       </button>
                     )}
                     <button
@@ -597,7 +510,7 @@ export function App() {
                       className="ev-btn ev-btn-primary ev-btn-sm"
                       onClick={() => setActiveTab('battle')}
                     >
-                      ⚔️ {isBn ? 'এই বিষয়ে 1v1 ব্যাটল' : '1v1 Battle'}
+                      {isBn ? '1v1 ব্যাটল' : '1v1 Battle'}
                     </button>
                   </div>
                 </div>
@@ -605,8 +518,7 @@ export function App() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                   {selectedSubject.chapters.map((chap, idx) => {
                     const chapMastery = chapterMastery[chap.id] || 0;
-                    const rawCount = chap.mcqs?.length || 0;
-                    const mcqCount = rawCount > 0 ? rawCount : 5;
+                    const mcqCount = chap.mcqs?.length || 0;
                     const formulaCount = chap.formulas?.length || 0;
 
                     return (
@@ -628,9 +540,9 @@ export function App() {
                             {idx + 1}. {trText(chap.name, language)}
                           </div>
                           <div style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600, marginTop: 2 }}>
-                            MCQ: {mcqCount}
+                            {mcqCount > 0 ? `${mcqCount} MCQs` : isBn ? 'প্রশ্ন যোগ হচ্ছে' : 'Coming soon'}
                             {formulaCount > 0 ? ` • ${isBn ? 'সূত্র' : 'Formulas'}: ${formulaCount}` : ''}
-                            {` • ${trKey('mastery', language)}: ${chapMastery}%`}
+                            {mcqCount > 0 ? ` • ${trKey('mastery', language)}: ${chapMastery}%` : ''}
                           </div>
                         </div>
 
@@ -641,16 +553,17 @@ export function App() {
                               className="ev-btn ev-btn-soft ev-btn-sm"
                               onClick={() => openSubjectFormulas(selectedSubject.id, chap.id)}
                             >
-                              📐 {isBn ? `সূত্র (${formulaCount})` : `Formulas (${formulaCount})`}
+                              {isBn ? `সূত্র (${formulaCount})` : `Formulas (${formulaCount})`}
                             </button>
                           )}
 
                           <button
                             type="button"
-                            className="ev-btn ev-btn-primary ev-btn-sm"
+                            className={`ev-btn ${mcqCount > 0 ? 'ev-btn-primary' : 'ev-btn-secondary'} ev-btn-sm`}
+                            disabled={mcqCount === 0}
                             onClick={() => handleLaunchSubjectPractice(selectedSubject, idx, 'mcq')}
                           >
-                            ⚡ MCQ ({mcqCount})
+                            {mcqCount > 0 ? `MCQ (${mcqCount})` : isBn ? 'শীঘ্রই' : 'Soon'}
                           </button>
                         </div>
                       </div>
@@ -689,7 +602,7 @@ export function App() {
                               value={selectedClass}
                               onChange={(e) => {
                                 const nextCls = e.target.value;
-                                const firstGrp = getAvailableGroups(nextCls)[0] || 'Science';
+                                const firstGrp = getAvailableGroups(nextCls)[0] || 'Business Studies';
                                 setClassAndGroup(nextCls, firstGrp);
                               }}
                             >
@@ -738,7 +651,7 @@ export function App() {
 
                         <div className="ev-wk">
                           {(isBn ? weekDaysBn : weekDaysEn).map((d, i) => {
-                            const isLit = i < Math.min(7, streak);
+                            const isLit = Boolean(weeklyActivity[i]);
                             return (
                               <div key={d} className={`ev-wk-day ${isLit ? 'is-lit' : ''}`}>
                                 <i>{isLit ? '✓' : '•'}</i>
@@ -757,23 +670,37 @@ export function App() {
                         </div>
                         <div style={{ flex: 1 }}>
                           <div className="ev-daily-title">{trKey('daily_challenge', language)}</div>
-                          <div className="ev-daily-sub">10 MCQs • {selectedClass}</div>
+                          <div className="ev-daily-sub">
+                            {dailySprintPool.length} MCQs • {selectedClass}
+                          </div>
                         </div>
                         <span className="ev-xp-chip">+120 XP</span>
                       </div>
 
                       <div className="ev-seg">
                         {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((seg) => (
-                          <i key={seg} className={seg < Math.min(10, examHistory.length * 2) ? 'is-done' : ''} />
+                          <i key={seg} className={seg < todaySprintDoneSegs ? 'is-done' : ''} />
                         ))}
                       </div>
 
                       <div style={{ display: 'flex', gap: 8 }}>
-                        <button type="button" className="ev-btn ev-btn-primary" style={{ flex: 1 }} onClick={handleLaunchDailySprint}>
-                          🚀 {isBn ? 'স্প্রিন্ট শুরু করো' : 'Start Sprint'}
+                        <button
+                          type="button"
+                          className="ev-btn ev-btn-primary"
+                          style={{ flex: 1 }}
+                          disabled={dailySprintPool.length === 0}
+                          onClick={handleLaunchDailySprint}
+                        >
+                          {dailySprintPool.length > 0
+                            ? isBn
+                              ? 'চ্যালেঞ্জ শুরু করো'
+                              : 'Start Challenge'
+                            : isBn
+                            ? 'শীঘ্রই আসছে'
+                            : 'Coming Soon'}
                         </button>
                         <button type="button" className="ev-btn ev-btn-secondary" onClick={() => setActiveTab('battle')}>
-                          ⚔️ 1v1
+                          1v1
                         </button>
                       </div>
                     </div>
@@ -795,7 +722,7 @@ export function App() {
                             value={selectedClass}
                             onChange={(e) => {
                               const nextCls = e.target.value;
-                              const firstGrp = getAvailableGroups(nextCls)[0] || 'Science';
+                              const firstGrp = getAvailableGroups(nextCls)[0] || 'Business Studies';
                               setClassAndGroup(nextCls, firstGrp);
                             }}
                           >
@@ -832,7 +759,6 @@ export function App() {
                       const subjAttr = getSubjectThemeAttr(subj.id);
                       const iconName = getSubjectIconName(subj.id);
                       const rawTotalMcqs = subj.chapters.reduce((sum, c) => sum + (c.mcqs?.length || 0), 0);
-                      const displayMcqs = rawTotalMcqs > 0 ? rawTotalMcqs : Math.max(15, subj.chapters.length * 5);
                       const subjMastery = Math.min(
                         100,
                         Math.round(
@@ -840,24 +766,36 @@ export function App() {
                             Math.max(1, subj.chapters.length)
                         )
                       );
+                      const primaryTitle = language === 'en' ? subj.name.en : subj.name.bn;
+                      const secondaryTitle = language === 'en' ? subj.name.bn : subj.name.en;
 
                       return (
                         <div
                           key={subj.id}
+                          role="button"
+                          tabIndex={0}
                           className="ev-card ev-card-interactive ev-subject-card"
                           data-subj={subjAttr}
                           onClick={() => setSelectedSubjectId(subj.id)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              setSelectedSubjectId(subj.id);
+                            }
+                          }}
                         >
                           <div className="ev-subject-top">
                             <div className="ev-subject-icon-box" data-subj={subjAttr}>
                               <EvIcon name={iconName} size={20} />
                             </div>
-                            <span className="ev-mcq-pill">{displayMcqs} MCQs</span>
+                            <span className="ev-mcq-pill">
+                              {rawTotalMcqs > 0 ? `${rawTotalMcqs} MCQs` : isBn ? 'শীঘ্রই' : 'Soon'}
+                            </span>
                           </div>
 
                           <div className="ev-subject-names">
-                            <div className="ev-subject-name">{subj.name.bn}</div>
-                            <div className="ev-subject-name-bn">{subj.name.en}</div>
+                            <div className="ev-subject-name">{primaryTitle}</div>
+                            <div className="ev-subject-name-bn">{secondaryTitle}</div>
                           </div>
 
                           <div className="ev-subject-meter">
@@ -940,7 +878,12 @@ export function App() {
       </nav>
 
       {mobileSprintPopupOpen && (
-        <div className="ev-modal-backdrop is-open" onClick={handleDismissMobileSprint}>
+        <div
+          className="ev-modal-backdrop is-open"
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setMobileSprintPopupOpen(false)}
+        >
           <div
             className="ev-card ev-daily-card"
             style={{ width: '100%', maxWidth: 380, padding: 18 }}
@@ -959,7 +902,7 @@ export function App() {
               <button
                 type="button"
                 className="ev-icon-btn"
-                onClick={handleDismissMobileSprint}
+                onClick={() => setMobileSprintPopupOpen(false)}
                 aria-label="Close"
               >
                 ✕
@@ -968,16 +911,32 @@ export function App() {
 
             <div className="ev-seg">
               {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((seg) => (
-                <i key={seg} className={seg < Math.min(10, examHistory.length * 2) ? 'is-done' : ''} />
+                <i key={seg} className={seg < todaySprintDoneSegs ? 'is-done' : ''} />
               ))}
             </div>
 
             <div style={{ display: 'flex', gap: 8 }}>
-              <button type="button" className="ev-btn ev-btn-primary" style={{ flex: 1 }} onClick={handleLaunchDailySprint}>
-                🚀 {isBn ? 'এখনই শুরু করো' : 'Start Now'}
+              <button
+                type="button"
+                className="ev-btn ev-btn-primary"
+                style={{ flex: 1 }}
+                disabled={dailySprintPool.length === 0}
+                onClick={handleLaunchDailySprint}
+              >
+                {dailySprintPool.length > 0
+                  ? isBn
+                    ? 'এখনই শুরু করো'
+                    : 'Start Now'
+                  : isBn
+                  ? 'শীঘ্রই আসছে'
+                  : 'Coming Soon'}
               </button>
-              <button type="button" className="ev-btn ev-btn-secondary" onClick={handleDismissMobileSprint}>
-                {isBn ? 'কেটে দিন' : 'Close'}
+              <button
+                type="button"
+                className="ev-btn ev-btn-secondary"
+                onClick={() => setMobileSprintPopupOpen(false)}
+              >
+                {isBn ? 'বন্ধ করো' : 'Close'}
               </button>
             </div>
           </div>
@@ -985,10 +944,15 @@ export function App() {
       )}
 
       {mobileMoreOpen && (
-        <div className="ev-modal-backdrop is-open" onClick={() => setMobileMoreOpen(false)}>
+        <div
+          className="ev-modal-backdrop is-open"
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setMobileMoreOpen(false)}
+        >
           <div className="ev-modal-panel" style={{ maxWidth: 460 }} onClick={(e) => e.stopPropagation()}>
             <div className="ev-section-header">
-              <h3 className="ev-section-title">✨ {isBn ? 'সকল ফিচারসমূহ' : 'All Features'}</h3>
+              <h3 className="ev-section-title">{isBn ? 'সকল ফিচার' : 'All Features'}</h3>
               <button className="ev-btn ev-btn-secondary ev-btn-sm" onClick={() => setMobileMoreOpen(false)}>
                 ✕
               </button>
@@ -1003,7 +967,7 @@ export function App() {
                 }}
               >
                 <EvIcon name="zap" />
-                <span>⚡ {trKey('daily_challenge', language)}</span>
+                <span>{trKey('daily_challenge', language)}</span>
               </button>
 
               {[
@@ -1038,7 +1002,7 @@ export function App() {
                   }}
                 >
                   <EvIcon name="shield" />
-                  <span>🔐 {isBn ? 'অ্যাডমিন প্যানেল' : 'Admin Panel'}</span>
+                  <span>{isBn ? 'অ্যাডমিন প্যানেল' : 'Admin Panel'}</span>
                 </button>
               )}
 
@@ -1051,7 +1015,7 @@ export function App() {
                 }}
               >
                 <EvIcon name="user" />
-                <span>{isAuthenticated ? (isBn ? 'আমার প্রোফাইল' : 'My Profile') : isBn ? 'সাইন ইন / লগইন' : 'Sign In'}</span>
+                <span>{isAuthenticated ? (isBn ? 'প্রোফাইল' : 'Profile') : isBn ? 'সাইন ইন' : 'Sign In'}</span>
               </button>
 
               <button
@@ -1063,7 +1027,7 @@ export function App() {
                 }}
               >
                 <EvIcon name="settings" />
-                <span>{isBn ? 'সেটিংস ও ভাষা' : 'Settings'}</span>
+                <span>{isBn ? 'সেটিংস' : 'Settings'}</span>
               </button>
             </div>
           </div>
