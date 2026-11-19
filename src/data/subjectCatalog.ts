@@ -11,6 +11,8 @@ import { HSC_MKT_1ST_PAPER_CHAPTERS } from './mkt1Data';
 import {
   ChapterData,
   ChapterFormula,
+  CQFormat,
+  CQMarks,
   CQQuestion,
   MCQQuestion,
   SubjectData,
@@ -27,16 +29,19 @@ export interface MCQ {
 
 export interface CQ {
   id: string;
+  format?: CQFormat;
+  title?: string;
   stem: string;
   board?: string;
   qA: string;
   ansA: string;
-  qB: string;
-  ansB: string;
-  qC: string;
-  ansC: string;
-  qD: string;
-  ansD: string;
+  qB?: string;
+  ansB?: string;
+  qC?: string;
+  ansC?: string;
+  qD?: string;
+  ansD?: string;
+  marks?: CQMarks;
 }
 
 export interface Chapter {
@@ -98,15 +103,18 @@ export function convertLegacyChapters(
 
     const cqs: CQQuestion[] = (ch.cqs || []).map((c): CQQuestion => ({
       id: c.id,
+      format: c.format,
+      title: c.title ? { bn: c.title, en: c.title } : undefined,
       stem: { bn: c.stem, en: c.stem },
       a: { bn: c.qA, en: c.qA },
-      b: { bn: c.qB, en: c.qB },
-      c: { bn: c.qC, en: c.qC },
-      d: { bn: c.qD, en: c.qD },
+      b: c.qB ? { bn: c.qB, en: c.qB } : undefined,
+      c: c.qC ? { bn: c.qC, en: c.qC } : undefined,
+      d: c.qD ? { bn: c.qD, en: c.qD } : undefined,
       ansA: { bn: c.ansA, en: c.ansA },
-      ansB: { bn: c.ansB, en: c.ansB },
-      ansC: { bn: c.ansC, en: c.ansC },
-      ansD: { bn: c.ansD, en: c.ansD },
+      ansB: c.ansB ? { bn: c.ansB, en: c.ansB } : undefined,
+      ansC: c.ansC ? { bn: c.ansC, en: c.ansC } : undefined,
+      ansD: c.ansD ? { bn: c.ansD, en: c.ansD } : undefined,
+      marks: c.marks,
       boardTag: c.board,
       board: c.board,
     }));
