@@ -20,17 +20,29 @@ export interface MCQQuestion {
 
 export type MCQ = MCQQuestion;
 
+export type CQFormat = 'cq4' | 'cq3' | 'english' | 'written';
+
+export interface CQMarks {
+  a?: number;
+  b?: number;
+  c?: number;
+  d?: number;
+}
+
 export interface CQQuestion {
   id: string;
+  format?: CQFormat;
+  title?: LocalizedText;
   stem: LocalizedText;
   a: LocalizedText;
-  b: LocalizedText;
-  c: LocalizedText;
-  d: LocalizedText;
+  b?: LocalizedText;
+  c?: LocalizedText;
+  d?: LocalizedText;
   ansA: LocalizedText;
-  ansB: LocalizedText;
-  ansC: LocalizedText;
-  ansD: LocalizedText;
+  ansB?: LocalizedText;
+  ansC?: LocalizedText;
+  ansD?: LocalizedText;
+  marks?: CQMarks;
   boardTag?: string;
   board?: string;
 }
