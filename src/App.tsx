@@ -27,6 +27,89 @@ import {
 } from './components/ModalsAndQuiz';
 import { ExtraFeaturesView } from './components/ExtraFeatures';
 
+interface SubjectSectionProfile {
+  supportsMcq: boolean;
+  supportsCq: boolean;
+  defaultTab: 'mcq' | 'cq';
+  mcqTabLabelBn: string;
+  mcqTabLabelEn: string;
+  cqTabLabelBn: string;
+  cqTabLabelEn: string;
+  cqHintBn: string;
+  cqHintEn: string;
+}
+
+function getSubjectSectionProfile(subj: SubjectData): SubjectSectionProfile {
+  const id = subj.id.toLowerCase();
+  const totalMcqs = subj.chapters.reduce((sum, c) => sum + (c.mcqs?.length || 0), 0);
+  const totalCqs = subj.chapters.reduce((sum, c) => sum + (c.cqs?.length || 0), 0);
+
+  // Admission & Job/BCS are strictly MCQ-only tracks
+  if (id.startsWith('adm-') || id.startsWith('bcs-') || id.startsWith('job-')) {
+    return {
+      supportsMcq: true,
+      supportsCq: false,
+      defaultTab: 'mcq',
+      mcqTabLabelBn: 'MCQ অনুশীলন',
+      mcqTabLabelEn: 'MCQ Practice',
+      cqTabLabelBn: 'CQ',
+      cqTabLabelEn: 'CQ',
+      cqHintBn: '',
+      cqHintEn: '',
+    };
+  }
+
+  // English 1st & 2nd Paper — Reading / Grammar / Written structure
+  if (id.includes('en-1') || id.includes('en-2')) {
+    return {
+      supportsMcq: totalMcqs > 0,
+      supportsCq: true,
+      defaultTab: totalCqs > 0 || totalMcqs === 0 ? 'cq' : 'mcq',
+      mcqTabLabelBn: 'Grammar MCQ',
+      mcqTabLabelEn: 'Grammar MCQ',
+      cqTabLabelBn: id.includes('en-1') ? 'Passage ও Written' : 'Grammar ও Written',
+      cqTabLabelEn: id.includes('en-1') ? 'Passage & Written' : 'Grammar & Written',
+      cqHintBn: 'রিডিং / গ্রামার / লিখিত',
+      cqHintEn: 'Reading / Grammar / Written',
+    };
+  }
+
+  // HSC Bangla 2nd Paper — Grammar & Composition (no standard OMR MCQ)
+  if (id === 'hsc-bn-2') {
+    return {
+      supportsMcq: totalMcqs > 0,
+      supportsCq: true,
+      defaultTab: totalCqs > 0 || totalMcqs === 0 ? 'cq' : 'mcq',
+      mcqTabLabelBn: 'ব্যাকরণ MCQ',
+      mcqTabLabelEn: 'Grammar MCQ',
+      cqTabLabelBn: 'ব্যাকরণ ও নির্মিতি',
+      cqTabLabelEn: 'Grammar & Written',
+      cqHintBn: 'ব্যাকরণ ও নির্মিতি প্রশ্নোত্তর',
+      cqHintEn: 'Grammar & Composition',
+    };
+  }
+
+  // Math & Accounting use 3-part CQ (ক: ২, খ: ৪, গ: ৪)
+  const isThreePartCq =
+    id.startsWith('math-') ||
+    id === 'ssc-math' ||
+    id === 'ssc-hmath' ||
+    id.startsWith('acc-') ||
+    id === 'ssc-acc';
+
+  return {
+    supportsMcq: true,
+    supportsCq: true,
+    defaultTab: totalMcqs === 0 && totalCqs > 0 ? 'cq' : 'mcq',
+    mcqTabLabelBn: 'MCQ (নৈর্ব্যক্তিক)',
+    mcqTabLabelEn: 'MCQ',
+    cqTabLabelBn: 'CQ (সৃজনশীল)',
+    cqTabLabelEn: 'CQ (Creative)',
+    cqHintBn: isThreePartCq ? '১০ নম্বর (ক, খ, গ)' : '১০ নম্বর (ক, খ, গ, ঘ)',
+    cqHintEn: isThreePartCq ? '10 Marks (a, b, c)' : '10 Marks (a, b, c, d)',
+  };
+}
+
 function getSubjectThemeAttr(subjId: string): string {
   const id = subjId.toLowerCase();
   if (id.includes('phy')) return 'physics';
@@ -139,6 +222,7 @@ export function App() {
 
   const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
   const [mobileSprintPopupOpen, setMobileSprintPopupOpen] = useState(false);
+  const [subjectSectionTab, setSubjectSectionTab] = useState<'mcq' | 'cq'>('mcq');
   const [, setLogoTapCount] = useState(0);
   const logoResetTimerRef = useRef<any>(null);
 
@@ -208,6 +292,18 @@ export function App() {
     ? subjects.find((s) => s.id === selectedSubjectId) || null
     : null;
 
+  const selectedSubjectProfile = useMemo(
+    () => (selectedSubject ? getSubjectSectionProfile(selectedSubject) : null),
+    [selectedSubject]
+  );
+
+  // Sync default section tab (MCQ vs CQ/Written) whenever user opens a subject
+  useEffect(() => {
+    if (selectedSubjectProfile) {
+      setSubjectSectionTab(selectedSubjectProfile.defaultTab);
+    }
+  }, [selectedSubjectId, selectedSubjectProfile?.defaultTab]);
+
   const pendingMistakesCount = mistakes.filter((m) => !m.mastered).length;
   const pendingReportsCount = questionReports.filter((r) => r.status === 'pending').length;
 
@@ -246,7 +342,10 @@ export function App() {
     const chap = subj.chapters[chapterIdx] || subj.chapters[0];
     if (!chap) return;
     const rawMcqs = chap.mcqs || [];
+    const rawCqs = chap.cqs || [];
     if (examType === 'mcq' && rawMcqs.length === 0) return;
+    if (examType === 'cq' && rawCqs.length === 0) return;
+
     startQuiz({
       mode: 'practice',
       examType,
@@ -254,8 +353,8 @@ export function App() {
       subjectName: subj.name,
       chapterId: chap.id,
       chapterName: chap.name,
-      questions: rawMcqs,
-      cqs: chap.cqs || [],
+      questions: examType === 'mcq' ? rawMcqs : [],
+      cqs: examType === 'cq' ? rawCqs : [],
       durationSec: Math.max(300, Math.max(1, rawMcqs.length) * 45),
       negativeMarking: 0,
     });
@@ -286,6 +385,19 @@ export function App() {
   const weekDaysBn = ['শনি', 'রবি', 'সোম', 'মঙ্গল', 'বুধ', 'বৃহঃ', 'শুক্র'];
   const weekDaysEn = ['Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
   const hasPhotoAvatar = isAuthenticated && userAvatar && userAvatar.startsWith('http');
+
+  const selectedTotalMcqs = selectedSubject
+    ? selectedSubject.chapters.reduce((sum, c) => sum + (c.mcqs?.length || 0), 0)
+    : 0;
+  const selectedTotalCqs = selectedSubject
+    ? selectedSubject.chapters.reduce((sum, c) => sum + (c.cqs?.length || 0), 0)
+    : 0;
+  const activeSectionMode: 'mcq' | 'cq' =
+    selectedSubjectProfile && !selectedSubjectProfile.supportsMcq
+      ? 'cq'
+      : selectedSubjectProfile && !selectedSubjectProfile.supportsCq
+      ? 'mcq'
+      : subjectSectionTab;
 
   return (
     <>
@@ -480,9 +592,9 @@ export function App() {
           <main className="ev-content-area ev-view-animate">
             {activeTab !== 'dashboard' && activeTab !== 'subjects' ? (
               <ExtraFeaturesView />
-            ) : selectedSubject ? (
+            ) : selectedSubject && selectedSubjectProfile ? (
               <div className="ev-card">
-                <div className="ev-section-header">
+                <div className="ev-section-header" style={{ marginBottom: 12 }}>
                   <div>
                     <button
                       type="button"
@@ -505,21 +617,92 @@ export function App() {
                         {isBn ? 'সূত্র দেখো' : 'Formulas'}
                       </button>
                     )}
-                    <button
-                      type="button"
-                      className="ev-btn ev-btn-primary ev-btn-sm"
-                      onClick={() => setActiveTab('battle')}
-                    >
-                      {isBn ? '1v1 ব্যাটল' : '1v1 Battle'}
-                    </button>
+                    {selectedSubjectProfile.supportsMcq && (
+                      <button
+                        type="button"
+                        className="ev-btn ev-btn-primary ev-btn-sm"
+                        onClick={() => setActiveTab('battle')}
+                      >
+                        {isBn ? '1v1 ব্যাটল' : '1v1 Battle'}
+                      </button>
+                    )}
                   </div>
                 </div>
+
+                {/* Adaptive MCQ / CQ Section Switcher */}
+                {selectedSubjectProfile.supportsMcq && selectedSubjectProfile.supportsCq && (
+                  <div
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: '1fr 1fr',
+                      gap: 8,
+                      padding: 6,
+                      borderRadius: 12,
+                      background: 'var(--bg-surface-muted)',
+                      border: '1px solid var(--border-subtle)',
+                      marginBottom: 14,
+                    }}
+                  >
+                    <button
+                      type="button"
+                      className={`ev-btn ev-btn-sm ${activeSectionMode === 'mcq' ? 'ev-btn-primary' : 'ev-btn-secondary'}`}
+                      style={{ width: '100%', minHeight: 38 }}
+                      onClick={() => setSubjectSectionTab('mcq')}
+                    >
+                      {isBn ? selectedSubjectProfile.mcqTabLabelBn : selectedSubjectProfile.mcqTabLabelEn}
+                      {selectedTotalMcqs > 0 ? ` (${selectedTotalMcqs})` : ''}
+                    </button>
+
+                    <button
+                      type="button"
+                      className={`ev-btn ev-btn-sm ${activeSectionMode === 'cq' ? 'ev-btn-primary' : 'ev-btn-secondary'}`}
+                      style={{ width: '100%', minHeight: 38 }}
+                      onClick={() => setSubjectSectionTab('cq')}
+                    >
+                      {isBn ? selectedSubjectProfile.cqTabLabelBn : selectedSubjectProfile.cqTabLabelEn}
+                      {selectedTotalCqs > 0 ? ` (${selectedTotalCqs})` : ''}
+                    </button>
+                  </div>
+                )}
+
+                {/* Single-Mode Banner for English / Bangla 2nd Written-Only View */}
+                {!selectedSubjectProfile.supportsMcq && selectedSubjectProfile.supportsCq && (
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '8px 12px',
+                      borderRadius: 10,
+                      background: 'var(--brand-primary-soft)',
+                      border: '1px solid var(--brand-primary-border)',
+                      marginBottom: 12,
+                      fontSize: 12.5,
+                      fontWeight: 700,
+                      color: 'var(--brand-primary)',
+                    }}
+                  >
+                    <span>
+                      {isBn ? selectedSubjectProfile.cqTabLabelBn : selectedSubjectProfile.cqTabLabelEn}
+                    </span>
+                    <span>
+                      {selectedTotalCqs > 0
+                        ? `${selectedTotalCqs} ${isBn ? 'টি প্রশ্ন' : 'Items'}`
+                        : isBn
+                        ? selectedSubjectProfile.cqHintBn
+                        : selectedSubjectProfile.cqHintEn}
+                    </span>
+                  </div>
+                )}
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                   {selectedSubject.chapters.map((chap, idx) => {
                     const chapMastery = chapterMastery[chap.id] || 0;
                     const mcqCount = chap.mcqs?.length || 0;
+                    const cqCount = chap.cqs?.length || 0;
                     const formulaCount = chap.formulas?.length || 0;
+                    const isCqTab = activeSectionMode === 'cq';
+                    const activeCount = isCqTab ? cqCount : mcqCount;
 
                     return (
                       <div
@@ -540,9 +723,25 @@ export function App() {
                             {idx + 1}. {trText(chap.name, language)}
                           </div>
                           <div style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600, marginTop: 2 }}>
-                            {mcqCount > 0 ? `${mcqCount} MCQs` : isBn ? 'প্রশ্ন যোগ হচ্ছে' : 'Coming soon'}
-                            {formulaCount > 0 ? ` • ${isBn ? 'সূত্র' : 'Formulas'}: ${formulaCount}` : ''}
-                            {mcqCount > 0 ? ` • ${trKey('mastery', language)}: ${chapMastery}%` : ''}
+                            {isCqTab ? (
+                              <>
+                                {cqCount > 0
+                                  ? `${cqCount} ${isBn ? 'টি প্রশ্ন' : 'CQs'}`
+                                  : isBn
+                                  ? 'সৃজনশীল যুক্ত হচ্ছে'
+                                  : 'CQ coming soon'}
+                                {selectedSubjectProfile.cqHintBn
+                                  ? ` • ${isBn ? selectedSubjectProfile.cqHintBn : selectedSubjectProfile.cqHintEn}`
+                                  : ''}
+                                {formulaCount > 0 ? ` • ${isBn ? 'সূত্র' : 'Formulas'}: ${formulaCount}` : ''}
+                              </>
+                            ) : (
+                              <>
+                                {mcqCount > 0 ? `${mcqCount} MCQs` : isBn ? 'প্রশ্ন যোগ হচ্ছে' : 'Coming soon'}
+                                {formulaCount > 0 ? ` • ${isBn ? 'সূত্র' : 'Formulas'}: ${formulaCount}` : ''}
+                                {mcqCount > 0 ? ` • ${trKey('mastery', language)}: ${chapMastery}%` : ''}
+                              </>
+                            )}
                           </div>
                         </div>
 
@@ -559,11 +758,23 @@ export function App() {
 
                           <button
                             type="button"
-                            className={`ev-btn ${mcqCount > 0 ? 'ev-btn-primary' : 'ev-btn-secondary'} ev-btn-sm`}
-                            disabled={mcqCount === 0}
-                            onClick={() => handleLaunchSubjectPractice(selectedSubject, idx, 'mcq')}
+                            className={`ev-btn ${activeCount > 0 ? 'ev-btn-primary' : 'ev-btn-secondary'} ev-btn-sm`}
+                            disabled={activeCount === 0}
+                            onClick={() => handleLaunchSubjectPractice(selectedSubject, idx, activeSectionMode)}
                           >
-                            {mcqCount > 0 ? `MCQ (${mcqCount})` : isBn ? 'শীঘ্রই' : 'Soon'}
+                            {isCqTab
+                              ? cqCount > 0
+                                ? isBn
+                                  ? `CQ পড়ো (${cqCount})`
+                                  : `Read CQ (${cqCount})`
+                                : isBn
+                                ? 'শীঘ্রই'
+                                : 'Soon'
+                              : mcqCount > 0
+                              ? `MCQ (${mcqCount})`
+                              : isBn
+                              ? 'শীঘ্রই'
+                              : 'Soon'}
                           </button>
                         </div>
                       </div>
@@ -759,6 +970,7 @@ export function App() {
                       const subjAttr = getSubjectThemeAttr(subj.id);
                       const iconName = getSubjectIconName(subj.id);
                       const rawTotalMcqs = subj.chapters.reduce((sum, c) => sum + (c.mcqs?.length || 0), 0);
+                      const rawTotalCqs = subj.chapters.reduce((sum, c) => sum + (c.cqs?.length || 0), 0);
                       const subjMastery = Math.min(
                         100,
                         Math.round(
@@ -768,6 +980,15 @@ export function App() {
                       );
                       const primaryTitle = language === 'en' ? subj.name.en : subj.name.bn;
                       const secondaryTitle = language === 'en' ? subj.name.bn : subj.name.en;
+
+                      let pillText = isBn ? 'শীঘ্রই' : 'Soon';
+                      if (rawTotalMcqs > 0 && rawTotalCqs > 0) {
+                        pillText = `${rawTotalMcqs} MCQ • ${rawTotalCqs} CQ`;
+                      } else if (rawTotalMcqs > 0) {
+                        pillText = `${rawTotalMcqs} MCQs`;
+                      } else if (rawTotalCqs > 0) {
+                        pillText = `${rawTotalCqs} CQs`;
+                      }
 
                       return (
                         <div
@@ -788,9 +1009,7 @@ export function App() {
                             <div className="ev-subject-icon-box" data-subj={subjAttr}>
                               <EvIcon name={iconName} size={20} />
                             </div>
-                            <span className="ev-mcq-pill">
-                              {rawTotalMcqs > 0 ? `${rawTotalMcqs} MCQs` : isBn ? 'শীঘ্রই' : 'Soon'}
-                            </span>
+                            <span className="ev-mcq-pill">{pillText}</span>
                           </div>
 
                           <div className="ev-subject-names">
