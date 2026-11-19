@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { getLevelProgress, signInOrSignUpUser, trKey, trText, useExamStore } from '../store/useExamStore';
+import { getLevelProgress, signInOrSignUpUser, useExamStore } from '../store/useExamStore';
 import { sendPasswordResetEmail, signInWithOAuthProvider } from '../lib/supabase';
-import { MCQQuestion, MistakeItem } from '../types';
+
+export { getComplexMathOrRuleExplanation, QuizRunnerModal } from './QuizRunnerModal';
 
 export const ExamVerseLogo: React.FC<{ size?: number }> = ({ size = 36 }) => (
   <svg width={size} height={size} viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ flexShrink: 0 }}>
@@ -24,6 +25,7 @@ export const EvIcon: React.FC<{ name: string; size?: number }> = ({ name, size =
     strokeLinecap: 'round' as const,
     strokeLinejoin: 'round' as const,
   };
+
   switch (name) {
     case 'home':
       return (
@@ -340,21 +342,21 @@ export const AuthModal: React.FC = () => {
       setStatusMsg(isBn ? `${provider === 'google' ? 'Google' : 'Facebook'}-এ সংযোগ হচ্ছে...` : `Connecting to ${provider}...`);
       await signInWithOAuthProvider(provider);
     } catch (err: any) {
-      setStatusMsg(err?.message || (isBn ? 'OAuth সংযোগ সম্ভব হয়নি, ইমেইল দিয়ে চেষ্টা করো।' : 'OAuth failed.'));
+      setStatusMsg(err?.message || (isBn ? 'সংযোগ সম্ভব হয়নি, ইমেইল দিয়ে চেষ্টা করো।' : 'OAuth failed.'));
     }
   };
 
   const handleForgotPassword = async () => {
     if (!email.trim()) {
-      setStatusMsg(isBn ? 'পাসওয়ার্ড রিসেট করতে আগে উপরের বক্সে তোমার ইমেইল লেখো।' : 'Enter your email address above first.');
+      setStatusMsg(isBn ? 'পাসওয়ার্ড রিসেট করতে আগে ইমেইল লেখো।' : 'Enter your email address first.');
       return;
     }
     try {
       setLoading(true);
       await sendPasswordResetEmail(email.trim());
-      setStatusMsg(isBn ? '✅ তোমার ইমেইলে পাসওয়ার্ড রিসেট লিংক পাঠানো হয়েছে!' : '✅ Password reset link sent to your email!');
+      setStatusMsg(isBn ? 'তোমার ইমেইলে পাসওয়ার্ড রিসেট লিংক পাঠানো হয়েছে।' : 'Password reset link sent to your email.');
     } catch (err: any) {
-      setStatusMsg(err?.message || (isBn ? 'পাসওয়ার্ড রিসেট ইমেইল পাঠানো যায়নি।' : 'Failed to send reset email.'));
+      setStatusMsg(err?.message || (isBn ? 'রিসেট ইমেইল পাঠানো যায়নি।' : 'Failed to send reset email.'));
     } finally {
       setLoading(false);
     }
@@ -367,7 +369,13 @@ export const AuthModal: React.FC = () => {
     setStatusMsg(null);
     try {
       const profile = await signInOrSignUpUser({ mode, name: name.trim(), email: email.trim(), password });
-      setUserProfile({ id: profile.id, name: profile.name, email: profile.email, isAuthenticated: true });
+      setUserProfile({
+        id: profile.id,
+        name: profile.name,
+        email: profile.email,
+        avatar: profile.avatar,
+        isAuthenticated: true,
+      });
       setAuthModalOpen(false);
     } catch (err: any) {
       setStatusMsg(err?.message || (isBn ? 'সঠিক ইমেইল ও পাসওয়ার্ড দাও।' : 'Authentication error'));
@@ -381,7 +389,7 @@ export const AuthModal: React.FC = () => {
       <div className="ev-modal-backdrop is-open" role="dialog" aria-modal="true" onClick={() => setAuthModalOpen(false)}>
         <div className="ev-modal-panel" style={{ maxWidth: 460 }} onClick={(e) => e.stopPropagation()}>
           <div className="ev-section-header">
-            <h3 className="ev-section-title">👤 {isBn ? 'আমার প্রোফাইল ও ক্লাউড অ্যাকাউন্ট' : 'My Profile & Cloud Account'}</h3>
+            <h3 className="ev-section-title">{isBn ? 'আমার প্রোফাইল' : 'My Profile'}</h3>
             <button type="button" className="ev-btn ev-btn-secondary ev-btn-sm" onClick={() => setAuthModalOpen(false)}>
               ✕
             </button>
@@ -392,33 +400,33 @@ export const AuthModal: React.FC = () => {
               display: 'flex',
               alignItems: 'center',
               gap: 14,
-              padding: 16,
+              padding: 14,
               borderRadius: 16,
               background: 'var(--bg-surface-muted)',
               border: '1px solid var(--border-default)',
-              marginBottom: 16,
+              marginBottom: 14,
             }}
           >
-            <div className="ev-avatar-sm" style={{ width: 56, height: 56, fontSize: 22, overflow: 'hidden', flexShrink: 0 }}>
+            <div className="ev-avatar-sm" style={{ width: 54, height: 54, fontSize: 22, overflow: 'hidden', flexShrink: 0 }}>
               {hasPhotoAvatar ? (
                 <img src={userAvatar} alt={userName} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
               ) : (
-                <EvIcon name="user" size={26} />
+                <EvIcon name="user" size={24} />
               )}
             </div>
             <div style={{ minWidth: 0, flex: 1 }}>
-              <div style={{ fontWeight: 800, fontSize: 17 }}>{userName}</div>
+              <div style={{ fontWeight: 800, fontSize: 16.5 }}>{userName}</div>
               {userEmail && <div style={{ fontSize: 12.5, color: 'var(--text-muted)', fontWeight: 600, marginBottom: 4 }}>{userEmail}</div>}
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                <span className="ev-badge-pill ev-badge-success">☁️ {isBn ? 'ক্লাউড সিঙ্ক সক্রিয়' : 'Cloud Synced'}</span>
+                <span className="ev-badge-pill ev-badge-success">{isBn ? 'সিঙ্ক সক্রিয়' : 'Synced'}</span>
                 <span className="ev-badge-pill ev-badge-indigo">
-                  🛡️ {isBn ? rank.fullTitleBn : rank.fullTitleEn} • Lv.{lvInfo.level}
+                  {isBn ? rank.fullTitleBn : rank.fullTitleEn} • Lv.{lvInfo.level}
                 </span>
               </div>
             </div>
           </div>
 
-          <div className="ev-grid-3" style={{ marginBottom: 16 }}>
+          <div className="ev-grid-3" style={{ marginBottom: 14 }}>
             <div className="ev-card" style={{ padding: 10, textAlign: 'center', background: 'var(--bg-surface-muted)' }}>
               <div style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--text-muted)' }}>XP</div>
               <div className="font-mono" style={{ fontSize: 16, fontWeight: 800, color: 'var(--brand-primary)' }}>
@@ -428,20 +436,20 @@ export const AuthModal: React.FC = () => {
             <div className="ev-card" style={{ padding: 10, textAlign: 'center', background: 'var(--bg-surface-muted)' }}>
               <div style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--text-muted)' }}>{isBn ? 'স্ট্রিক' : 'Streak'}</div>
               <div className="font-mono" style={{ fontSize: 16, fontWeight: 800, color: '#D97706' }}>
-                🔥 {streak}d
+                {streak}d
               </div>
             </div>
             <div className="ev-card" style={{ padding: 10, textAlign: 'center', background: 'var(--bg-surface-muted)' }}>
               <div style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--text-muted)' }}>{isBn ? 'বিভাগ' : 'Track'}</div>
-              <div style={{ fontSize: 12.5, fontWeight: 800 }}>
+              <div style={{ fontSize: 12, fontWeight: 800 }}>
                 {selectedClass} • {selectedGroup}
               </div>
             </div>
           </div>
 
-          <div style={{ marginBottom: 16 }}>
+          <div style={{ marginBottom: 14 }}>
             <label style={{ fontSize: 13, fontWeight: 700, display: 'block', marginBottom: 6 }}>
-              {isBn ? 'প্রোফাইল নাম পরিবর্তন করো' : 'Update Display Name'}
+              {isBn ? 'প্রোফাইল নাম' : 'Display Name'}
             </label>
             <div style={{ display: 'flex', gap: 8 }}>
               <input type="text" className="ev-input" value={editProfileName} onChange={(e) => setEditProfileName(e.target.value)} />
@@ -458,7 +466,7 @@ export const AuthModal: React.FC = () => {
           </div>
 
           <button type="button" className="ev-btn ev-btn-danger" style={{ width: '100%' }} onClick={() => logoutUser()}>
-            🚪 {isBn ? 'অ্যাকাউন্ট থেকে লগ আউট করো (Sign Out)' : 'Sign Out'}
+            {isBn ? 'লগ আউট করো' : 'Sign Out'}
           </button>
         </div>
       </div>
@@ -467,14 +475,36 @@ export const AuthModal: React.FC = () => {
 
   return (
     <div className="ev-modal-backdrop is-open" role="dialog" aria-modal="true" onClick={() => setAuthModalOpen(false)}>
-      <div className="ev-auth-card" onClick={(e) => e.stopPropagation()}>
+      <div className="ev-auth-card" style={{ position: 'relative' }} onClick={(e) => e.stopPropagation()}>
+        <button
+          type="button"
+          onClick={() => setAuthModalOpen(false)}
+          aria-label="Close"
+          style={{
+            position: 'absolute',
+            top: 12,
+            right: 12,
+            zIndex: 5,
+            width: 32,
+            height: 32,
+            borderRadius: 999,
+            background: '#F1F5F9',
+            color: '#0F172A',
+            fontWeight: 800,
+            border: '1px solid #E2E8F0',
+            cursor: 'pointer',
+          }}
+        >
+          ✕
+        </button>
+
         <div className="ev-auth-form-side">
-          <div style={{ textAlign: 'center', marginBottom: 18 }}>
-            <h2 style={{ fontSize: 25, fontWeight: 800, color: '#111827' }}>
-              {mode === 'signin' ? (isBn ? 'সাইন ইন করো' : 'Sign In') : isBn ? 'নতুন অ্যাকাউন্ট' : 'Create Account'}
+          <div style={{ textAlign: 'center', marginBottom: 16 }}>
+            <h2 style={{ fontSize: 24, fontWeight: 800, color: '#111827' }}>
+              {mode === 'signin' ? (isBn ? 'সাইন ইন' : 'Sign In') : isBn ? 'নতুন অ্যাকাউন্ট' : 'Create Account'}
             </h2>
             <p style={{ fontSize: 13, fontWeight: 600, color: '#6B7280', marginTop: 4 }}>
-              {isBn ? 'তোমার অগ্রগতি ক্লাউডে সুরক্ষিত রাখো' : 'Sync your progress securely to the cloud'}
+              {isBn ? 'অগ্রগতি ক্লাউডে সংরক্ষণ করো' : 'Sync your study progress'}
             </p>
           </div>
 
@@ -505,6 +535,7 @@ export const AuthModal: React.FC = () => {
               </svg>
               <span>Google</span>
             </button>
+
             <button
               type="button"
               onClick={() => handleOAuth('facebook')}
@@ -531,16 +562,15 @@ export const AuthModal: React.FC = () => {
           </div>
 
           <div style={{ textAlign: 'center', fontSize: 11.5, fontWeight: 700, color: '#9CA3AF', marginBottom: 12 }}>
-            — {isBn ? 'অথবা ইমেইল ব্যবহার করো' : 'OR USE EMAIL'} —
+            — {isBn ? 'অথবা ইমেইল' : 'OR EMAIL'} —
           </div>
 
           <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {mode === 'signup' && (
               <div className="ev-auth-pill-input">
-                <span>👤</span>
                 <input
                   type="text"
-                  placeholder={isBn ? 'তোমার পূর্ণ নাম (Full Name)' : 'Full Name'}
+                  placeholder={isBn ? 'পূর্ণ নাম' : 'Full Name'}
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   required
@@ -548,20 +578,18 @@ export const AuthModal: React.FC = () => {
               </div>
             )}
             <div className="ev-auth-pill-input">
-              <span>✉️</span>
               <input
                 type="email"
-                placeholder={isBn ? 'ইমেইল অ্যাড্রেস (E-mail)' : 'E-mail'}
+                placeholder={isBn ? 'ইমেইল অ্যাড্রেস' : 'Email'}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
               />
             </div>
             <div className="ev-auth-pill-input">
-              <span>🔒</span>
               <input
                 type={showPass ? 'text' : 'password'}
-                placeholder={isBn ? 'পাসওয়ার্ড (Password)' : 'Password'}
+                placeholder={isBn ? 'পাসওয়ার্ড' : 'Password'}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
@@ -569,9 +597,9 @@ export const AuthModal: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setShowPass(!showPass)}
-                style={{ fontSize: 13, color: '#6D28D9', background: 'none', border: 'none', cursor: 'pointer' }}
+                style={{ fontSize: 12, fontWeight: 700, color: '#6D28D9', background: 'none', border: 'none', cursor: 'pointer' }}
               >
-                {showPass ? '🙈' : '👁️'}
+                {showPass ? (isBn ? 'লুকাও' : 'Hide') : isBn ? 'দেখো' : 'Show'}
               </button>
             </div>
 
@@ -618,7 +646,7 @@ export const AuthModal: React.FC = () => {
                 cursor: 'pointer',
               }}
             >
-              {loading ? '...' : mode === 'signin' ? (isBn ? 'সাইন ইন করো' : 'SIGN IN') : isBn ? 'অ্যাকাউন্ট খোলো' : 'CREATE ACCOUNT'}
+              {loading ? '...' : mode === 'signin' ? (isBn ? 'সাইন ইন' : 'Sign In') : isBn ? 'অ্যাকাউন্ট খোলো' : 'Create Account'}
             </button>
           </form>
 
@@ -634,12 +662,12 @@ export const AuthModal: React.FC = () => {
                   }}
                   style={{ color: '#5B21B6', fontWeight: 800, textDecoration: 'underline', background: 'none', border: 'none', cursor: 'pointer' }}
                 >
-                  {isBn ? 'নতুন তৈরি করো' : 'Create'}
+                  {isBn ? 'তৈরি করো' : 'Create'}
                 </button>
               </>
             ) : (
               <>
-                {isBn ? 'ইতিমধ্যে অ্যাকাউন্ট আছে? ' : 'Already have an account? '}
+                {isBn ? 'অ্যাকাউন্ট আছে? ' : 'Already have an account? '}
                 <button
                   type="button"
                   onClick={() => {
@@ -648,7 +676,7 @@ export const AuthModal: React.FC = () => {
                   }}
                   style={{ color: '#5B21B6', fontWeight: 800, textDecoration: 'underline', background: 'none', border: 'none', cursor: 'pointer' }}
                 >
-                  {isBn ? 'সাইন ইন করো' : 'Sign In'}
+                  {isBn ? 'সাইন ইন' : 'Sign In'}
                 </button>
               </>
             )}
@@ -656,31 +684,12 @@ export const AuthModal: React.FC = () => {
         </div>
 
         <div className="ev-auth-cloud-side">
-          <button
-            type="button"
-            onClick={() => setAuthModalOpen(false)}
-            style={{
-              position: 'absolute',
-              top: 14,
-              right: 14,
-              width: 34,
-              height: 34,
-              borderRadius: 999,
-              background: 'rgba(255,255,255,0.18)',
-              color: '#FFFFFF',
-              fontWeight: 800,
-              border: 'none',
-              cursor: 'pointer',
-            }}
-          >
-            ✕
-          </button>
           <ExamVerseLogo size={54} />
           <h3 style={{ fontSize: 22, fontWeight: 800, marginTop: 12 }}>ExamVerse</h3>
           <p style={{ fontSize: 13, lineHeight: 1.6, color: 'rgba(255,255,255,0.88)', marginTop: 6 }}>
             {isBn
-              ? 'অধ্যায়ভিত্তিক অনুশীলন, গাণিতিক সূত্রের খাতা, ১v১ কুইজ ব্যাটল ও রিয়েল-টাইম লিডারবোর্ডে নিজের অবস্থান এগিয়ে নাও।'
-              : 'Practice chapter-wise MCQs, master formulas, and compete on the live leaderboard.'}
+              ? 'অধ্যায়ভিত্তিক অনুশীলন, সূত্রের খাতা ও ১v১ কুইজ ব্যাটলে নিজের প্রস্তুতি এগিয়ে নাও।'
+              : 'Practice chapter-wise MCQs, formulas, and 1v1 quiz battles.'}
           </p>
         </div>
       </div>
@@ -726,7 +735,7 @@ export const SettingsModal: React.FC = () => {
     <div className="ev-modal-backdrop is-open" role="dialog" aria-modal="true" onClick={() => setSettingsModalOpen(false)}>
       <div className="ev-modal-panel" style={{ maxWidth: 460 }} onClick={(e) => e.stopPropagation()}>
         <div className="ev-section-header">
-          <h3 className="ev-section-title">⚙️ {isBn ? 'সেটিংস ও ভাষা' : 'Settings & Language'}</h3>
+          <h3 className="ev-section-title">{isBn ? 'সেটিংস' : 'Settings'}</h3>
           <button className="ev-btn ev-btn-secondary ev-btn-sm" onClick={() => setSettingsModalOpen(false)}>
             ✕
           </button>
@@ -735,7 +744,7 @@ export const SettingsModal: React.FC = () => {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div>
             <label style={{ fontSize: 13, fontWeight: 700, display: 'block', marginBottom: 6 }}>
-              {isBn ? 'তোমার নাম (Display Name)' : 'Display Name'}
+              {isBn ? 'প্রোফাইল নাম' : 'Display Name'}
             </label>
             <div style={{ display: 'flex', gap: 8 }}>
               <input type="text" className="ev-input" value={tempName} onChange={(e) => setTempName(e.target.value)} />
@@ -753,7 +762,7 @@ export const SettingsModal: React.FC = () => {
 
           <div>
             <label style={{ fontSize: 13, fontWeight: 700, display: 'block', marginBottom: 6 }}>
-              {isBn ? 'ভাষা নির্বাচন (Language)' : 'Language'}
+              {isBn ? 'ভাষা' : 'Language'}
             </label>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
               {(['bn', 'en', 'bilingual'] as const).map((lng) => (
@@ -778,9 +787,9 @@ export const SettingsModal: React.FC = () => {
               background: 'var(--bg-surface-muted)',
             }}
           >
-            <span style={{ fontWeight: 700, fontSize: 13.5 }}>{isBn ? 'ডার্ক থিম (Dark Mode)' : 'Dark Theme'}</span>
+            <span style={{ fontWeight: 700, fontSize: 13.5 }}>{isBn ? 'থিম মোড' : 'Theme Mode'}</span>
             <button className="ev-btn ev-btn-secondary ev-btn-sm" onClick={toggleDarkMode}>
-              {darkMode ? '☀️ Light' : '🌙 Dark'}
+              {darkMode ? (isBn ? 'লাইট' : 'Light') : isBn ? 'ডার্ক' : 'Dark'}
             </button>
           </div>
 
@@ -795,9 +804,7 @@ export const SettingsModal: React.FC = () => {
                 background: 'var(--bg-surface-muted)',
               }}
             >
-              <span style={{ fontWeight: 700, fontSize: 13.5 }}>
-                {isBn ? 'ক্লাউড অ্যাকাউন্ট থেকে লগ আউট' : 'Sign Out of Cloud Account'}
-              </span>
+              <span style={{ fontWeight: 700, fontSize: 13.5 }}>{isBn ? 'অ্যাকাউন্ট লগ আউট' : 'Sign Out'}</span>
               <button
                 className="ev-btn ev-btn-secondary ev-btn-sm"
                 onClick={() => {
@@ -805,7 +812,7 @@ export const SettingsModal: React.FC = () => {
                   setSettingsModalOpen(false);
                 }}
               >
-                🚪 {isBn ? 'লগ আউট' : 'Sign Out'}
+                {isBn ? 'লগ আউট' : 'Sign Out'}
               </button>
             </div>
           )}
@@ -822,7 +829,7 @@ export const SettingsModal: React.FC = () => {
             }}
           >
             <span style={{ fontWeight: 700, fontSize: 13, color: 'var(--status-danger-text)' }}>
-              {isBn ? 'সব পুরনো ডেমো বা লোকাল রেকর্ড মুছো' : 'Reset Local Progress'}
+              {isBn ? 'লোকাল প্রগ্রেস রিসেট করো' : 'Reset Local Progress'}
             </span>
             <button
               className="ev-btn ev-btn-danger ev-btn-sm"
@@ -833,777 +840,6 @@ export const SettingsModal: React.FC = () => {
             >
               {isBn ? 'রিসেট' : 'Reset'}
             </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const EXACT_MATH_EXPLANATIONS: Record<string, string> = {
-  'ACC1-034': 'স্থায়ী সম্পদ ক্রয়ে ভ্যাট ও সংস্থাপন/বহন খরচ সম্পদের ক্রয়মূল্যের সাথে যুক্ত হয়: ৬৯,০০০ + ১,০০০ = ৭০,০০০ টাকা।',
-  'ACC1-080': 'নগদান বই অনুযায়ী জের = ব্যাংক বিবরণীর জের ১৫,০০০ - অনুপস্থাপিত চেক ৩,০০০ = ১২,০০০ টাকা।',
-  'ACC1-081': 'ব্যাংক বিবরণীর জের = ২০,০০০ + সরাসরি জমা ৫,০০০ - প্রত্যাখ্যাত চেক ৪,০০০ - ব্যাংক চার্জ ২০০ = ২০,৮০০ টাকা।',
-  'ACC1-083': 'আদায় ১০,০০০ টাকা ক্রেডিট না করে ভুলবশত ডেবিট করায় দ্বিগুণ অর্থাৎ ১০,০০০ × ২ = ২০,০০০ টাকা ক্রেডিট করতে হবে।',
-  'ACC1-084': '২৬০ টাকা ক্রেডিটের পরিবর্তে ভুলক্রমে ৬২০ টাকা ডেবিট করায় মোট গরমিল = ২৬০ + ৬২০ = ৮৮০ টাকা।',
-  'ACC1-098': 'সমন্বিত ক্রয় = প্রারম্ভিক মজুদ ২৫,০০০ + নিট ক্রয় ১,৫০,০০০ - সমাপনী মজুদ ৩০,০০০ = ১,৪৫,০০০ টাকা।',
-  'ACC1-101': 'রেওয়ামিলে সমন্বিত ক্রয় থাকলে প্রারম্ভিক মজুদ পণ্য রেওয়ামিলে অন্তর্ভুক্ত হয় না, বরং সমাপনী মজুদ অন্তর্ভুক্ত হয়।',
-  'ACC1-102': 'ক্রয় = সমন্বিত ক্রয় ১,৫০,০০০ + সমাপনী মজুদ ২০,০০০ - প্রারম্ভিক মজুদ ৩০,০০০ = ১,৪০,০০০ টাকা।',
-  'ACC1-107': 'ডেবিট দিকে (ক্রয়) ৫,০০০ টাকা কম এবং ক্রেডিট দিকেও (বিক্রয়) ৫,০০০ টাকা কম লেখায় একটি ভুল অপর ভুলকে পূরণ করেছে (পরিপূরক ভুল)।',
-  'ACC1-108': 'উভয় দিকেই ৫,০০০ টাকা করে কম লেখায় রেওয়ামিলের যোগফলে ৫,০০০ টাকা কম হয়েছে।',
-  'ACC1-115': 'ক্রয় (ডেবিট) ও বিক্রয় (ক্রেডিট) উভয় দিকেই সমপরিমাণ ৫,০০০ টাকা কম লেখায় এটি পরিপূরক ভুল।',
-  'ACC1-116': 'যন্ত্রপাতি (স্থায়ী সম্পদ) ক্রয়কে মুনাফাজাতীয় ক্রয় হিসাবে ডেবিট করায় স্থায়ী সম্পদ ১০,০০০ টাকা হ্রাস পাবে (নীতিগত ভুল)।',
-  'ACC1-120': 'মুনাফাজাতীয় ব্যয়কে (যন্ত্রপাতি মেরামত) মূলধনজাতীয় সম্পদ (যন্ত্রপাতি) হিসাবে দেখানো নীতিগত ভুল।',
-  'ACC1-143': 'রক্ষণশীলতার নীতি অনুযায়ী সমাপনী মজুদ পণ্যের ক্রয়মূল্য ও বাজারমূল্যের মধ্যে যেটি কম (১৫,৫০,০০০ টাকা) সেটিই হিসাবভুক্ত হয়।',
-  'ACC1-160': 'নতুন অনাদায়ী পাওনা সঞ্চিতি = পুরাতন সঞ্চিতি ৪,০০০ + বৃদ্ধি ২,০০০ = ৬,০০০ টাকা।',
-  'ACC1-161': 'অনাদায়ী পাওনা খরচ = অনাদায়ী পাওনা ৫,০০০ + নতুন সঞ্চিতি ৬,০০০ - পুরাতন সঞ্চিতি ৪,০০০ = ৭,০০০ টাকা।',
-  'ACC1-164': 'সমাপনী প্রাপ্য হিসাব = ৫০,০০০ + ৯০,০০০ - ৬০,০০০ = ৮০,০০০ টাকা। ১০% সঞ্চিতি = ৮০,০০০ × ১০% = ৮,০০০ টাকা।',
-  'ACC1-165': 'নিট প্রাপ্য হিসাব = সমাপনী প্রাপ্য হিসাব ৮০,০০০ - ১০% সঞ্চিতি ৮,০০০ = ৭২,০০০ টাকা।',
-  'ACC1-166': 'পুরাতন সঞ্চিতি ৪,০০০ এর স্থলে ৭,০০০ টাকা হলে সঞ্চিতি ৩,০০০ টাকা বাড়বে, ফলে নিট সম্পদ ও দায়/মালিকানাস্বত্ব ৩,০০০ টাকা হ্রাস পাবে।',
-  'ACC1-173': 'মার্চ মাসের অবশিষ্ট ৩০ দিন + এপ্রিল ৩০ দিন = ৬০ দিন (৩০ এপ্রিল) + ৩ দিন অনুগ্রহ দিবস = ০৩ মে ২০১৬।',
-  'ACC1-174': 'নতুন সঞ্চিতি = (প্রাপ্য হিসাব ৫০,০০০ - অনাদায়ী পাওনা ২,০০০) × ৫% = ৪৮,০০০ × ৫% = ২,৪০০ টাকা।',
-  'ACC1-176': 'নতুন অনাদায়ী পাওনা সঞ্চিতি = পুরাতন সঞ্চিতি ৮,০০০ + বৃদ্ধি ৫,০০০ = ১৩,০০০ টাকা।',
-  'ACC1-178': 'নিট বিক্রয় = ১০,০০,০০০ - ২০,০০০ = ৯,৮০,০০০; ধারে বিক্রয় = ১০,০০,০০০ × ৮০% - ২০,০০০ = ৭,৮০,০০০; ২% সঞ্চিতি = ৭,৮০,০০০ × ২% = ১৫,৬০০ টাকা।',
-  'ACC1-195': 'ব্যবহৃত সাপ্লাইজ খরচ = প্রারম্ভিক সাপ্লাইজ ১,০০০ - সমাপনী সাপ্লাইজ ৬০০ = ৪০০ টাকা (সাপ্লাইজ খরচ ডেবিট ৪০০; সাপ্লাইজ ক্রেডিট ৪০০)।',
-  'ACC1-202': 'ব্যবহৃত সাপ্লাইজ খরচ = ১,৩৫০ - ৮০০ = ৫৫০ টাকা (সাপ্লাইজ খরচ ডেবিট ৫৫০; সাপ্লাইজ ক্রেডিট ৫৫০)।',
-  'ACC1-210': 'মাসিক বেতন = ৪০,০০০ ÷ ১০ = ৪,০০০ টাকা। ১ বছরে (১২ মাসে) বকেয়া ২ মাসের বেতন = ৪,০০০ × ২ = ৮,০০০ টাকা।',
-  'ACC1-212': 'অবশিষ্ট অনুপার্জিত সেবা আয় = ৫০,০০০ × (১ - ২/৫) = ৫০,০০০ × ৩/৫ = ৩০,০০০ টাকা।',
-  'ACC1-221': 'মেশিন হিসাবে ডেবিট = ক্রয়মূল্য ২০,০০০ + পরিবহন ৫০০ + সংস্থাপন ২,০০০ = ২২,৫০০ টাকা।',
-  'ACC1-222': 'যন্ত্রপাতি হিসাবে ডেবিট = ৩০,০০০ + ৩,০০০ + ৭,০০০ = ৪০,০০০ টাকা।',
-  'ACC1-223': 'যন্ত্রটির ক্রয়মূল্য = পুস্তক মূল্য ২৫,০০০ + পুঞ্জীভূত অবচয় ১৫,০০০ = ৪০,০০০ টাকা।',
-  'ACC1-224': 'বিক্রয়জনিত লাভ = বিক্রয়মূল্য ৩০,০০০ - পুস্তক মূল্য ২৫,০০০ = ৫,০০০ টাকা লাভ।',
-  'ACC1-234': 'বার্ষিক অবচয় = (মোট ব্যয় ১,০০,০০০ - ভগ্নাবশেষ ২০,০০০) ÷ ১০ বছর = ৮,০০০ টাকা।',
-  'ACC1-235': 'অবচয়ের হার = (১০০% ÷ ১০) × ২ = ২০%। ২০২৩ সালের ৬ মাসের অবচয় = ১,০০,০০০ × ২০% × (৬/১২) = ১০,০০০ টাকা।',
-  'ACC1-252': 'নিট বিক্রয় = ৩,৯০,০০০; মোট লাভ = ৩,৯০,০০০ × ৪০% = ১,৫৬,০০০; নিট লাভ = ১,৫৬,০০০ × ৩০% = ৪৬,৮০০; পরোক্ষ খরচ = ১,৫৬,০০০ - ৪৬,৮০০ = ১,০৯,২০০ টাকা।',
-  'ACC1-253': 'বিক্রীত পণ্যের ব্যয় = ২২,০০০ + ১,৩৫,০০০ + ১০,০০০ - ৩৬,০০০ = ১,৩১,০০০; মোট লাভ = ৩,৭৫,০০০ - ১,৩১,০০০ = ২,৪৪,০০০ টাকা।',
-  'ACC1-254': 'বিক্রীত পণ্যের ব্যয় = ২৫,০০০ + ১,০০,০০০ + ৪,০০০ - ২০,০০০ = ১,০৯,০০০ টাকা।',
-  'ACC1-257': 'নিট ভ্যাটসহ ক্রয় = ৭১,০০০ - ২,০০০ = ৬৯,০০০ টাকা। ক্রয় ভ্যাট = ৬৯,০০০ × ১৫ ÷ ১১৫ = ৯,০০০ টাকা।',
-  'ACC1-258': 'ক্রয়মূল্যের ওপর ২৫% (১/৪ অংশ) হলে বিক্রয়মূল্যের ওপর লাভের হার = ১ ÷ (৪ + ১) = ১/৫ বা ২০%।',
-  'ACC1-260': 'বিক্রয়মূল্যের ওপর ২০% (১/৫ অংশ) হলে ক্রয়মূল্যের ওপর মুনাফার হার = ১ ÷ (৫ - ১) = ১/৪ বা ২৫%।',
-  'ACC1-261': 'বিক্রয় = বিক্রীত পণ্যের ব্যয় ৩,০০,০০০ + মোট লাভ ২,০০,০০০ = ৫,০০,০০০ টাকা।',
-  'ACC1-262': 'সমাপনী মজুদ = প্রারম্ভিক মজুদ ৩০,০০০ + ক্রয় ৪,০০,০০০ - বিক্রীত পণ্যের ব্যয় ৩,৩০,০০০ = ১,০০,০০০ টাকা।',
-  'ACC1-263': 'কমিশন = ৪৪,০০০ × ১০ ÷ ১১০ = ৪,০০০ টাকা।',
-  'ACC1-264': 'সমন্বিত ক্রয় = প্রারম্ভিক মজুদ ৬০,০০০ + নিট ক্রয় ১,৫০,০০০ - সমাপনী মজুদ ৩০,০০০ = ১,৮০,০০০ টাকা।',
-  'ACC1-265': 'সমাপনী মজুদ ক্রয়মূল্য ৩০,০০০ এর স্থলে বাজারমূল্য ২০,০০০ টাকা ধরা হলে সমাপনী মজুদ ও মোট লাভ উভয়ই ১০,০০০ টাকা হ্রাস পায়।',
-  'ACC1-268': 'প্রারম্ভিক মূলধন = ৩০,০০০ ÷ ০.৭৫ = ৪০,০০০ টাকা। ৫% হারে সুদ = ৪০,০০০ × ৫% = ২,০০০ টাকা।',
-  'ACC1-269': 'সমাপনী মূলধন = প্রারম্ভিক মূলধন ১,৭০,০০০ + নিট লাভ ৫০,০০০ - উত্তোলন ২০,০০০ = ২,০০,০০০ টাকা।',
-  'ACC1-277': 'নিট মুনাফা ২০,০০০ টাকা বৃদ্ধি পেলে মালিকানাস্বত্ব ও মোট সম্পদ ২০,০০০ টাকা বৃদ্ধি পাবে।',
-  'ACC1-290': 'প্রতি মাসে ১,০০০ টাকা নগদ উত্তোলনের সুদ = ১,০০০ × ১০% × ৬ = ৬০০ টাকা।',
-  'ACC1-291': 'প্রতি মাসের শুরুতে উত্তোলনের সুদ = মাসিক উত্তোলন ১,০০০ × সুদের হার ৫% × ৬.৫ = ৩২৫ টাকা।',
-  'ACC1-292': 'মোট সম্পদ = ৯১,৫০০; মোট বহির্দায় = ৪০,০০০; সমাপনী মূলধন = ৫০,০০০ টাকা।',
-  'ACC1-293': 'নিট লাভ = সমাপনী মূলধন ৭৫,০০০ - প্রারম্ভিক মূলধন ৫০,০০০ = ২৫,০০০ টাকা।',
-  'ACC1-296': 'অতিরিক্ত মূলধন = বকেয়া বেতন পরিশোধ ১০,০০০ + ব্যক্তিগত কম্পিউটার প্রদান ২০,০০০ = ৩০,০০০ টাকা।',
-  'ACC1-297': 'মোট উত্তোলন = নগদ উত্তোলন (৫০০ × ৩ = ১,৫০০) + পণ্য উত্তোলন ২,০০০ = ৩,৫০০ টাকা।',
-};
-
-function getCleanBoardBadge(boardTag?: string): string | null {
-  if (!boardTag) return null;
-  const t = boardTag.trim();
-  if (!t) return null;
-  if (
-    t === 'NCTB ও বোর্ড প্রশ্ন' ||
-    t === 'বো. প্রশ্ন' ||
-    t.startsWith('HSC বাংলা ১ম পত্র') ||
-    t.startsWith('HSC ফিন্যান্স') ||
-    t.includes('Batch')
-  ) {
-    return null;
-  }
-  return t;
-}
-
-/**
- * Returns any genuine explanation (including all 2,000 Bangla 1st Paper explanations, ICT, Finance, etc.)
- * while filtering out repetitive dummy placeholders like "NCTB হিসাববিজ্ঞান ১ম পত্র বোর্ড স্ট্যান্ডার্ড সমাধান।".
- */
-export function getComplexMathOrRuleExplanation(
-  q: MCQQuestion,
-  lang: 'bn' | 'en' | 'bilingual' = 'bn'
-): string {
-  if (!q) return '';
-  if (EXACT_MATH_EXPLANATIONS[q.id]) {
-    return EXACT_MATH_EXPLANATIONS[q.id];
-  }
-  const rawExp = trText(q.explanation, lang).trim();
-  if (
-    !rawExp ||
-    rawExp.includes('বোর্ড স্ট্যান্ডার্ড সমাধান') ||
-    rawExp.includes('Board standard solution')
-  ) {
-    return '';
-  }
-  return rawExp;
-}
-
-export const QuizRunnerModal: React.FC = () => {
-  const { activeQuiz, closeQuiz, recordExamResult, submitQuestionReport, userName, language } = useExamStore();
-
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [answers, setAnswers] = useState<Record<number, number>>({});
-  const [flagged, setFlagged] = useState<Record<number, boolean>>({});
-  const [timeLeft, setTimeLeft] = useState(600);
-  const [submitted, setSubmitted] = useState(false);
-  const [instantFeedback, setInstantFeedback] = useState(true);
-  const [openCqSolution, setOpenCqSolution] = useState<Record<string, boolean>>({});
-  const [paletteOpenMobile, setPaletteOpenMobile] = useState(false);
-
-  const [reportOpen, setReportOpen] = useState(false);
-  const [reportIssueType, setReportIssueType] = useState('উত্তর ভুল আছে (Wrong Answer Key)');
-  const [reportComment, setReportComment] = useState('');
-  const [reportSentMsg, setReportSentMsg] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (activeQuiz) {
-      setCurrentIndex(0);
-      setAnswers({});
-      setFlagged({});
-      setTimeLeft(activeQuiz.durationSec || 600);
-      setSubmitted(false);
-      setInstantFeedback(activeQuiz.mode === 'practice');
-      setReportOpen(false);
-      setReportSentMsg(null);
-      setPaletteOpenMobile(false);
-    }
-  }, [activeQuiz]);
-
-  useEffect(() => {
-    if (!activeQuiz || submitted || activeQuiz.examType === 'cq') return;
-    const timer = setInterval(() => {
-      setTimeLeft((prev) => (prev <= 1 ? 0 : prev - 1));
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [activeQuiz, submitted]);
-
-  const handleSubmitExam = () => {
-    if (!activeQuiz || submitted) return;
-    setSubmitted(true);
-    const questions = activeQuiz.questions || [];
-    let correctCount = 0;
-    let wrongCount = 0;
-    const newMistakes: MistakeItem[] = [];
-
-    questions.forEach((q, idx) => {
-      const chosen = answers[idx];
-      if (chosen === q.ans) {
-        correctCount++;
-      } else if (chosen !== undefined) {
-        wrongCount++;
-        newMistakes.push({
-          id: `mistake-${Date.now()}-${idx}`,
-          questionId: q.id,
-          subjectId: activeQuiz.subjectId,
-          subjectName: trText(activeQuiz.subjectName, language),
-          chapterName: trText(activeQuiz.chapterName, language),
-          question: q.q,
-          options: q.options,
-          correctIndex: q.ans,
-          selectedIndex: chosen,
-          explanation: q.explanation,
-          wrongCount: 1,
-          lastMissedAt: new Date().toISOString().slice(0, 10),
-          mastered: false,
-        });
-      }
-    });
-
-    const total = Math.max(1, questions.length);
-    const negRate = activeQuiz.negativeMarking || 0;
-    const negativePenalty = Math.round(wrongCount * negRate * 100) / 100;
-    const netScore = Math.max(0, Math.round((correctCount - negativePenalty) * 100) / 100);
-
-    // True accuracy across the entire quiz (not just 1 attempted question)
-    const accuracy = Math.min(100, Math.max(0, Math.round((netScore / total) * 100)));
-    const xpEarned = Math.max(0, Math.round(netScore * 10 + (accuracy >= 80 && total >= 5 ? 25 : 0)));
-
-    recordExamResult(
-      {
-        subjectId: activeQuiz.subjectId,
-        subjectName: trText(activeQuiz.subjectName, language),
-        chapterId: activeQuiz.chapterId,
-        chapterName: trText(activeQuiz.chapterName, language),
-        mode: activeQuiz.mode === 'daily' ? 'daily' : activeQuiz.mode === 'timed' ? 'timed' : 'mcq',
-        score: netScore,
-        rawCorrect: correctCount,
-        wrongCount,
-        negativePenalty,
-        total,
-        accuracy,
-        timeSpentSec: Math.max(5, activeQuiz.durationSec - timeLeft),
-        xpEarned,
-      },
-      newMistakes
-    );
-  };
-
-  useEffect(() => {
-    if (activeQuiz && activeQuiz.examType !== 'cq' && !submitted && timeLeft === 0) {
-      handleSubmitExam();
-    }
-  }, [timeLeft, activeQuiz, submitted]);
-
-  if (!activeQuiz) return null;
-
-  const isBn = language !== 'en';
-  const questions = activeQuiz.questions || [];
-  const currentQ = questions[currentIndex];
-  const negRate = activeQuiz.negativeMarking || 0;
-
-  const formatTimer = (sec: number) => {
-    const m = Math.floor(sec / 60);
-    const s = sec % 60;
-    return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-  };
-
-  const handleSendReport = () => {
-    if (!currentQ) return;
-    const opts = currentQ.options.bn?.length ? currentQ.options.bn : currentQ.options.en;
-    submitQuestionReport({
-      questionId: currentQ.id,
-      subjectId: activeQuiz.subjectId,
-      subjectName: trText(activeQuiz.subjectName, 'bn'),
-      chapterId: activeQuiz.chapterId,
-      chapterName: trText(activeQuiz.chapterName, 'bn'),
-      questionText: trText(currentQ.q, 'bn'),
-      options: opts,
-      currentAns: currentQ.ans,
-      issueType: reportIssueType,
-      comment: reportComment.trim() || reportIssueType,
-      reportedBy: userName,
-    });
-    setReportComment('');
-    setReportSentMsg(isBn ? '✅ রিপোর্ট অ্যাডমিন প্যানেলে পাঠানো হয়েছে!' : '✅ Report sent to Admin!');
-    setTimeout(() => {
-      setReportOpen(false);
-      setReportSentMsg(null);
-    }, 1100);
-  };
-
-  if (activeQuiz.examType === 'cq') {
-    return (
-      <div className="ev-modal-backdrop is-open" role="dialog" aria-modal="true">
-        <div className="ev-card" style={{ width: '100%', maxWidth: 860, maxHeight: '90vh', overflowY: 'auto' }}>
-          <div className="ev-section-header">
-            <h3 className="ev-section-title">
-              📝 {trText(activeQuiz.subjectName, language)} — {trText(activeQuiz.chapterName, language)}
-            </h3>
-            <button className="ev-btn ev-btn-secondary ev-btn-sm" onClick={closeQuiz}>
-              ✕ {isBn ? 'বন্ধ করো' : 'Close'}
-            </button>
-          </div>
-          {activeQuiz.cqs.length === 0 ? (
-            <p style={{ color: 'var(--text-secondary)', fontSize: 14 }}>
-              {isBn ? 'এই অধ্যায়ে এখনো কোনো সৃজনশীল প্রশ্ন যুক্ত করা হয়নি।' : 'No Creative Questions added yet.'}
-            </p>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              {activeQuiz.cqs.map((cq, idx) => (
-                <div key={cq.id} className="ev-card" style={{ background: 'var(--bg-surface-muted)' }}>
-                  <div style={{ fontWeight: 800, color: 'var(--brand-primary)', marginBottom: 6 }}>
-                    {isBn ? `উদ্দীপক #${idx + 1}` : `Stem #${idx + 1}`}
-                  </div>
-                  <p style={{ marginBottom: 12, fontWeight: 600 }}>{trText(cq.stem, language)}</p>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 14 }}>
-                    <div>
-                      <strong>ক:</strong> {trText(cq.a, language)}
-                    </div>
-                    <div>
-                      <strong>খ:</strong> {trText(cq.b, language)}
-                    </div>
-                    <div>
-                      <strong>গ:</strong> {trText(cq.c, language)}
-                    </div>
-                    <div>
-                      <strong>ঘ:</strong> {trText(cq.d, language)}
-                    </div>
-                  </div>
-                  <button
-                    className="ev-btn ev-btn-secondary ev-btn-sm"
-                    style={{ marginTop: 10 }}
-                    onClick={() => setOpenCqSolution((p) => ({ ...p, [cq.id]: !p[cq.id] }))}
-                  >
-                    {openCqSolution[cq.id] ? (isBn ? 'উত্তর লুকাও' : 'Hide Answer') : isBn ? 'নমুনা উত্তর দেখো' : 'Model Answer'}
-                  </button>
-                  {openCqSolution[cq.id] && (
-                    <div className="ev-explanation-box">
-                      <div>
-                        <strong>ক:</strong> {trText(cq.ansA, language)}
-                      </div>
-                      <div>
-                        <strong>খ:</strong> {trText(cq.ansB, language)}
-                      </div>
-                      <div>
-                        <strong>গ:</strong> {trText(cq.ansC, language)}
-                      </div>
-                      <div>
-                        <strong>ঘ:</strong> {trText(cq.ansD, language)}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  }
-
-  if (questions.length === 0) {
-    return (
-      <div className="ev-modal-backdrop is-open" role="dialog" aria-modal="true" onClick={closeQuiz}>
-        <div className="ev-modal-panel" style={{ maxWidth: 440, textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
-          <h3 style={{ fontSize: 18, fontWeight: 800, marginBottom: 8 }}>
-            {trText(activeQuiz.subjectName, language)} • {trText(activeQuiz.chapterName, language)}
-          </h3>
-          <p style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 16 }}>
-            {isBn
-              ? 'এই অধ্যায়ে এখনো কোনো MCQ প্রশ্ন আপলোড করা হয়নি। খুব শীঘ্রই প্রশ্ন যুক্ত করা হবে!'
-              : 'No MCQ questions have been uploaded for this chapter yet.'}
-          </p>
-          <button className="ev-btn ev-btn-primary" onClick={closeQuiz}>
-            {isBn ? 'বন্ধ করো' : 'Close'}
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  const answeredCount = Object.keys(answers).length;
-  const correctSoFar = Object.entries(answers).filter(
-    ([idxStr, ansIdx]) => questions[Number(idxStr)]?.ans === ansIdx
-  ).length;
-  const wrongSoFar = answeredCount - correctSoFar;
-  const netPenaltySoFar = Math.round(wrongSoFar * negRate * 100) / 100;
-  const netScoreSoFar = Math.max(0, Math.round((correctSoFar - netPenaltySoFar) * 100) / 100);
-  const overallAccuracyPct = Math.min(100, Math.max(0, Math.round((netScoreSoFar / Math.max(1, questions.length)) * 100)));
-
-  const optionLabels = isBn ? ['ক', 'খ', 'গ', 'ঘ'] : ['A', 'B', 'C', 'D'];
-  const optionsArray =
-    language === 'en' ? currentQ?.options.en || currentQ?.options.bn || [] : currentQ?.options.bn || currentQ?.options.en || [];
-  const hasAnsweredCurrent = answers[currentIndex] !== undefined;
-  const showAnswerState = submitted || (instantFeedback && hasAnsweredCurrent);
-  const cleanBoardBadge = currentQ ? getCleanBoardBadge(currentQ.boardTag || currentQ.board) : null;
-  const explanationText = currentQ && showAnswerState ? getComplexMathOrRuleExplanation(currentQ, language) : '';
-
-  return (
-    <div
-      className="ev-modal-backdrop is-open"
-      role="dialog"
-      aria-modal="true"
-      style={{ alignItems: 'flex-start', padding: '10px', overflowY: 'auto' }}
-    >
-      <div style={{ width: '100%', maxWidth: 1060, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 10, paddingBottom: 28 }}>
-        <div
-          className="ev-card"
-          style={{
-            position: 'sticky',
-            top: 0,
-            zIndex: 30,
-            padding: '10px 14px',
-            marginBottom: 0,
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 8,
-            boxShadow: '0 6px 20px rgba(15, 23, 42, 0.08)',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-            <div style={{ minWidth: 0, flex: 1 }}>
-              <div style={{ fontSize: 13.5, fontWeight: 800, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {trText(activeQuiz.subjectName, language)}
-              </div>
-              <div
-                style={{
-                  fontSize: 11.5,
-                  color: 'var(--text-muted)',
-                  fontWeight: 700,
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                }}
-              >
-                {trText(activeQuiz.chapterName, language)}
-                {negRate > 0 ? ` • (-${negRate} Neg)` : ''}
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-              {!submitted && (
-                <button
-                  type="button"
-                  onClick={() => setInstantFeedback((p) => !p)}
-                  style={{
-                    height: 32,
-                    padding: '0 10px',
-                    borderRadius: 999,
-                    border: '1px solid var(--border-default)',
-                    background: instantFeedback ? 'rgba(16, 185, 129, 0.12)' : 'rgba(99, 102, 241, 0.12)',
-                    color: instantFeedback ? '#059669' : '#4F46E5',
-                    fontSize: 11.5,
-                    fontWeight: 800,
-                    cursor: 'pointer',
-                  }}
-                  title={isBn ? 'অনুশীলন ও পরীক্ষা মোড পরিবর্তন করো' : 'Switch Practice / Exam Mode'}
-                >
-                  {instantFeedback ? (isBn ? '⚡ অনুশীলন' : '⚡ Practice') : isBn ? '📝 পরীক্ষা' : '📝 Exam'}
-                </button>
-              )}
-
-              <div
-                className={`ev-timer-badge font-mono ${timeLeft <= 60 && !submitted ? 'is-urgent' : ''}`}
-                style={{ padding: '4px 10px', fontSize: 13 }}
-              >
-                ⏱️ {formatTimer(timeLeft)}
-              </div>
-
-              <button
-                type="button"
-                className="ev-btn ev-btn-secondary ev-btn-sm"
-                style={{ width: 32, height: 32, padding: 0, borderRadius: 10 }}
-                onClick={closeQuiz}
-                aria-label="Close Quiz"
-              >
-                ✕
-              </button>
-            </div>
-          </div>
-
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              fontSize: 12,
-              fontWeight: 700,
-              color: 'var(--text-secondary)',
-            }}
-          >
-            <span>
-              {isBn ? `প্রশ্ন ${currentIndex + 1} / ${questions.length}` : `Q ${currentIndex + 1} / ${questions.length}`} •{' '}
-              {isBn ? `উত্তর প্রদান: ${answeredCount}টি` : `Answered: ${answeredCount}`}
-            </span>
-
-            <button
-              type="button"
-              onClick={() => setPaletteOpenMobile((p) => !p)}
-              style={{
-                background: 'none',
-                border: 'none',
-                color: 'var(--brand-primary)',
-                fontWeight: 800,
-                fontSize: 12,
-                cursor: 'pointer',
-                padding: 0,
-              }}
-            >
-              🧭 {isBn ? (paletteOpenMobile ? 'নেভিগেটর লুকাও ▲' : 'প্রশ্ন নেভিগেটর ▼') : 'Navigator'}
-            </button>
-          </div>
-
-          <div className="ev-progress-track" style={{ height: 5 }}>
-            <div
-              className="ev-progress-fill"
-              style={{ width: `${Math.round(((currentIndex + 1) / Math.max(1, questions.length)) * 100)}%` }}
-            />
-          </div>
-
-          {paletteOpenMobile && (
-            <div style={{ paddingTop: 6, borderTop: '1px solid var(--border-subtle)' }}>
-              <div className="ev-palette-grid" style={{ maxHeight: 150, overflowY: 'auto' }}>
-                {questions.map((q, idx) => {
-                  const chosen = answers[idx];
-                  const reveal = submitted || (instantFeedback && chosen !== undefined);
-                  let dotCls = '';
-                  if (reveal) dotCls = chosen === q.ans ? 'is-correct' : chosen !== undefined ? 'is-incorrect' : '';
-                  else if (idx === currentIndex) dotCls = 'is-current';
-                  else if (chosen !== undefined) dotCls = 'is-answered';
-
-                  return (
-                    <button
-                      key={q.id}
-                      type="button"
-                      className={`ev-palette-dot ${dotCls} ${flagged[idx] ? 'is-bookmarked' : ''}`}
-                      onClick={() => {
-                        setCurrentIndex(idx);
-                        setPaletteOpenMobile(false);
-                      }}
-                    >
-                      {idx + 1}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {submitted && (
-          <div
-            className="ev-card"
-            style={{
-              background: 'linear-gradient(135deg, rgba(79,70,229,0.09) 0%, rgba(16,185,129,0.09) 100%)',
-              border: '1.5px solid rgba(79,70,229,0.28)',
-              padding: '14px 16px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              flexWrap: 'wrap',
-              gap: 12,
-            }}
-          >
-            <div>
-              <div style={{ fontWeight: 900, fontSize: 16, color: 'var(--text-primary)' }}>
-                🎉{' '}
-                {isBn
-                  ? `নিট স্কোর: ${netScoreSoFar} / ${questions.length}`
-                  : `Net Score: ${netScoreSoFar} / ${questions.length}`}
-              </div>
-              <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text-secondary)', marginTop: 2 }}>
-                ✅ {isBn ? `সঠিক: ${correctSoFar}` : `Correct: ${correctSoFar}`} • ❌{' '}
-                {isBn ? `ভুল: ${wrongSoFar}` : `Wrong: ${wrongSoFar}`}
-                {negRate > 0
-                  ? isBn
-                    ? ` • ➖ নেগেটিভ কর্তন: -${netPenaltySoFar}`
-                    : ` • ➖ Penalty: -${netPenaltySoFar}`
-                  : ''}{' '}
-                • 🎯 {isBn ? `সঠিকতার হার: ${overallAccuracyPct}%` : `Accuracy: ${overallAccuracyPct}%`}
-              </div>
-            </div>
-            <button type="button" className="ev-btn ev-btn-primary ev-btn-sm" onClick={closeQuiz}>
-              {isBn ? 'ড্যাশবোর্ডে ফিরে যাও →' : 'Done →'}
-            </button>
-          </div>
-        )}
-
-        <div className="ev-quiz-layout">
-          <div className="ev-card ev-question-card" style={{ padding: '16px' }}>
-            {currentQ && (
-              <>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                    <span className="ev-badge-pill ev-badge-indigo">#{currentIndex + 1}</span>
-                    {cleanBoardBadge && <span className="ev-badge-pill ev-badge-warning">{cleanBoardBadge}</span>}
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <button
-                      type="button"
-                      className="ev-btn ev-btn-secondary ev-btn-sm"
-                      onClick={() => setFlagged((p) => ({ ...p, [currentIndex]: !p[currentIndex] }))}
-                    >
-                      {flagged[currentIndex] ? '🚩 মার্ককৃত' : '🏳️ মার্ক'}
-                    </button>
-                    <button type="button" className="ev-btn ev-btn-danger ev-btn-sm" onClick={() => setReportOpen(!reportOpen)}>
-                      ⚠️ {isBn ? 'ভুল রিপোর্ট' : 'Report'}
-                    </button>
-                  </div>
-                </div>
-
-                {reportOpen && (
-                  <div
-                    style={{
-                      marginTop: 12,
-                      padding: 12,
-                      borderRadius: 12,
-                      background: 'var(--status-danger-bg)',
-                      border: '1px solid var(--status-danger-border)',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: 8,
-                    }}
-                  >
-                    <div style={{ fontWeight: 800, fontSize: 13, color: 'var(--status-danger-text)' }}>
-                      🚩 {isBn ? 'এই প্রশ্ন বা উত্তরে ভুল রিপোর্ট করো (অ্যাডমিন যাচাই করবেন)' : 'Report Question Error'}
-                    </div>
-                    <select className="ev-select" value={reportIssueType} onChange={(e) => setReportIssueType(e.target.value)}>
-                      <option value="উত্তর ভুল আছে (Wrong Answer)">উত্তর ভুল আছে (Wrong Answer)</option>
-                      <option value="প্রশ্নে বা অপশনে বানান ভুল (Typo)">প্রশ্নে বা অপশনে বানান ভুল (Typo)</option>
-                      <option value="ব্যাখ্যা অস্পষ্ট বা ভুল (Explanation Issue)">ব্যাখ্যা অস্পষ্ট বা ভুল</option>
-                    </select>
-                    <input
-                      type="text"
-                      className="ev-input"
-                      placeholder={isBn ? 'সঠিক উত্তর বা মন্তব্য লেখো...' : 'Write correct answer or note...'}
-                      value={reportComment}
-                      onChange={(e) => setReportComment(e.target.value)}
-                    />
-                    {reportSentMsg ? (
-                      <div style={{ fontWeight: 800, fontSize: 13, color: 'var(--status-success)' }}>{reportSentMsg}</div>
-                    ) : (
-                      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-                        <button type="button" className="ev-btn ev-btn-secondary ev-btn-sm" onClick={() => setReportOpen(false)}>
-                          {isBn ? 'বাতিল' : 'Cancel'}
-                        </button>
-                        <button type="button" className="ev-btn ev-btn-primary ev-btn-sm" onClick={handleSendReport}>
-                          {isBn ? 'রিপোর্ট পাঠাও' : 'Submit Report'}
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                <div className="ev-question-text" style={{ whiteSpace: 'pre-line', marginTop: 12, marginBottom: 14 }}>
-                  {trText(currentQ.q, language)}
-                </div>
-
-                <div className="ev-options-list">
-                  {optionsArray.map((optText, optIdx) => {
-                    const isSelected = answers[currentIndex] === optIdx;
-                    let cls = '';
-                    if (showAnswerState) {
-                      if (optIdx === currentQ.ans) cls = 'is-correct';
-                      else if (isSelected && optIdx !== currentQ.ans) cls = 'is-incorrect';
-                    } else if (isSelected) {
-                      cls = 'is-selected';
-                    }
-                    return (
-                      <button
-                        key={optIdx}
-                        type="button"
-                        disabled={submitted}
-                        className={`ev-option-btn ${cls}`}
-                        style={
-                          !showAnswerState && isSelected
-                            ? {
-                                borderColor: '#4F46E5',
-                                background: 'rgba(79, 70, 229, 0.09)',
-                                boxShadow: '0 0 0 2px rgba(79, 70, 229, 0.18)',
-                              }
-                            : undefined
-                        }
-                        onClick={() => setAnswers((prev) => ({ ...prev, [currentIndex]: optIdx }))}
-                      >
-                        <span
-                          className="ev-option-key"
-                          style={
-                            !showAnswerState && isSelected
-                              ? { background: '#4F46E5', color: '#FFFFFF', borderColor: '#4F46E5' }
-                              : undefined
-                          }
-                        >
-                          {optionLabels[optIdx] || optIdx + 1}
-                        </span>
-                        <span style={{ flex: 1, textAlign: 'left' }}>{optText}</span>
-                        {showAnswerState && optIdx === currentQ.ans && <span>✅</span>}
-                        {showAnswerState && isSelected && optIdx !== currentQ.ans && <span>❌</span>}
-                      </button>
-                    );
-                  })}
-                </div>
-
-                {explanationText && (
-                  <div className="ev-explanation-box" style={{ marginTop: 14 }}>
-                    💡 <strong>{isBn ? 'ব্যাখ্যা ও সমাধান:' : 'Explanation:'}</strong> {explanationText}
-                  </div>
-                )}
-
-                <div
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: '1fr 1fr',
-                    gap: 10,
-                    marginTop: 18,
-                    paddingTop: 14,
-                    borderTop: '1px solid var(--border-subtle)',
-                  }}
-                >
-                  <button
-                    type="button"
-                    className="ev-btn ev-btn-secondary"
-                    disabled={currentIndex === 0}
-                    onClick={() => setCurrentIndex((i) => Math.max(0, i - 1))}
-                  >
-                    ← {trKey('prev_q', language)}
-                  </button>
-
-                  {currentIndex < questions.length - 1 ? (
-                    <button
-                      type="button"
-                      className="ev-btn ev-btn-primary"
-                      onClick={() => setCurrentIndex((i) => Math.min(questions.length - 1, i + 1))}
-                    >
-                      {trKey('next_q', language)} →
-                    </button>
-                  ) : !submitted ? (
-                    <button
-                      type="button"
-                      className="ev-btn"
-                      style={{ background: '#059669', color: '#FFFFFF', fontWeight: 800, border: 'none' }}
-                      onClick={handleSubmitExam}
-                    >
-                      ✅ {trKey('submit_exam', language)}
-                    </button>
-                  ) : (
-                    <button type="button" className="ev-btn ev-btn-primary" onClick={closeQuiz}>
-                      {isBn ? 'সম্পন্ন ✓' : 'Finish ✓'}
-                    </button>
-                  )}
-                </div>
-
-                <div style={{ marginTop: 10 }}>
-                  {!submitted ? (
-                    <button
-                      type="button"
-                      className="ev-btn"
-                      style={{
-                        width: '100%',
-                        background: 'rgba(5, 150, 105, 0.12)',
-                        color: '#059669',
-                        border: '1.5px solid rgba(5, 150, 105, 0.35)',
-                        fontWeight: 800,
-                      }}
-                      onClick={handleSubmitExam}
-                    >
-                      ✅{' '}
-                      {isBn
-                        ? `পরীক্ষা জমা দাও ও ফলাফল দেখো (${answeredCount}/${questions.length})`
-                        : `Submit Exam (${answeredCount}/${questions.length})`}
-                    </button>
-                  ) : (
-                    <button type="button" className="ev-btn ev-btn-secondary" style={{ width: '100%' }} onClick={closeQuiz}>
-                      {isBn ? 'বন্ধ করো' : 'Close Quiz'}
-                    </button>
-                  )}
-                </div>
-              </>
-            )}
-          </div>
-
-          <div className="ev-card">
-            <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 8 }}>🧭 {trKey('question_palette', language)}</div>
-            <div className="ev-palette-grid">
-              {questions.map((q, idx) => {
-                const chosen = answers[idx];
-                const reveal = submitted || (instantFeedback && chosen !== undefined);
-                let dotCls = '';
-                if (reveal) {
-                  dotCls = chosen === q.ans ? 'is-correct' : chosen !== undefined ? 'is-incorrect' : '';
-                } else if (idx === currentIndex) {
-                  dotCls = 'is-current';
-                } else if (chosen !== undefined) {
-                  dotCls = 'is-answered';
-                }
-                return (
-                  <button
-                    key={q.id}
-                    type="button"
-                    className={`ev-palette-dot ${dotCls} ${flagged[idx] ? 'is-bookmarked' : ''}`}
-                    onClick={() => setCurrentIndex(idx)}
-                  >
-                    {idx + 1}
-                  </button>
-                );
-              })}
-            </div>
-            {!submitted && (
-              <button
-                type="button"
-                className="ev-btn"
-                style={{ width: '100%', marginTop: 14, background: '#059669', color: '#FFFFFF', fontWeight: 800, border: 'none' }}
-                onClick={handleSubmitExam}
-              >
-                ✅ {trKey('submit_exam', language)}
-              </button>
-            )}
           </div>
         </div>
       </div>
