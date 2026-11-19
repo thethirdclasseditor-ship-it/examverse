@@ -8,6 +8,7 @@ import { HSC_FINANCE_2ND_PART1_CHAPTERS } from './Finance2part1data';
 import { HSC_FINANCE_2ND_PART2_CHAPTERS } from './Finance2part2data';
 import { HSC_BOM_1ST_PAPER_CHAPTERS } from './bom1Part3Data';
 import { HSC_MKT_1ST_PAPER_CHAPTERS } from './mkt1Data';
+import { HSC_MATH1_ALL_CHAPTERS } from './math1CqPart3Data';
 import {
   ChapterData,
   ChapterFormula,
@@ -62,7 +63,7 @@ export const HSC_FINANCE_2ND_PAPER_CHAPTERS: Chapter[] = [
   ...HSC_FINANCE_2ND_PART2_CHAPTERS,
 ];
 
-export { HSC_ACCOUNTING_1ST_PAPER_CHAPTERS, HSC_ICT_CHAPTERS };
+export { HSC_ACCOUNTING_1ST_PAPER_CHAPTERS, HSC_ICT_CHAPTERS, HSC_MATH1_ALL_CHAPTERS };
 
 const NON_MATH_CHAPTER_IDS = new Set(['acc1-c5', 'fin1-c1', 'fin1-c2']);
 
@@ -401,24 +402,14 @@ const _S17 = mkSubj(
   ]
 );
 
-const _S18 = mkSubj(
-  'math-1',
-  'উচ্চতর গণিত ১ম পত্র',
-  'Higher Math 1st Paper',
-  '📐',
-  '#D97706',
-  '217, 119, 6',
-  [
-    ch('math1-c1', '১ম–৫ম অধ্যায়: ম্যাট্রিক্স ও নির্ণায়ক, ভেক্টর, সরলরেখা, বৃত্ত এবং বিন্যাস ও সমাবেশ', [
-      'ম্যাট্রিক্স ও সরলরেখা: A⁻¹ = adj(A) ÷ |A|, ঢাল m = (y₂ - y₁) ÷ (x₂ - x₁), লম্ব দূরত্ব d = |ax₁ + by₁ + c| ÷ √(a² + b²)',
-      'বৃত্ত ও বিন্যাস-সমাবেশ: x² + y² + 2gx + 2fy + c = 0 বৃত্তের কেন্দ্র (-g,-f) ও ব্যাসার্ধ r = √(g² + f² - c) | ⁿPᵣ = n!/(n-r)!, ⁿCᵣ = n!/[r!(n-r)!]',
-    ]),
-    ch('math1-c2', '৬ষ্ঠ–১০ম অধ্যায়: ত্রিকোণমিতি, ফাংশন, অন্তরীকরণ ও যোগজীকরণ', [
-      'ত্রিকোণমিতিক সূত্র: s = rθ, ক্ষেত্রফল = ½r²θ | sin(A±B) = sinA cosB ± cosA sinB, sin 2A = 2sinA cosA, cos 2A = cos²A - sin²A',
-      'অন্তরীকরণ ও যোগজীকরণ: lim(x→0)(sin x/x) = 1, d/dx(xⁿ) = nxⁿ⁻¹, d/dx(ln x) = 1/x | ∫ xⁿ dx = xⁿ⁺¹/(n+1) + c, ∫ u v dx = u∫v dx - ∫[(du/dx)∫v dx]dx',
-    ]),
-  ]
-);
+const _S18: SubjectData = {
+  id: 'math-1',
+  name: { bn: 'উচ্চতর গণিত ১ম পত্র', en: 'Higher Math 1st Paper' },
+  icon: '📐',
+  color: '#D97706',
+  rgb: '217, 119, 6',
+  chapters: convertLegacyChapters(HSC_MATH1_ALL_CHAPTERS, 'math1', true),
+};
 
 const _S19 = mkSubj(
   'math-2',
